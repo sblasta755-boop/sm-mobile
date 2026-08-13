@@ -1,0 +1,55 @@
+{
+  "expo": {
+    "name": "SmartClean",
+    "slug": "smartclean-mobile",
+    "scheme": "smartclean",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#f8fbfc"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "za.co.smartclean.mobile",
+      "infoPlist": {
+        "NSCameraUsageDescription": "SmartClean uses the camera to scan site and room QR codes and capture required task evidence.",
+        "NSLocationWhenInUseUsageDescription": "SmartClean captures location only during operational verification such as attendance, scans, and inspections."
+      }
+    },
+    "android": {
+      "package": "za.co.smartclean.mobile",
+      "permissions": [
+        "CAMERA",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION"
+      ]
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "SmartClean uses the camera to scan QR codes and capture required evidence."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "SmartClean captures location only during operational verification."
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "apiBaseUrl": ""
+    }
+  }
+}

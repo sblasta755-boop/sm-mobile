@@ -1,0 +1,94 @@
+import { Redirect, Tabs } from "expo-router";
+import { StyleSheet, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useSmartClean } from "@/features/store";
+import { colors, sizes, spacing, typography } from "@/theme";
+
+export default function AppTabsLayout() {
+  const { currentUser, state } = useSmartClean();
+  const insets = useSafeAreaInsets();
+
+  if (state.sessionRestored && !currentUser) {
+    return <Redirect href="/login" />;
+  }
+
+  return (
+    <Tabs
+      screenOptions={{
+        headerShown: false,
+        tabBarActiveTintColor: colors.primary,
+        tabBarInactiveTintColor: colors.mutedForeground,
+        tabBarStyle: {
+          height: sizes.bottomNavHeight + insets.bottom,
+          paddingBottom: insets.bottom + spacing.xs,
+          paddingTop: spacing.xs,
+          borderTopColor: colors.border,
+          backgroundColor: colors.background,
+        },
+        tabBarLabelStyle: {
+          fontSize: typography.tiny,
+          fontWeight: "600",
+        },
+      }}
+    >
+      <Tabs.Screen
+        name="home"
+        options={{
+          title: "Home",
+          tabBarIcon: ({ color, size }) => <Ionicons name="home" color={color} size={size} />,
+        }}
+      />
+      <Tabs.Screen
+        name="shifts"
+        options={{
+          title: "Shifts",
+          tabBarIcon: ({ color, size }) => <Ionicons name="calendar" color={color} size={size} />,
+        }}
+      />
+      <Tabs.Screen
+        name="scan"
+        options={{
+          title: "Scan",
+          tabBarIcon: ({ color }) => (
+            <View style={styles.primaryTab}>
+              <Ionicons name="scan" color={color === colors.primary ? colors.primaryForeground : colors.primaryForeground} size={24} />
+            </View>
+          ),
+          tabBarLabel: () => null,
+        }}
+      />
+      <Tabs.Screen
+        name="corrective-actions/index"
+        options={{
+          title: "Actions",
+          tabBarIcon: ({ color, size }) => <Ionicons name="checkbox" color={color} size={size} />,
+        }}
+      />
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: "Profile",
+          tabBarIcon: ({ color, size }) => <Ionicons name="person" color={color} size={size} />,
+        }}
+      />
+    </Tabs>
+  );
+}
+
+const styles = StyleSheet.create({
+  primaryTab: {
+    marginTop: -20,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.primary,
+    shadowColor: "#000",
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 6,
+  },
+});

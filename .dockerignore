@@ -1,0 +1,16 @@
+.expo
+.expo-shared
+dist
+web-build
+node_modules
+npm-debug.log
+yarn-debug.log
+yarn-error.log
+.DS_Store
+coverage
+*.keystore
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
