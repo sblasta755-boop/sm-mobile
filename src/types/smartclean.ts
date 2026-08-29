@@ -70,6 +70,7 @@ export interface Evidence {
   duplicateOf?: string;
   imgSeed: number;
   uri?: string;
+  filePath?: string;
 }
 
 export interface Task {
@@ -165,11 +166,48 @@ export interface Incident {
   uri?: string;
 }
 
-export interface SyncOp {
+export interface Notification {
   id: string;
   kind: string;
-  status: "local" | "queued" | "synchronising" | "synced" | "failed" | "conflict";
+  severity: "info" | "warning" | "critical";
+  text: string;
+  relatedId?: string;
   createdAt: string;
-  entity?: string;
-  conflict?: string;
+  read: boolean;
+  channel: "in_app" | "email" | "sms" | "whatsapp";
+}
+
+export interface AirbnbTurnover {
+  id: string;
+  propertyId: string;
+  propertyName: string;
+  checkoutAt: string;
+  nextCheckinAt: string;
+  status: string;
+  cleanerId: string;
+  supervisorId: string;
+  checks: { area: string; done: boolean; note?: string; blocking?: boolean }[];
+  readinessScore?: number;
+}
+
+export interface StockItem {
+  id: string;
+  name: string;
+  qty: number;
+  reorder: number;
+  unit: string;
+  siteId: string;
+  lastTx?: string;
+}
+
+export interface Asset {
+  id: string;
+  tag: string;
+  name: string;
+  siteId: string;
+  location: string;
+  condition: "good" | "fair" | "poor";
+  available: boolean;
+  maintenanceFlag?: boolean;
+  history: { at: string; text: string }[];
 }

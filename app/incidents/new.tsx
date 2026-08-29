@@ -5,7 +5,7 @@ import { Screen } from "@/components/Screen";
 import { Button } from "@/components/Button";
 import { SelectField } from "@/components/SelectField";
 import { useSmartClean } from "@/features/store";
-import { newId, nowIso } from "@/services/ids";
+import { createIncident } from "@/api/client";
 import { colors, radius, spacing, typography } from "@/theme";
 import type { IncidentPriority } from "@/types/smartclean";
 
@@ -13,32 +13,32 @@ const CATEGORIES = ["Safety", "Security", "Damage", "Complaint", "Lost property"
 const PRIORITIES: IncidentPriority[] = ["low", "medium", "high", "critical"];
 
 export default function NewIncidentScreen() {
-  const { state, dispatch, currentUser } = useSmartClean();
+  const { state, dispatch, currentUser, refreshBackendData } = useSmartClean();
   const [category, setCategory] = useState(CATEGORIES[0]);
   const [priority, setPriority] = useState<IncidentPriority>("medium");
   const [description, setDescription] = useState("");
   const [location, setLocation] = useState("");
+  const [busy, setBusy] = useState(false);
   const site = state.sites.find((s) => currentUser?.siteIds.includes(s.id));
 
-  function submit() {
-    if (!site) return;
-    const id = newId("inc");
-    dispatch({
-      type: "CREATE_INCIDENT",
-      incident: {
-        id,
+  async function submit() {
+    if (!site || !state.accessToken) return;
+    setBusy(true);
+    try {
+      const incident = await createIncident(state.accessToken, {
         siteId: site.id,
         locationName: location || "Unknown",
         category,
         priority,
         description,
-        ownerId: currentUser?.id ?? "unknown",
-        status: "open",
-        createdAt: nowIso(),
         offlineOriginated: state.connectivity === "offline",
-      },
-    });
-    router.push("/home");
+      });
+      dispatch({ type: "CREATE_INCIDENT", incident });
+      await refreshBackendData();
+      router.push("/home");
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -71,7 +71,7 @@ export default function NewIncidentScreen() {
           />
         </View>
 
-        <Button disabled={description.length < 5} onPress={submit}>
+        <Button disabled={busy || description.length < 5} onPress={submit}>
           Submit incident
         </Button>
       </View>

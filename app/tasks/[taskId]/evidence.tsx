@@ -1,17 +1,15 @@
 import { useRef, useState } from "react";
 import { router, useLocalSearchParams } from "expo-router";
-import { Image, Pressable, StyleSheet, Text, View } from "react-native";
+import { Image, StyleSheet, Text, View } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { Ionicons } from "@expo/vector-icons";
 import { Screen } from "@/components/Screen";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { useSmartClean } from "@/features/store";
-import { newId, nowIso } from "@/services/ids";
+import { addTaskEvidence, fileUrl, uploadImage } from "@/api/client";
 import { colors, radius, spacing, typography } from "@/theme";
 import type { Evidence } from "@/types/smartclean";
-
-const SEEDS = [11, 27, 42, 58, 73, 88];
 
 export default function EvidenceScreen() {
   const { taskId } = useLocalSearchParams<{ taskId: string }>();
@@ -20,7 +18,6 @@ export default function EvidenceScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const [cameraOn, setCameraOn] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [seedIdx, setSeedIdx] = useState(0);
   const cameraRef = useRef<CameraView | null>(null);
 
   if (!task) {
@@ -40,29 +37,21 @@ export default function EvidenceScreen() {
   }
 
   async function capture(kind: Evidence["kind"]) {
-    if (!cameraOn || !cameraRef.current || busy || !task) return;
+    if (!cameraOn || !cameraRef.current || busy || !task || !state.accessToken) return;
     setBusy(true);
     try {
       const photo = await cameraRef.current.takePictureAsync({ quality: 0.6, base64: false, skipProcessing: true });
-      const seed = SEEDS[seedIdx % SEEDS.length];
-      const dup = task.evidence.find((e) => e.imgSeed === seed);
-      dispatch({
-        type: "ADD_EVIDENCE",
-        taskId: task.id,
-        evidence: {
-          id: newId("ev"),
-          taskId: task.id,
-          kind,
-          label: kind === "before" ? "Before photo" : kind === "after" ? "After photo" : "Issue photo",
-          capturedAt: nowIso(),
-          device: "Mobile app",
-          offlineOriginated: state.connectivity === "offline",
-          duplicateOf: dup?.id,
-          imgSeed: seed,
-          uri: photo?.uri,
-        },
+      if (!photo?.uri) return;
+      const label = kind === "before" ? "Before photo" : kind === "after" ? "After photo" : "Issue photo";
+      const filePath = await uploadImage(state.accessToken, photo.uri, `${kind}-${Date.now()}.jpg`);
+      const updatedTask = await addTaskEvidence(state.accessToken, task.id, {
+        kind,
+        label,
+        filePath,
+        liveCapture: true,
+        offlineOriginated: state.connectivity === "offline",
       });
-      setSeedIdx((i) => i + 1);
+      dispatch({ type: "UPDATE_TASK", taskId: task.id, patch: updatedTask });
     } finally {
       setBusy(false);
     }
@@ -113,8 +102,8 @@ export default function EvidenceScreen() {
         {task.evidence.length === 0 && <Text style={styles.mutedSmall}>No evidence captured yet.</Text>}
         {task.evidence.map((e) => (
           <Card key={e.id} style={styles.evidenceCard}>
-            {e.uri ? (
-              <Image source={{ uri: e.uri }} style={styles.thumb} />
+            {fileUrl(e.filePath) ?? e.uri ? (
+              <Image source={{ uri: fileUrl(e.filePath) ?? e.uri }} style={styles.thumb} />
             ) : (
               <View style={[styles.thumb, { backgroundColor: colors.neutral }]} />
             )}
@@ -131,13 +120,6 @@ export default function EvidenceScreen() {
                 </View>
               )}
             </View>
-            <Pressable
-              accessibilityLabel="Delete evidence"
-              onPress={() => dispatch({ type: "REMOVE_EVIDENCE", taskId: task.id, evidenceId: e.id })}
-              hitSlop={8}
-            >
-              <Ionicons name="trash-outline" size={18} color={colors.mutedForeground} />
-            </Pressable>
           </Card>
         ))}
       </View>

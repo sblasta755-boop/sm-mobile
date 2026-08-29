@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "SmartClean",
+    "name": "Šoma360",
     "slug": "smartclean-mobile",
     "scheme": "smartclean",
     "version": "0.1.0",
@@ -17,8 +17,8 @@
       "supportsTablet": false,
       "bundleIdentifier": "za.co.smartclean.mobile",
       "infoPlist": {
-        "NSCameraUsageDescription": "SmartClean uses the camera to scan site and room QR codes and capture required task evidence.",
-        "NSLocationWhenInUseUsageDescription": "SmartClean captures location only during operational verification such as attendance, scans, and inspections."
+        "NSCameraUsageDescription": "Šoma360 uses the camera to scan site and room QR codes and capture required task evidence.",
+        "NSLocationWhenInUseUsageDescription": "Šoma360 captures location only during operational verification such as attendance, scans, and inspections."
       }
     },
     "android": {
@@ -30,7 +30,11 @@
       "permissions": [
         "CAMERA",
         "ACCESS_FINE_LOCATION",
-        "ACCESS_COARSE_LOCATION"
+        "ACCESS_COARSE_LOCATION",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
       ]
     },
     "web": {
@@ -42,21 +46,26 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "SmartClean uses the camera to scan QR codes and capture required evidence."
+          "cameraPermission": "Šoma360 uses the camera to scan QR codes and capture required evidence."
         }
       ],
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "SmartClean captures location only during operational verification."
+          "locationAlwaysAndWhenInUsePermission": "Šoma360 captures location only during operational verification."
         }
-      ]
+      ],
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": true
     },
     "extra": {
-      "apiBaseUrl": ""
+      "apiBaseUrl": "",
+      "router": {},
+      "eas": {
+        "projectId": "a71fdba6-05c4-4b13-babc-b77bdda39b19"
+      }
     }
   }
 }

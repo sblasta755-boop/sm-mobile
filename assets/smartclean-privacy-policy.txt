@@ -1,0 +1,96 @@
+Šoma360 — Privacy Policy
+Last updated: 22 August 2026
+
+Šoma360 ("we", "our", "us") provides a cleaning operations app used by
+cleaning staff and supervisors to manage shifts, tasks, and site
+inspections. This policy explains what information the Šoma360 mobile
+and web apps collect, how it's used, and the choices you have.
+
+
+INFORMATION WE COLLECT
+
+- Account information. Name, username or email, role, and assigned
+  site(s), provided by your employer or administrator when your account
+  is created.
+
+- Attendance & location data. When you check in or out of a shift or
+  scan a site/room QR code, we record the time and, where enabled, your
+  device's location to verify you were on site. Location is only
+  accessed during these operational actions, not tracked continuously in
+  the background.
+
+- Camera & photos. The app uses your camera to scan QR codes and to
+  capture photo evidence for tasks, inspections, and incident reports.
+  Captured images are uploaded to our servers as part of that record.
+
+- Task & operational records. Task completions, declarations, corrective
+  actions, and incident reports you submit through the app.
+
+- Device & usage data. Basic technical data (such as app version and
+  device type) used for troubleshooting and reliability.
+
+
+HOW WE USE THIS INFORMATION
+
+- To operate core features: shift check-ins, task assignment and
+  tracking, inspections, and incident reporting.
+- To verify attendance and task completion at the correct site.
+- To let supervisors and administrators oversee operations at their
+  sites.
+- To maintain the security, integrity, and reliability of the app.
+- To communicate with you about your account or operational alerts.
+
+
+WHO CAN SEE YOUR INFORMATION
+
+Your operational data (attendance, tasks, evidence photos, inspections)
+is visible to supervisors and administrators at your organisation who
+are responsible for the sites you work at. We do not sell your personal
+information, and we do not share it with third parties for their own
+marketing purposes.
+
+
+DATA RETENTION
+
+We retain account and operational records for as long as your account is
+active and for a reasonable period afterward to meet operational, audit,
+and legal record-keeping needs. You can request deletion of your account
+data as described below.
+
+
+YOUR CHOICES
+
+- Camera and location permissions can be managed at any time in your
+  device settings. Note that declining these permissions may prevent
+  core features (QR scanning, evidence capture, verified check-in) from
+  working.
+- You can request access to, correction of, or deletion of your personal
+  information by contacting us at the email below, or by asking your
+  organisation's Šoma360 administrator.
+
+
+DATA SECURITY
+
+We use reasonable technical and organisational measures to protect your
+information, including encrypted transport (HTTPS) between the app and
+our servers and access controls based on your role and assigned
+site(s).
+
+
+CHILDREN'S PRIVACY
+
+Šoma360 is a workplace tool intended for use by employed cleaning
+staff and supervisors. It is not directed at children, and we do not
+knowingly collect information from children.
+
+
+CHANGES TO THIS POLICY
+
+We may update this policy from time to time. Material changes will be
+reflected by updating the "Last updated" date above.
+
+
+CONTACT US
+
+Questions about this policy or your data can be sent to
+support@smartclean.example.

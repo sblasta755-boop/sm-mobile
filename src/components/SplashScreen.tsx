@@ -133,7 +133,7 @@ export function SplashScreen() {
           transform: [{ translateY: textTranslateY }],
         }}
       >
-        <Text style={styles.brand}>SmartClean</Text>
+        <Text style={styles.brand}>Šoma360</Text>
         <Text style={styles.tagline}>Getting things spotless…</Text>
       </Animated.View>
 

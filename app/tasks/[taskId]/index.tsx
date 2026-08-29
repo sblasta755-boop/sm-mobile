@@ -8,6 +8,7 @@ import { Checkbox } from "@/components/Checkbox";
 import { ProgressBar } from "@/components/ProgressBar";
 import { StatusBadge, VerifiedBadge } from "@/components/StatusBadge";
 import { useSmartClean } from "@/features/store";
+import { updateChecklistItem } from "@/api/client";
 import { toneForTask, humanStatus, taskSubmissionBlocked } from "@/domain/status";
 import { colors, radius, spacing, typography } from "@/theme";
 
@@ -15,6 +16,29 @@ export default function TaskDetailScreen() {
   const { taskId } = useLocalSearchParams<{ taskId: string }>();
   const { state, dispatch } = useSmartClean();
   const task = state.tasks.find((t) => t.id === taskId);
+
+  async function toggleCheck(itemId: string, value: boolean | string) {
+    if (!task || !state.accessToken) return;
+    dispatch({
+      type: "UPDATE_TASK",
+      taskId: task.id,
+      patch: {
+        checklist: task.checklist.map((item) =>
+          item.id === itemId
+            ? { ...item, done: typeof value === "boolean" ? value : item.done, value: typeof value === "string" ? value : item.value }
+            : item,
+        ),
+      },
+    });
+    try {
+      await updateChecklistItem(state.accessToken, task.id, itemId, {
+        done: typeof value === "boolean" ? value : undefined,
+        value: typeof value === "string" ? value : undefined,
+      });
+    } catch {
+      // best-effort — local optimistic update stands; next refresh will reconcile
+    }
+  }
 
   if (!task) {
     return (
@@ -69,7 +93,7 @@ export default function TaskDetailScreen() {
                 <Checkbox
                   checked={Boolean(item.done)}
                   disabled={!task.qrVerified}
-                  onChange={(value) => dispatch({ type: "TOGGLE_CHECK", taskId: task.id, itemId: item.id, value })}
+                  onChange={(value) => toggleCheck(item.id, value)}
                 />
               )}
               <View style={styles.checklistBody}>
@@ -87,7 +111,7 @@ export default function TaskDetailScreen() {
                     placeholderTextColor={colors.mutedForeground}
                     multiline
                     value={item.value ?? ""}
-                    onChangeText={(text) => dispatch({ type: "TOGGLE_CHECK", taskId: task.id, itemId: item.id, value: text })}
+                    onChangeText={(text) => toggleCheck(item.id, text)}
                   />
                 )}
               </View>

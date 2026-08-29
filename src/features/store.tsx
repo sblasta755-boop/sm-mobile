@@ -1,77 +1,125 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import NetInfo from "@react-native-community/netinfo";
-import { createContext, useContext, useEffect, useMemo, useReducer, type ReactNode } from "react";
-import * as sample from "@/domain/sampleData";
+import { createContext, useContext, useEffect, useMemo, useReducer, useRef, type ReactNode } from "react";
+import {
+  loadBackendBootstrap,
+  loginToBackend,
+  logoutFromBackend,
+  setSessionHandlers,
+  type BackendBootstrap,
+} from "@/api/client";
 import type {
+  AirbnbTurnover,
+  Asset,
   Connectivity,
   CorrectiveAction,
   DemoUser,
   Evidence,
   Incident,
   Inspection,
+  Notification,
   QrCode,
   Site,
-  SyncOp,
+  Location,
+  StockItem,
   Task,
 } from "@/types/smartclean";
 import { SecureSessionService, type StoredSession } from "@/storage/SecureSessionService";
 
 interface State {
   currentUserId: string | null;
+  accessToken: string | null;
+  refreshToken: string | null;
+  authExpiresAt: string | null;
   sessionRestored: boolean;
+  loading: boolean;
+  error: string | null;
   connectivity: Connectivity;
   users: DemoUser[];
   sites: Site[];
+  locations: Location[];
   qrCodes: QrCode[];
   tasks: Task[];
   inspections: Inspection[];
   correctiveActions: CorrectiveAction[];
   incidents: Incident[];
-  syncQueue: SyncOp[];
+  notifications: Notification[];
+  turnovers: AirbnbTurnover[];
+  stock: StockItem[];
+  assets: Asset[];
   attendance: Record<string, { clockedInAt?: string; siteId?: string; locationCapturedAt?: string }>;
-  accessTokenPresent: boolean;
 }
 
 type Action =
   | { type: "RESTORE"; state: Partial<State> | null; session: StoredSession | null }
-  | { type: "SET_USER"; userId: string | null }
+  | { type: "SET_LOADING"; loading: boolean; error?: string | null }
+  | { type: "SET_AUTH"; accessToken: string; refreshToken: string; expiresAt: string; bootstrap: BackendBootstrap }
+  | { type: "SET_SESSION"; accessToken: string; refreshToken: string; expiresAt: string }
+  | { type: "HYDRATE"; bootstrap: BackendBootstrap }
   | { type: "SET_CONNECTIVITY"; value: Connectivity }
   | { type: "CLOCK_IN"; userId: string; siteId: string }
   | { type: "CLOCK_OUT"; userId: string }
   | { type: "UPDATE_TASK"; taskId: string; patch: Partial<Task> }
-  | { type: "TOGGLE_CHECK"; taskId: string; itemId: string; value?: string | boolean }
   | { type: "ADD_EVIDENCE"; taskId: string; evidence: Evidence }
-  | { type: "REMOVE_EVIDENCE"; taskId: string; evidenceId: string }
-  | { type: "SUBMIT_TASK"; taskId: string }
   | { type: "CREATE_INSPECTION"; inspection: Inspection }
   | { type: "UPDATE_INSPECTION"; id: string; patch: Partial<Inspection> }
-  | { type: "CREATE_CA"; ca: CorrectiveAction }
   | { type: "UPDATE_CA"; id: string; patch: Partial<CorrectiveAction> }
   | { type: "APPEND_CA_TIMELINE"; id: string; entry: { at: string; actor: string; text: string } }
   | { type: "CREATE_INCIDENT"; incident: Incident }
-  | { type: "ENQUEUE_SYNC"; op: SyncOp }
-  | { type: "UPDATE_SYNC"; id: string; patch: Partial<SyncOp> }
-  | { type: "SYNC_ALL" }
   | { type: "UPDATE_USER"; userId: string; patch: Partial<DemoUser> }
   | { type: "SIGN_OUT" };
 
 const STORAGE_KEY = "smartclean.mobile.state.v1";
 
-const initialState: State = {
-  currentUserId: null,
-  sessionRestored: false,
-  connectivity: "online",
-  users: sample.users,
-  sites: sample.sites,
-  qrCodes: sample.qrCodes,
-  tasks: sample.tasks,
-  inspections: sample.inspections,
-  correctiveActions: sample.correctiveActions,
-  incidents: sample.incidents,
-  syncQueue: sample.syncQueue,
-  attendance: {},
-  accessTokenPresent: false,
-};
+function initial(): State {
+  return {
+    currentUserId: null,
+    accessToken: null,
+    refreshToken: null,
+    authExpiresAt: null,
+    sessionRestored: false,
+    loading: false,
+    error: null,
+    connectivity: "online",
+    users: [],
+    sites: [],
+    locations: [],
+    qrCodes: [],
+    tasks: [],
+    inspections: [],
+    correctiveActions: [],
+    incidents: [],
+    notifications: [],
+    turnovers: [],
+    stock: [],
+    assets: [],
+    attendance: {},
+  };
+}
+
+function bootstrapState(bootstrap: BackendBootstrap): Partial<State> {
+  return {
+    users: bootstrap.users.length ? bootstrap.users : [bootstrap.user],
+    sites: bootstrap.sites,
+    locations: bootstrap.locations,
+    qrCodes: bootstrap.qrCodes,
+    tasks: bootstrap.tasks,
+    inspections: bootstrap.inspections,
+    correctiveActions: bootstrap.correctiveActions,
+    incidents: bootstrap.incidents,
+    notifications: bootstrap.notifications,
+    // Previously never sourced from the backend — state.attendance only
+    // changed via local-only CLOCK_IN/CLOCK_OUT reducer actions that
+    // nothing dispatched (the scan screen only calls clockIn() +
+    // refreshBackendData()), so a real clock-in never showed up as
+    // "Clocked in" on Home. Now backed by AttendanceController.today_status
+    // via bootstrap.attendance — same fix already applied on web.
+    attendance: bootstrap.attendance,
+    turnovers: bootstrap.turnovers,
+    stock: bootstrap.stock,
+    assets: bootstrap.assets,
+  };
+}
 
 function reducer(state: State, action: Action): State {
   switch (action.type) {
@@ -80,11 +128,35 @@ function reducer(state: State, action: Action): State {
         ...state,
         ...(action.state ?? {}),
         currentUserId: action.state?.currentUserId ?? state.currentUserId,
-        accessTokenPresent: Boolean(action.session),
         sessionRestored: true,
       };
-    case "SET_USER":
-      return { ...state, currentUserId: action.userId };
+    case "SET_LOADING":
+      return { ...state, loading: action.loading, error: action.error ?? null };
+    case "SET_AUTH":
+      return {
+        ...state,
+        accessToken: action.accessToken,
+        refreshToken: action.refreshToken,
+        authExpiresAt: action.expiresAt,
+        currentUserId: action.bootstrap.user.id,
+        loading: false,
+        error: null,
+        sessionRestored: true,
+        ...bootstrapState(action.bootstrap),
+      };
+    case "SET_SESSION":
+      // From request()'s transparent refresh-and-retry in api/client.ts
+      // — only the tokens change here, not bootstrap data, since a
+      // background refresh happens mid-action on whatever screen the
+      // user is already on.
+      return {
+        ...state,
+        accessToken: action.accessToken,
+        refreshToken: action.refreshToken,
+        authExpiresAt: action.expiresAt,
+      };
+    case "HYDRATE":
+      return { ...state, loading: false, error: null, ...bootstrapState(action.bootstrap) };
     case "SET_CONNECTIVITY":
       return { ...state, connectivity: action.value };
     case "CLOCK_IN":
@@ -106,49 +178,11 @@ function reducer(state: State, action: Action): State {
         ...state,
         tasks: state.tasks.map((task) => (task.id === action.taskId ? { ...task, ...action.patch } : task)),
       };
-    case "TOGGLE_CHECK":
-      return {
-        ...state,
-        tasks: state.tasks.map((task) =>
-          task.id === action.taskId
-            ? {
-                ...task,
-                status: task.status === "assigned" || task.status === "not_started" ? "in_progress" : task.status,
-                startedAt: task.startedAt ?? new Date().toISOString(),
-                checklist: task.checklist.map((item) =>
-                  item.id === action.itemId
-                    ? {
-                        ...item,
-                        done: typeof action.value === "boolean" ? action.value : item.type === "note" ? item.done : !item.done,
-                        value: typeof action.value === "string" ? action.value : item.value,
-                      }
-                    : item,
-                ),
-              }
-            : task,
-        ),
-      };
     case "ADD_EVIDENCE":
       return {
         ...state,
         tasks: state.tasks.map((task) =>
           task.id === action.taskId ? { ...task, evidence: [...task.evidence, action.evidence] } : task,
-        ),
-      };
-    case "REMOVE_EVIDENCE":
-      return {
-        ...state,
-        tasks: state.tasks.map((task) =>
-          task.id === action.taskId
-            ? { ...task, evidence: task.evidence.filter((evidence) => evidence.id !== action.evidenceId) }
-            : task,
-        ),
-      };
-    case "SUBMIT_TASK":
-      return {
-        ...state,
-        tasks: state.tasks.map((task) =>
-          task.id === action.taskId ? { ...task, status: "submitted", submittedAt: new Date().toISOString() } : task,
         ),
       };
     case "CREATE_INSPECTION":
@@ -160,8 +194,6 @@ function reducer(state: State, action: Action): State {
           inspection.id === action.id ? { ...inspection, ...action.patch } : inspection,
         ),
       };
-    case "CREATE_CA":
-      return { ...state, correctiveActions: [action.ca, ...state.correctiveActions] };
     case "UPDATE_CA":
       return {
         ...state,
@@ -176,29 +208,13 @@ function reducer(state: State, action: Action): State {
       };
     case "CREATE_INCIDENT":
       return { ...state, incidents: [action.incident, ...state.incidents] };
-    case "ENQUEUE_SYNC":
-      return state.syncQueue.some((op) => op.entity === action.op.entity && op.kind === action.op.kind && op.status !== "synced")
-        ? state
-        : { ...state, syncQueue: [action.op, ...state.syncQueue] };
-    case "UPDATE_SYNC":
-      return {
-        ...state,
-        syncQueue: state.syncQueue.map((op) => (op.id === action.id ? { ...op, ...action.patch } : op)),
-      };
-    case "SYNC_ALL":
-      return {
-        ...state,
-        syncQueue: state.syncQueue.map((op) =>
-          op.status === "queued" || op.status === "failed" ? { ...op, status: "synced" } : op,
-        ),
-      };
     case "UPDATE_USER":
       return {
         ...state,
         users: state.users.map((user) => (user.id === action.userId ? { ...user, ...action.patch } : user)),
       };
     case "SIGN_OUT":
-      return { ...state, currentUserId: null, accessTokenPresent: false };
+      return { ...initial(), sessionRestored: true };
     default:
       return state;
   }
@@ -208,20 +224,118 @@ const StoreContext = createContext<{
   state: State;
   currentUser: DemoUser | undefined;
   dispatch: React.Dispatch<Action>;
-  signInAs: (role: "cleaner" | "supervisor") => Promise<void>;
+  signIn: (username: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
+  refreshBackendData: () => Promise<void>;
 } | null>(null);
 
 export function SmartCleanProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(reducer, initialState);
+  const [state, dispatch] = useReducer(reducer, undefined, initial);
+
+  // api/client.ts's request() calls these on a 401 to transparently
+  // refresh-and-retry — registered once below via a ref rather than
+  // closing over `state` directly, since client.ts's module-level
+  // handlers are set once but need the *current* refresh token, not
+  // whatever it was at registration time.
+  const stateRef = useRef(state);
+  stateRef.current = state;
+
+  // Tracks whether this mount has already fetched fresh backend data
+  // once — either via the restore-on-mount effect below, or because
+  // signIn() already delivered a fresh bootstrap directly. Mirrors the
+  // fix already applied to the web app's store.tsx for the exact same
+  // bug: gating the restore-fetch on `state.users.length === 0` looks
+  // right for a brand-new session, but a *returning* session's
+  // AsyncStorage snapshot almost always has non-empty `users` already —
+  // so that guard skipped the refetch entirely and every restored
+  // field (tasks, corrective actions, incidents, attendance) kept
+  // showing whatever was true when the app was last closed, with
+  // nothing to correct it until some unrelated action happened to call
+  // refreshBackendData().
+  const didRestoreFetch = useRef(false);
+
+  useEffect(() => {
+    setSessionHandlers({
+      getRefreshToken: () => stateRef.current.refreshToken,
+      onRefreshed: (session) => {
+        void SecureSessionService.set(session);
+        dispatch({
+          type: "SET_SESSION",
+          accessToken: session.accessToken,
+          refreshToken: session.refreshToken,
+          expiresAt: session.expiresAt,
+        });
+      },
+      onRefreshFailed: () => {
+        // The refresh token itself is invalid/expired too — nothing left
+        // to try. Clear the session so the user gets a clean re-login
+        // prompt instead of every subsequent request silently 401ing.
+        void SecureSessionService.clear();
+        dispatch({ type: "SIGN_OUT" });
+      },
+    });
+    return () => setSessionHandlers(null);
+  }, []);
+
+  const refreshBackendData = async () => {
+    if (!state.accessToken) return;
+    try {
+      const bootstrap = await loadBackendBootstrap(state.accessToken);
+      dispatch({ type: "HYDRATE", bootstrap });
+    } catch (error) {
+      dispatch({ type: "SET_LOADING", loading: false, error: error instanceof Error ? error.message : "Backend refresh failed" });
+    }
+  };
+
+  const signIn = async (username: string, password: string) => {
+    dispatch({ type: "SET_LOADING", loading: true });
+    try {
+      const { session, bootstrap } = await loginToBackend(username, password);
+      await SecureSessionService.set(session);
+      // SET_AUTH below already carries a fresh bootstrap — mark the
+      // restore-on-mount effect as satisfied so it doesn't immediately
+      // fire a second, redundant refreshBackendData() once accessToken
+      // transitions from null to set.
+      didRestoreFetch.current = true;
+      dispatch({
+        type: "SET_AUTH",
+        accessToken: session.accessToken,
+        refreshToken: session.refreshToken,
+        expiresAt: session.expiresAt,
+        bootstrap,
+      });
+    } catch (error) {
+      dispatch({ type: "SET_LOADING", loading: false, error: error instanceof Error ? error.message : "Login failed" });
+      throw error;
+    }
+  };
+
+  const signOut = async () => {
+    const { accessToken, refreshToken } = state;
+    await SecureSessionService.clear();
+    dispatch({ type: "SIGN_OUT" });
+    if (accessToken && refreshToken) {
+      try {
+        await logoutFromBackend(accessToken, refreshToken);
+      } catch {
+        // best-effort — local session is already cleared
+      }
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
     async function restore() {
       const [raw, session] = await Promise.all([AsyncStorage.getItem(STORAGE_KEY), SecureSessionService.get()]);
-      if (!cancelled) {
-        dispatch({ type: "RESTORE", state: raw ? (JSON.parse(raw) as Partial<State>) : null, session });
-      }
+      if (cancelled) return;
+      const persisted = raw ? (JSON.parse(raw) as Partial<State>) : null;
+      dispatch({
+        type: "RESTORE",
+        state: session
+          ? { ...persisted, accessToken: session.accessToken, refreshToken: session.refreshToken, authExpiresAt: session.expiresAt }
+          : null,
+        session,
+      });
     }
     restore();
     return () => {
@@ -237,39 +351,22 @@ export function SmartCleanProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (!state.sessionRestored) return;
-    const { accessTokenPresent: _accessTokenPresent, sessionRestored: _sessionRestored, ...persistable } = state;
-    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(persistable));
-  }, [state]);
+    if (state.sessionRestored && state.accessToken && !didRestoreFetch.current) {
+      didRestoreFetch.current = true;
+      void refreshBackendData();
+    }
+  }, [state.sessionRestored, state.accessToken]);
 
   useEffect(() => {
-    if (state.connectivity === "online" && state.syncQueue.some((op) => op.status === "queued")) {
-      dispatch({ type: "SYNC_ALL" });
-    }
-  }, [state.connectivity, state.syncQueue]);
+    if (!state.sessionRestored) return;
+    const { accessToken: _accessToken, refreshToken: _refreshToken, authExpiresAt: _authExpiresAt, sessionRestored: _sessionRestored, ...persistable } = state;
+    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(persistable));
+  }, [state]);
 
   const currentUser = state.users.find((user) => user.id === state.currentUserId);
 
   const value = useMemo(
-    () => ({
-      state,
-      currentUser,
-      dispatch,
-      async signInAs(role: "cleaner" | "supervisor") {
-        const user = state.users.find((item) => item.role === role);
-        if (!user) return;
-        await SecureSessionService.set({
-          accessToken: `demo-${role}-access`,
-          refreshToken: `demo-${role}-refresh`,
-          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-        });
-        dispatch({ type: "SET_USER", userId: user.id });
-      },
-      async signOut() {
-        await SecureSessionService.clear();
-        dispatch({ type: "SIGN_OUT" });
-      },
-    }),
+    () => ({ state, currentUser, dispatch, signIn, signOut, refreshBackendData }),
     [currentUser, state],
   );
 

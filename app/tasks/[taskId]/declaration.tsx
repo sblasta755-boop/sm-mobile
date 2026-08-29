@@ -7,15 +7,16 @@ import { Button } from "@/components/Button";
 import { Checkbox } from "@/components/Checkbox";
 import { VerifiedBadge } from "@/components/StatusBadge";
 import { useSmartClean } from "@/features/store";
-import { newId, nowIso } from "@/services/ids";
+import { submitTask } from "@/api/client";
 import { colors, radius, spacing, typography } from "@/theme";
 
 export default function DeclarationScreen() {
   const { taskId } = useLocalSearchParams<{ taskId: string }>();
-  const { state, dispatch } = useSmartClean();
+  const { state, dispatch, refreshBackendData } = useSmartClean();
   const task = state.tasks.find((t) => t.id === taskId);
   const [agree, setAgree] = useState(false);
   const [signature, setSignature] = useState("");
+  const [busy, setBusy] = useState(false);
 
   if (!task) {
     return (
@@ -25,21 +26,17 @@ export default function DeclarationScreen() {
     );
   }
 
-  function submit() {
-    if (!task) return;
-    dispatch({ type: "SUBMIT_TASK", taskId: task.id });
-    const inspectionId = newId("insp");
-    dispatch({
-      type: "CREATE_INSPECTION",
-      inspection: { id: inspectionId, taskId: task.id, status: "pending", createdAt: nowIso() },
-    });
-    if (state.connectivity === "offline") {
-      dispatch({
-        type: "ENQUEUE_SYNC",
-        op: { id: newId("op"), kind: "task_submit", status: "queued", createdAt: nowIso(), entity: task.id },
-      });
+  async function submit() {
+    if (!task || !state.accessToken) return;
+    setBusy(true);
+    try {
+      const updatedTask = await submitTask(state.accessToken, task.id);
+      dispatch({ type: "UPDATE_TASK", taskId: task.id, patch: updatedTask });
+      await refreshBackendData();
+      router.push("/home");
+    } finally {
+      setBusy(false);
     }
-    router.push("/home");
   }
 
   const doneCount = task.checklist.filter((c) => c.done).length;
@@ -82,7 +79,7 @@ export default function DeclarationScreen() {
         </View>
       </Card>
 
-      <Button disabled={!agree || signature.trim().length < 3} onPress={submit}>
+      <Button disabled={busy || !agree || signature.trim().length < 3} onPress={submit}>
         Submit task
       </Button>
     </Screen>

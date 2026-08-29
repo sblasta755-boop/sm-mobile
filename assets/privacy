@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="SmartClean is a cleaning operations app for shift check-ins, task tracking, and site inspections. Download the Android app or open the web app."
+    />
+    <title>SmartClean — Cleaning Operations Made Simple</title>
+    <script type="module" crossorigin src="/assets/index-CwLNJ9Xv.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-C7nwVAt6.css">
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>

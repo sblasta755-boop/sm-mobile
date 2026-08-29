@@ -6,13 +6,13 @@ import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useSmartClean } from "@/features/store";
+import { updateCorrectiveAction } from "@/api/client";
 import { humanStatus } from "@/domain/status";
-import { nowIso } from "@/services/ids";
 import { colors, spacing, typography } from "@/theme";
 
 export default function CorrectiveActionDetailScreen() {
   const { actionId } = useLocalSearchParams<{ actionId: string }>();
-  const { state, dispatch, currentUser } = useSmartClean();
+  const { state, dispatch, refreshBackendData } = useSmartClean();
   const ca = state.correctiveActions.find((c) => c.id === actionId);
 
   if (!ca) {
@@ -25,18 +25,19 @@ export default function CorrectiveActionDetailScreen() {
 
   const task = state.tasks.find((t) => t.id === ca.taskId);
 
-  function resubmit() {
-    if (!ca) return;
-    dispatch({ type: "UPDATE_CA", id: ca.id, patch: { status: "awaiting_reinspection", resubmittedAt: nowIso() } });
-    dispatch({
-      type: "APPEND_CA_TIMELINE",
-      id: ca.id,
-      entry: { at: nowIso(), actor: currentUser?.name ?? "Cleaner", text: "Rework resubmitted with fresh evidence" },
-    });
-    dispatch({ type: "UPDATE_TASK", taskId: ca.taskId, patch: { status: "resubmitted" } });
-    const insp = state.inspections.find((i) => i.taskId === ca.taskId);
-    if (insp) dispatch({ type: "UPDATE_INSPECTION", id: insp.id, patch: { status: "reinspection_required" } });
-    router.push("/home");
+  async function resubmit() {
+    if (!ca || !state.accessToken) return;
+    try {
+      const updated = await updateCorrectiveAction(state.accessToken, ca.id, {
+        status: "awaiting_reinspection",
+        note: "Rework resubmitted with fresh evidence",
+      });
+      dispatch({ type: "UPDATE_CA", id: ca.id, patch: updated });
+      await refreshBackendData();
+      router.push("/home");
+    } catch {
+      // best-effort — UI stays on this screen so the cleaner can retry
+    }
   }
 
   return (

@@ -6,9 +6,8 @@ import { Button } from "@/components/Button";
 import { colors, radius, spacing, typography } from "@/theme";
 
 export function ProfileMenuSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
-  const { state, dispatch, currentUser, signOut } = useSmartClean();
+  const { state, currentUser, signOut } = useSmartClean();
   const site = state.sites.find((s) => currentUser?.siteIds.includes(s.id));
-  const pending = state.syncQueue.filter((s) => s.status !== "synced").length;
   const online = state.connectivity === "online";
 
   async function handleSignOut() {
@@ -37,12 +36,7 @@ export function ProfileMenuSheet({ visible, onClose }: { visible: boolean; onClo
           </Pressable>
         </View>
 
-        <Pressable
-          style={styles.row}
-          onPress={() =>
-            dispatch({ type: "SET_CONNECTIVITY", value: online ? "offline" : "online" })
-          }
-        >
+        <View style={styles.row}>
           <View style={styles.rowLeft}>
             <Ionicons
               name={online ? "wifi" : "cloud-offline-outline"}
@@ -51,30 +45,10 @@ export function ProfileMenuSheet({ visible, onClose }: { visible: boolean; onClo
             />
             <View>
               <Text style={styles.rowTitle}>{online ? "Online" : "Offline"}</Text>
-              <Text style={styles.rowSub}>Tap to switch demo connectivity</Text>
+              <Text style={styles.rowSub}>Network status</Text>
             </View>
           </View>
-          <Ionicons name="chevron-forward" size={16} color={colors.mutedForeground} />
-        </Pressable>
-
-        <Pressable
-          style={styles.row}
-          onPress={() => {
-            onClose();
-            router.push("/profile");
-          }}
-        >
-          <View style={styles.rowLeft}>
-            <Ionicons name="cloud-upload-outline" size={18} color={colors.info} />
-            <View>
-              <Text style={styles.rowTitle}>Sync status</Text>
-              <Text style={styles.rowSub}>
-                {pending} item{pending === 1 ? "" : "s"} waiting
-              </Text>
-            </View>
-          </View>
-          <Ionicons name="chevron-forward" size={16} color={colors.mutedForeground} />
-        </Pressable>
+        </View>
 
         <Pressable
           style={styles.row}

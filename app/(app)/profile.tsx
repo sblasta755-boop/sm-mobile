@@ -7,48 +7,37 @@ import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useSmartClean } from "@/features/store";
+import { fileUrl, toUserRecord, updateUser, uploadImage } from "@/api/client";
 import { colors, radius, spacing, typography } from "@/theme";
 
 export default function ProfileScreen() {
   const { state, dispatch, currentUser, signOut } = useSmartClean();
   const site = state.sites.find((s) => currentUser?.siteIds.includes(s.id));
   const clocked = currentUser ? state.attendance[currentUser.id]?.clockedInAt : undefined;
-  const pending = state.syncQueue.filter((s) => s.status !== "synced");
   const myTasks = state.tasks.filter((t) => t.assigneeId === currentUser?.id);
   const done = myTasks.filter((t) => ["approved", "closed"].includes(t.status)).length;
 
   async function pickPhoto() {
-    if (!currentUser) return;
+    if (!currentUser || !state.accessToken) return;
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) return;
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ["images"],
-      base64: true,
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.7,
     });
-    if (result.canceled || !result.assets[0]?.base64) return;
-    const mime = result.assets[0].mimeType ?? "image/jpeg";
-    dispatch({
-      type: "UPDATE_USER",
-      userId: currentUser.id,
-      patch: { profilePhotoDataUrl: `data:${mime};base64,${result.assets[0].base64}` },
-    });
-  }
-
-  function runSync() {
-    if (state.connectivity === "offline") return;
-    pending.forEach((op) => {
-      if (op.status === "queued" || op.status === "local") {
-        dispatch({ type: "UPDATE_SYNC", id: op.id, patch: { status: "synced" } });
-      }
-    });
-  }
-
-  function clockOut() {
-    if (!currentUser) return;
-    dispatch({ type: "CLOCK_OUT", userId: currentUser.id });
+    if (result.canceled || !result.assets[0]) return;
+    const asset = result.assets[0];
+    const mime = asset.mimeType ?? "image/jpeg";
+    try {
+      const filePath = await uploadImage(state.accessToken, asset.uri, asset.fileName ?? "profile.jpg", mime);
+      const photoUrl = fileUrl(filePath);
+      await updateUser(state.accessToken, currentUser.id, toUserRecord(currentUser, { profilePhotoDataUrl: photoUrl }));
+      dispatch({ type: "UPDATE_USER", userId: currentUser.id, patch: { profilePhotoDataUrl: photoUrl } });
+    } catch {
+      // best-effort — leave existing photo unchanged
+    }
   }
 
   async function handleSignOut() {
@@ -92,47 +81,26 @@ export default function ProfileScreen() {
             label="Clock-in"
             value={clocked ? new Date(clocked).toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit" }) : "—"}
           />
-          <Stat label="Pending sync" value={String(pending.length)} />
         </View>
       </Card>
 
       <View style={styles.rows}>
-        <Row icon="cloud-upload-outline" label={`Sync queue (${pending.length})`} onPress={runSync} />
         <Row icon="notifications-outline" label="Notifications" onPress={() => {}} />
         <Row icon="alert-circle-outline" label="Report an incident" onPress={() => router.push("/incidents/new")} />
         <Row icon="shield-checkmark-outline" label="Privacy & POPIA notice" onPress={() => {}} />
         <Row icon="help-circle-outline" label="Help & support" onPress={() => {}} />
       </View>
 
-      {pending.length > 0 && (
-        <Card style={styles.queueCard}>
-          <Text style={styles.statsLabel}>Sync queue</Text>
-          <View style={styles.queueList}>
-            {pending.map((op) => (
-              <View key={op.id} style={styles.queueItem}>
-                <View>
-                  <Text style={styles.queueKind}>{op.kind}</Text>
-                  <Text style={styles.mutedSmall}>
-                    {op.entity} · {new Date(op.createdAt).toLocaleTimeString("en-ZA")}
-                  </Text>
-                </View>
-                <StatusBadge tone={op.status === "conflict" || op.status === "failed" ? "destructive" : "info"} label={op.status} />
-              </View>
-            ))}
-          </View>
-        </Card>
-      )}
-
       <View style={styles.bottomActions}>
-        {clocked ? (
-          <Button variant="outline" icon={<Ionicons name="time-outline" size={16} color={colors.foreground} />} onPress={clockOut}>
-            Clock out
-          </Button>
-        ) : (
-          <Button variant="outline" icon={<Ionicons name="time-outline" size={16} color={colors.foreground} />} onPress={() => router.push("/scan")}>
-            Clock in
-          </Button>
-        )}
+        {/* Clocking out re-scans the site QR the same way clocking in
+            does — see scan.tsx, which clocks in or out depending on
+            whether the user is already clocked in. Previously this
+            button called clockOut() directly with an empty qrValue,
+            which the backend always rejected (it requires a real,
+            matching site code) — clock-out silently never worked. */}
+        <Button variant="outline" icon={<Ionicons name="time-outline" size={16} color={colors.foreground} />} onPress={() => router.push("/scan")}>
+          {clocked ? "Clock out" : "Clock in"}
+        </Button>
         <Button variant="outline" icon={<Ionicons name="refresh" size={16} color={colors.foreground} />} onPress={() => router.replace("/login")}>
           Switch account
         </Button>
@@ -288,23 +256,6 @@ const styles = StyleSheet.create({
   rowLabel: {
     flex: 1,
     fontSize: typography.body,
-    fontWeight: "600",
-    color: colors.foreground,
-  },
-  queueCard: {
-    marginBottom: spacing.lg,
-    gap: spacing.sm,
-  },
-  queueList: {
-    gap: spacing.sm,
-  },
-  queueItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  queueKind: {
-    fontSize: typography.small,
     fontWeight: "600",
     color: colors.foreground,
   },

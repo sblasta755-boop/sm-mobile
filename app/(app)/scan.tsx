@@ -8,7 +8,7 @@ import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { StatusBadge, VerifiedBadge } from "@/components/StatusBadge";
 import { useSmartClean } from "@/features/store";
-import { nowIso } from "@/services/ids";
+import { clockIn as clockInRequest, clockOut as clockOutRequest, resolveQr } from "@/api/client";
 import { colors, radius, spacing, typography } from "@/theme";
 
 interface ScanResult {
@@ -18,6 +18,7 @@ interface ScanResult {
   linkedName?: string;
   taskId?: string;
   kind?: string;
+  clockedOut?: boolean;
 }
 
 const SUGGESTIONS = ["SITE-SBP-001", "ROOM-SBP-BTH-02", "ZONE-SBP-REC-01", "STOCK-SBP-001"];
@@ -29,7 +30,7 @@ function extractCode(raw: string): string {
 }
 
 export default function ScanScreen() {
-  const { state, dispatch, currentUser } = useSmartClean();
+  const { state, currentUser, refreshBackendData } = useSmartClean();
   const [permission, requestPermission] = useCameraPermissions();
   const [cameraOn, setCameraOn] = useState(false);
   const [manual, setManual] = useState("");
@@ -41,52 +42,76 @@ export default function ScanScreen() {
   const clocked = currentUser ? state.attendance[currentUser.id]?.clockedInAt : undefined;
 
   const scan = useCallback(
-    (rawCode: string) => {
+    async (rawCode: string) => {
       const code = extractCode(rawCode);
       setRecent((r) => [code, ...r.filter((c) => c !== code)].slice(0, 4));
 
-      const qr = state.qrCodes.find((q) => q.code === code);
-
-      if (!qr) {
-        setResult({ code, ok: false, reason: "Unknown QR code. Verify with your supervisor." });
-        return;
-      }
-      if (!qr.active) {
-        setResult({ code, ok: false, reason: "This QR is inactive or expired." });
+      if (!state.accessToken) return;
+      let resolved: Awaited<ReturnType<typeof resolveQr>>;
+      try {
+        resolved = await resolveQr(state.accessToken, code);
+      } catch (error) {
+        setResult({ code, ok: false, reason: error instanceof Error ? error.message : "Scan failed" });
         return;
       }
 
-      if (qr.kind === "site") {
-        const site = state.sites.find((s) => s.id === qr.targetId);
-        if (!site) {
-          setResult({ code, ok: false, reason: "Site not found." });
+      if (!resolved.valid) {
+        setResult({ code, ok: false, reason: String(resolved.reason ?? "QR code is not recognised.") });
+        return;
+      }
+
+      if (resolved.kind === "site") {
+        const site = resolved.site as { id: string; name: string };
+        // Re-scanning the site QR is also how you clock out — mirrors
+        // clocking in: both require the same physical presence proof,
+        // rather than clock-out trusting a stored site code with no
+        // fresh verification. Which one happens depends on whether this
+        // user is already clocked in.
+        const alreadyClockedIn = Boolean(
+          currentUser && state.attendance[currentUser.id]?.clockedInAt,
+        );
+        try {
+          if (alreadyClockedIn) {
+            await clockOutRequest(state.accessToken, { siteId: site.id, qrValue: code });
+          } else {
+            await clockInRequest(state.accessToken, { siteId: site.id, qrValue: code });
+          }
+          await refreshBackendData();
+        } catch (error) {
+          setResult({
+            code,
+            ok: false,
+            reason:
+              error instanceof Error
+                ? error.message
+                : alreadyClockedIn
+                  ? "Clock-out failed"
+                  : "Clock-in failed",
+          });
           return;
         }
-        const assigned = currentUser?.siteIds.includes(site.id);
-        if (!assigned) {
-          setResult({ code, ok: false, reason: "You are not assigned to this site." });
-          return;
+        setResult({ code, ok: true, linkedName: site.name, kind: "site", clockedOut: alreadyClockedIn });
+        if (!alreadyClockedIn) {
+          setApproval({ siteName: site.name, at: new Date().toISOString() });
         }
-        dispatch({ type: "CLOCK_IN", userId: currentUser!.id, siteId: site.id });
-        setResult({ code, ok: true, linkedName: site.name, kind: "site" });
-        setApproval({ siteName: site.name, at: nowIso() });
         return;
       }
 
-      if (qr.kind === "room" || qr.kind === "zone") {
-        const task = state.tasks.find((t) => t.requiredQr === code && t.assigneeId === currentUser?.id);
+      if (resolved.kind === "room" || resolved.kind === "zone") {
+        const location = resolved.location as { name: string } | null;
+        const task = resolved.task as { id: string } | null;
         if (!task) {
           setResult({ code, ok: false, reason: "No assigned task for this location right now." });
           return;
         }
-        dispatch({ type: "UPDATE_TASK", taskId: task.id, patch: { qrVerified: true } });
-        setResult({ code, ok: true, linkedName: qr.targetName, taskId: task.id, kind: qr.kind });
+        await refreshBackendData();
+        setResult({ code, ok: true, linkedName: location?.name, taskId: task.id, kind: resolved.kind });
         return;
       }
 
-      setResult({ code, ok: true, linkedName: qr.targetName, kind: qr.kind });
+      setResult({ code, ok: true, kind: (resolved.kind as string | undefined) ?? undefined });
     },
-    [state.qrCodes, state.sites, state.tasks, currentUser, dispatch],
+    [state.accessToken, state.attendance, currentUser, refreshBackendData],
   );
 
   const onBarcodeScanned = useCallback(
@@ -142,7 +167,7 @@ export default function ScanScreen() {
       </View>
 
       <Text style={styles.helpText}>
-        Point at a SmartClean QR sticker. You can also tap a suggestion or type a code.
+        Point at a Šoma360 QR sticker. You can also tap a suggestion or type a code.
       </Text>
 
       <View style={styles.suggestions}>
@@ -178,6 +203,11 @@ export default function ScanScreen() {
               <Text style={styles.resultLine}>
                 Linked to: <Text style={styles.resultStrong}>{result.linkedName}</Text>
               </Text>
+              {result.clockedOut && (
+                <Text style={styles.resultLine}>
+                  <Text style={styles.resultStrong}>Clocked out.</Text> Have a good rest of your day.
+                </Text>
+              )}
               <View style={styles.checklist}>
                 <ChecklistLine icon="shield-checkmark" text={`Identity verified — ${currentUser?.name}`} />
                 <ChecklistLine
@@ -187,9 +217,14 @@ export default function ScanScreen() {
                 <ChecklistLine icon="location" text="GPS within geofence" />
                 <ChecklistLine icon="phone-portrait-outline" text="Device recognised" />
               </View>
-              {result.kind === "site" && clocked && (
+              {result.kind === "site" && clocked && !result.clockedOut && (
                 <Button style={styles.resultAction} onPress={() => router.push("/home")}>
                   Continue to my tasks
+                </Button>
+              )}
+              {result.clockedOut && (
+                <Button style={styles.resultAction} onPress={() => router.push("/home")}>
+                  Back to home
                 </Button>
               )}
               {result.taskId && (
