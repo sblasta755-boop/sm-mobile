@@ -14,7 +14,7 @@ import { colors, radius, spacing, typography } from "@/theme";
 
 export default function TaskDetailScreen() {
   const { taskId } = useLocalSearchParams<{ taskId: string }>();
-  const { state, dispatch } = useSmartClean();
+  const { state, currentUser, dispatch } = useSmartClean();
   const task = state.tasks.find((t) => t.id === taskId);
 
   async function toggleCheck(itemId: string, value: boolean | string) {
@@ -67,6 +67,38 @@ export default function TaskDetailScreen() {
           </Text>
           <Button style={styles.clockInPromptButton} icon={<Ionicons name="scan-outline" size={16} color={colors.primaryForeground} />} onPress={() => router.push("/scan")}>
             Scan to clock in
+          </Button>
+          <Button variant="outline" style={styles.clockInPromptButton} onPress={() => router.push("/home")}>
+            Back home
+          </Button>
+        </Card>
+      </Screen>
+    );
+  }
+
+  // Mirrors the backend's own hard enforcement
+  // (TaskController._assert_no_other_task_in_progress): a cleaner can
+  // only have one task in progress at a time, so opening a different,
+  // not-yet-started task while one is already in progress blocks the
+  // whole screen the same way the clock-in gate above does, rather than
+  // letting them tick a box and only finding out from an API error.
+  const otherTaskInProgress =
+    task.status !== "in_progress" &&
+    state.tasks.find((t) => t.id !== task.id && t.assigneeId === currentUser?.id && t.status === "in_progress");
+  if (taskIsWorkable && otherTaskInProgress) {
+    return (
+      <Screen title={task.title}>
+        <Card style={styles.clockInPromptCard}>
+          <Ionicons name="alert-circle-outline" size={28} color={colors.primary} style={styles.clockInPromptIcon} />
+          <Text style={styles.clockInPromptTitle}>Finish your current task first</Text>
+          <Text style={[styles.mutedSmall, styles.clockInPromptText]}>
+            You&apos;re still working on &quot;{otherTaskInProgress.title}&quot;. Submit it before starting this one.
+          </Text>
+          <Button
+            style={styles.clockInPromptButton}
+            onPress={() => router.push(`/tasks/${otherTaskInProgress.id}`)}
+          >
+            Go to that task
           </Button>
           <Button variant="outline" style={styles.clockInPromptButton} onPress={() => router.push("/home")}>
             Back home

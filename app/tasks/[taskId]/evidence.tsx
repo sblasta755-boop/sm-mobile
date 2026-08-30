@@ -14,7 +14,7 @@ import type { Evidence } from "@/types/smartclean";
 
 export default function EvidenceScreen() {
   const { taskId } = useLocalSearchParams<{ taskId: string }>();
-  const { state, dispatch } = useSmartClean();
+  const { state, currentUser, dispatch } = useSmartClean();
   const task = state.tasks.find((t) => t.id === taskId);
   const [permission, requestPermission] = useCameraPermissions();
   const [cameraOn, setCameraOn] = useState(false);
@@ -46,6 +46,36 @@ export default function EvidenceScreen() {
           </Text>
           <Button style={styles.clockInPromptButton} onPress={() => router.push("/scan")}>
             Go to Scan
+          </Button>
+          <Button variant="outline" style={styles.clockInPromptButton} onPress={() => router.push(`/tasks/${task.id}`)}>
+            Back to task
+          </Button>
+        </Card>
+      </Screen>
+    );
+  }
+
+  // Same "one task in progress at a time" gate as the task detail screen
+  // (see tasks/[taskId]/index.tsx) — the backend hard-blocks add_evidence
+  // regardless (TaskController._assert_no_other_task_in_progress); this
+  // just stops a doomed camera session before it starts.
+  const otherTaskInProgress =
+    task.status !== "in_progress" &&
+    state.tasks.find((t) => t.id !== task.id && t.assigneeId === currentUser?.id && t.status === "in_progress");
+  if (taskIsWorkable && otherTaskInProgress) {
+    return (
+      <Screen title="Capture evidence">
+        <Card style={styles.clockInPromptCard}>
+          <Ionicons name="alert-circle-outline" size={28} color={colors.primary} style={styles.clockInPromptIcon} />
+          <Text style={styles.clockInPromptTitle}>Finish your current task first</Text>
+          <Text style={[styles.mutedSmall, styles.clockInPromptText]}>
+            You&apos;re still working on &quot;{otherTaskInProgress.title}&quot;. Submit it before starting this one.
+          </Text>
+          <Button
+            style={styles.clockInPromptButton}
+            onPress={() => router.push(`/tasks/${otherTaskInProgress.id}`)}
+          >
+            Go to that task
           </Button>
           <Button variant="outline" style={styles.clockInPromptButton} onPress={() => router.push(`/tasks/${task.id}`)}>
             Back to task
