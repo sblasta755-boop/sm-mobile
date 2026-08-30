@@ -85,9 +85,9 @@ export default function ProfileScreen() {
       </Card>
 
       <View style={styles.rows}>
-        <Row icon="notifications-outline" label="Notifications" onPress={() => {}} />
+        <Row icon="notifications-outline" label="Notifications" onPress={() => router.push("/notifications")} />
         <Row icon="alert-circle-outline" label="Report an incident" onPress={() => router.push("/incidents/new")} />
-        <Row icon="shield-checkmark-outline" label="Privacy & POPIA notice" onPress={() => {}} />
+        <Row icon="shield-checkmark-outline" label="Privacy & POPIA notice" onPress={() => router.push("/privacy")} />
         <Row icon="help-circle-outline" label="Help & support" onPress={() => {}} />
       </View>
 
@@ -100,9 +100,6 @@ export default function ProfileScreen() {
             matching site code) — clock-out silently never worked. */}
         <Button variant="outline" icon={<Ionicons name="time-outline" size={16} color={colors.foreground} />} onPress={() => router.push("/scan")}>
           {clocked ? "Clock out" : "Clock in"}
-        </Button>
-        <Button variant="outline" icon={<Ionicons name="refresh" size={16} color={colors.foreground} />} onPress={() => router.replace("/login")}>
-          Switch account
         </Button>
       </View>
 

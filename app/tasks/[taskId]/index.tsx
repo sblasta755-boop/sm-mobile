@@ -9,7 +9,7 @@ import { ProgressBar } from "@/components/ProgressBar";
 import { StatusBadge, VerifiedBadge } from "@/components/StatusBadge";
 import { useSmartClean } from "@/features/store";
 import { updateChecklistItem } from "@/api/client";
-import { toneForTask, humanStatus, taskSubmissionBlocked } from "@/domain/status";
+import { toneForTask, humanStatus, taskSubmissionBlocked, taskStage, isChecklistUnlocked } from "@/domain/status";
 import { colors, radius, spacing, typography } from "@/theme";
 
 export default function TaskDetailScreen() {
@@ -51,9 +51,36 @@ export default function TaskDetailScreen() {
     );
   }
 
+  // Blocks the whole screen, not just Submit — matches the backend's own
+  // hard enforcement (TaskController._assert_clocked_in) and the web
+  // app's mobile.tasks.$taskId.tsx, and README.md's stated order: clock
+  // in (Attendance) is step 1, task work is step 2.
+  const taskIsWorkable = ["assigned", "not_started", "in_progress", "rework_required"].includes(task.status);
+  if (taskIsWorkable && task.clockedIn === false) {
+    return (
+      <Screen title={task.title}>
+        <Card style={styles.clockInPromptCard}>
+          <Ionicons name="scan-outline" size={28} color={colors.primary} style={styles.clockInPromptIcon} />
+          <Text style={styles.clockInPromptTitle}>Clock in to start this task</Text>
+          <Text style={[styles.mutedSmall, styles.clockInPromptText]}>
+            Scan your site&apos;s QR code to clock in before working on checklist items or capturing evidence.
+          </Text>
+          <Button style={styles.clockInPromptButton} icon={<Ionicons name="scan-outline" size={16} color={colors.primaryForeground} />} onPress={() => router.push("/scan")}>
+            Scan to clock in
+          </Button>
+          <Button variant="outline" style={styles.clockInPromptButton} onPress={() => router.push("/home")}>
+            Back home
+          </Button>
+        </Card>
+      </Screen>
+    );
+  }
+
   const doneCount = task.checklist.filter((c) => c.done).length;
   const pct = Math.round((doneCount / task.checklist.length) * 100);
   const submission = taskSubmissionBlocked(task);
+  const stage = taskStage(task);
+  const checklistUnlocked = isChecklistUnlocked(stage);
 
   return (
     <Screen title={task.title}>
@@ -85,6 +112,48 @@ export default function TaskDetailScreen() {
         </View>
       </Card>
 
+      {stage === "before" && (
+        <Card style={styles.beforePromptCard}>
+          <View style={styles.beforePromptRow}>
+            <Ionicons name="camera-outline" size={18} color={colors.primary} />
+            <View style={styles.beforePromptText}>
+              <Text style={styles.beforePromptTitle}>Take a Before photo to start</Text>
+              <Text style={styles.mutedSmall}>
+                The checklist unlocks once you&apos;ve captured a Before photo in Evidence.
+              </Text>
+            </View>
+          </View>
+          <Button
+            style={styles.beforePromptButton}
+            icon={<Ionicons name="camera-outline" size={16} color={colors.primaryForeground} />}
+            onPress={() => router.push(`/tasks/${task.id}/evidence`)}
+          >
+            Open camera
+          </Button>
+        </Card>
+      )}
+
+      {stage === "finish" && !task.evidence.some((e) => e.kind === "after") && (
+        <Card style={styles.beforePromptCard}>
+          <View style={styles.beforePromptRow}>
+            <Ionicons name="camera-outline" size={18} color={colors.primary} />
+            <View style={styles.beforePromptText}>
+              <Text style={styles.beforePromptTitle}>Checklist done — take an After photo</Text>
+              <Text style={styles.mutedSmall}>
+                Capture an After photo (and an Issue photo if anything needs flagging) to finish up.
+              </Text>
+            </View>
+          </View>
+          <Button
+            style={styles.beforePromptButton}
+            icon={<Ionicons name="camera-outline" size={16} color={colors.primaryForeground} />}
+            onPress={() => router.push(`/tasks/${task.id}/evidence`)}
+          >
+            Open camera
+          </Button>
+        </Card>
+      )}
+
       <View style={styles.checklist}>
         {task.checklist.map((item) => (
           <Card key={item.id} style={item.done ? styles.checklistItemDone : styles.checklistItem}>
@@ -92,7 +161,10 @@ export default function TaskDetailScreen() {
               {item.type !== "note" && (
                 <Checkbox
                   checked={Boolean(item.done)}
-                  disabled={!task.qrVerified}
+                  // photo_required auto-ticks itself once both before/after
+                  // photos exist (see the backend's add_evidence) — it's
+                  // evidence-driven, not something to check by hand.
+                  disabled={item.type === "photo_required" || !checklistUnlocked}
                   onChange={(value) => toggleCheck(item.id, value)}
                 />
               )}
@@ -101,7 +173,13 @@ export default function TaskDetailScreen() {
                 <View style={styles.checklistBadges}>
                   {item.risk === "high" && <StatusBadge tone="destructive" label="High risk" />}
                   {item.risk === "medium" && <StatusBadge tone="warning" label="Attention" />}
-                  {item.type === "photo_required" && <StatusBadge tone="info" label="Photo required" icon="camera-outline" />}
+                  {item.type === "photo_required" && (
+                    <StatusBadge
+                      tone={item.done ? "success" : "info"}
+                      label={item.done ? "Photo captured" : "Auto-completes with before & after photos"}
+                      icon="camera-outline"
+                    />
+                  )}
                   {item.type === "declaration" && <StatusBadge tone="muted" label="Declaration" />}
                 </View>
                 {item.type === "note" && (
@@ -110,6 +188,7 @@ export default function TaskDetailScreen() {
                     placeholder="Notes for supervisor"
                     placeholderTextColor={colors.mutedForeground}
                     multiline
+                    editable={checklistUnlocked}
                     value={item.value ?? ""}
                     onChangeText={(text) => toggleCheck(item.id, text)}
                   />
@@ -134,15 +213,28 @@ export default function TaskDetailScreen() {
         </Button>
       </View>
 
-      {submission.blocked && (
-        <View style={styles.warningBox}>
-          <Ionicons name="warning-outline" size={14} color={colors.warningForeground} />
-          <View style={styles.warningText}>
-            {submission.missingQr && <Text style={styles.warningLine}>Scan the room QR before starting.</Text>}
-            {submission.missingChecks && <Text style={styles.warningLine}>Complete all checklist items.</Text>}
-            {submission.missingEvidence && <Text style={styles.warningLine}>Capture required before / after evidence.</Text>}
-          </View>
+      {submission.alreadySubmitted ? (
+        <View style={styles.infoBox}>
+          <Ionicons name="information-circle-outline" size={14} color={colors.info} />
+          <Text style={styles.infoLine}>
+            Already submitted — this task is{" "}
+            {task.status === "submitted" || task.status === "resubmitted"
+              ? "awaiting supervisor inspection"
+              : humanStatus(task.status)}
+            .
+          </Text>
         </View>
+      ) : (
+        submission.blocked && (
+          <View style={styles.warningBox}>
+            <Ionicons name="warning-outline" size={14} color={colors.warningForeground} />
+            <View style={styles.warningText}>
+              {submission.missingQr && <Text style={styles.warningLine}>Scan the room QR before starting.</Text>}
+              {submission.missingChecks && <Text style={styles.warningLine}>Complete all checklist items.</Text>}
+              {submission.missingEvidence && <Text style={styles.warningLine}>Capture required before / after evidence.</Text>}
+            </View>
+          </View>
+        )
       )}
 
       <View style={styles.footerRow}>
@@ -172,6 +264,49 @@ const styles = StyleSheet.create({
   },
   scanChip: {
     alignSelf: "flex-start",
+  },
+  beforePromptCard: {
+    marginBottom: spacing.md,
+    backgroundColor: colors.accent,
+    borderColor: colors.primary,
+    gap: spacing.sm,
+  },
+  beforePromptRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: spacing.sm,
+  },
+  beforePromptText: {
+    flex: 1,
+    gap: 2,
+  },
+  beforePromptTitle: {
+    fontSize: typography.body,
+    fontWeight: "700",
+    color: colors.foreground,
+  },
+  beforePromptButton: {},
+  clockInPromptCard: {
+    marginTop: spacing.md,
+    alignItems: "center",
+    gap: spacing.sm,
+    padding: spacing.lg,
+  },
+  clockInPromptIcon: {
+    marginBottom: spacing.xs,
+  },
+  clockInPromptTitle: {
+    fontSize: typography.h2,
+    fontWeight: "700",
+    color: colors.foreground,
+    textAlign: "center",
+  },
+  clockInPromptText: {
+    textAlign: "center",
+  },
+  clockInPromptButton: {
+    marginTop: spacing.sm,
+    alignSelf: "stretch",
   },
   progressRow: {
     flexDirection: "row",
@@ -245,6 +380,20 @@ const styles = StyleSheet.create({
   warningText: {
     flex: 1,
     gap: 2,
+  },
+  infoBox: {
+    marginTop: spacing.sm,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: spacing.sm,
+    backgroundColor: colors.infoSoft,
+    borderRadius: radius.md,
+    padding: spacing.sm,
+  },
+  infoLine: {
+    flex: 1,
+    fontSize: typography.tiny,
+    color: colors.info,
   },
   warningLine: {
     fontSize: typography.tiny,

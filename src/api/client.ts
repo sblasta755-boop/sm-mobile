@@ -347,5 +347,34 @@ function list(value: unknown): Record<string, unknown>[] {
 }
 
 function initials(name: string) {
-  return name.split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase() || "SC";
+  return name.split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase() || "S3";
+}
+
+// ---- Notifications ----
+
+export function markNotificationRead(accessToken: string, notificationId: string) {
+  return request<Record<string, unknown>>(
+    `/notifications/${notificationId}/read`,
+    { method: "PATCH" },
+    accessToken,
+  );
+}
+
+// ---- Push notifications ----
+// Mirrors app.api.v1.push / app.controllers.push on the backend.
+
+export function registerPushToken(accessToken: string, token: string, platform: string) {
+  return request<{ registered: boolean }>(
+    "/push-tokens",
+    { method: "POST", body: JSON.stringify({ token, platform }) },
+    accessToken,
+  );
+}
+
+export function unregisterPushToken(accessToken: string, token: string) {
+  return request<{ unregistered: boolean }>(
+    "/push-tokens",
+    { method: "DELETE", body: JSON.stringify({ token }) },
+    accessToken,
+  );
 }

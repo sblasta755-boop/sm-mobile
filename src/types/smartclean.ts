@@ -90,6 +90,10 @@ export interface Task {
   requiresBeforeAfter: boolean;
   requiredQr: string;
   qrVerified?: boolean;
+  // Whether the assignee is currently clocked in — undefined when the
+  // backend didn't compute this for the response. Gates the whole task
+  // screen (checklist + evidence), matching the web app.
+  clockedIn?: boolean;
   startedAt?: string;
   submittedAt?: string;
   approvedAt?: string;

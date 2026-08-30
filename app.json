@@ -34,7 +34,8 @@
         "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO",
         "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.ACCESS_FINE_LOCATION"
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.POST_NOTIFICATIONS"
       ]
     },
     "web": {
@@ -53,6 +54,12 @@
         "expo-location",
         {
           "locationAlwaysAndWhenInUsePermission": "Šoma360 captures location only during operational verification."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#21779b"
         }
       ],
       "expo-font"

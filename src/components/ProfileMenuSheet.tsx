@@ -50,20 +50,6 @@ export function ProfileMenuSheet({ visible, onClose }: { visible: boolean; onClo
           </View>
         </View>
 
-        <Pressable
-          style={styles.row}
-          onPress={() => {
-            onClose();
-            router.replace("/login");
-          }}
-        >
-          <View style={styles.rowLeft}>
-            <Ionicons name="refresh" size={18} color={colors.primary} />
-            <Text style={styles.rowTitle}>Switch role</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={16} color={colors.mutedForeground} />
-        </Pressable>
-
         <Button variant="outline" onPress={handleSignOut} style={styles.signOut}>
           Sign out
         </Button>

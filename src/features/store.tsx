@@ -67,6 +67,7 @@ type Action =
   | { type: "APPEND_CA_TIMELINE"; id: string; entry: { at: string; actor: string; text: string } }
   | { type: "CREATE_INCIDENT"; incident: Incident }
   | { type: "UPDATE_USER"; userId: string; patch: Partial<DemoUser> }
+  | { type: "MARK_NOTIFICATION_READ"; id: string; all?: boolean }
   | { type: "SIGN_OUT" };
 
 const STORAGE_KEY = "smartclean.mobile.state.v1";
@@ -212,6 +213,13 @@ function reducer(state: State, action: Action): State {
       return {
         ...state,
         users: state.users.map((user) => (user.id === action.userId ? { ...user, ...action.patch } : user)),
+      };
+    case "MARK_NOTIFICATION_READ":
+      return {
+        ...state,
+        notifications: state.notifications.map((n) =>
+          action.all || n.id === action.id ? { ...n, read: true } : n,
+        ),
       };
     case "SIGN_OUT":
       return { ...initial(), sessionRestored: true };

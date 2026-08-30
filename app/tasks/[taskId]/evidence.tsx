@@ -8,6 +8,7 @@ import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { useSmartClean } from "@/features/store";
 import { addTaskEvidence, fileUrl, uploadImage } from "@/api/client";
+import { taskStage } from "@/domain/status";
 import { colors, radius, spacing, typography } from "@/theme";
 import type { Evidence } from "@/types/smartclean";
 
@@ -27,6 +28,42 @@ export default function EvidenceScreen() {
       </Screen>
     );
   }
+
+  // Same gate as the task detail screen (see tasks/[taskId]/index.tsx) —
+  // reached directly here if the app was already on this screen when the
+  // task's clockedIn flipped false (e.g. a background clock-out), or via
+  // deep link. The backend hard-blocks add_evidence regardless; this just
+  // stops a doomed camera session before it starts.
+  const taskIsWorkable = ["assigned", "not_started", "in_progress", "rework_required"].includes(task.status);
+  if (taskIsWorkable && task.clockedIn === false) {
+    return (
+      <Screen title="Capture evidence">
+        <Card style={styles.clockInPromptCard}>
+          <Ionicons name="camera-outline" size={28} color={colors.primary} style={styles.clockInPromptIcon} />
+          <Text style={styles.clockInPromptTitle}>Clock in to capture evidence</Text>
+          <Text style={[styles.mutedSmall, styles.clockInPromptText]}>
+            Scan your site&apos;s QR code to clock in before capturing task evidence.
+          </Text>
+          <Button style={styles.clockInPromptButton} onPress={() => router.push("/scan")}>
+            Go to Scan
+          </Button>
+          <Button variant="outline" style={styles.clockInPromptButton} onPress={() => router.push(`/tasks/${task.id}`)}>
+            Back to task
+          </Button>
+        </Card>
+      </Screen>
+    );
+  }
+
+  // Gamified capture order: Before is the only shot available until it's
+  // taken (stage "scan"/"before"); After and Issue only unlock once the
+  // checklist itself is fully done (stage "finish") — see
+  // domain/status.ts's taskStage for the full sequence this mirrors on
+  // the task detail screen.
+  const stage = taskStage(task);
+  const beforeTaken = task.evidence.some((e) => e.kind === "before");
+  const canCaptureBefore = !beforeTaken;
+  const canCaptureAfterOrIssue = stage === "finish";
 
   async function startCamera() {
     if (!permission?.granted) {
@@ -86,16 +123,38 @@ export default function EvidenceScreen() {
       </View>
 
       <View style={styles.captureRow}>
-        <Button variant="outline" style={styles.captureButton} disabled={!cameraOn || busy} onPress={() => capture("before")}>
+        <Button
+          variant="outline"
+          style={styles.captureButton}
+          disabled={!cameraOn || busy || !canCaptureBefore}
+          onPress={() => capture("before")}
+        >
           Before
         </Button>
-        <Button style={styles.captureButton} disabled={!cameraOn || busy} onPress={() => capture("after")}>
+        <Button
+          style={styles.captureButton}
+          disabled={!cameraOn || busy || !canCaptureAfterOrIssue}
+          onPress={() => capture("after")}
+        >
           After
         </Button>
-        <Button variant="outline" style={styles.captureButton} disabled={!cameraOn || busy} onPress={() => capture("issue")}>
+        <Button
+          variant="outline"
+          style={styles.captureButton}
+          disabled={!cameraOn || busy || !canCaptureAfterOrIssue}
+          onPress={() => capture("issue")}
+        >
           Issue
         </Button>
       </View>
+
+      {!canCaptureAfterOrIssue && (
+        <Text style={styles.stageHint}>
+          {!beforeTaken
+            ? "Take the Before photo first, then work through the checklist."
+            : "After and Issue photos unlock once the checklist is complete."}
+        </Text>
+      )}
 
       <Text style={styles.sectionTitle}>{`Captured (${task.evidence.length})`}</Text>
       <View style={styles.list}>
@@ -193,6 +252,13 @@ const styles = StyleSheet.create({
   captureButton: {
     flex: 1,
   },
+  stageHint: {
+    marginTop: -spacing.sm,
+    marginBottom: spacing.lg,
+    fontSize: typography.tiny,
+    color: colors.mutedForeground,
+    textAlign: "center",
+  },
   sectionTitle: {
     fontSize: typography.body,
     fontWeight: "700",
@@ -241,5 +307,27 @@ const styles = StyleSheet.create({
   },
   backButton: {
     marginTop: spacing.sm,
+  },
+  clockInPromptCard: {
+    marginTop: spacing.md,
+    alignItems: "center",
+    gap: spacing.sm,
+    padding: spacing.lg,
+  },
+  clockInPromptIcon: {
+    marginBottom: spacing.xs,
+  },
+  clockInPromptTitle: {
+    fontSize: typography.h2,
+    fontWeight: "700",
+    color: colors.foreground,
+    textAlign: "center",
+  },
+  clockInPromptText: {
+    textAlign: "center",
+  },
+  clockInPromptButton: {
+    marginTop: spacing.sm,
+    alignSelf: "stretch",
   },
 });
