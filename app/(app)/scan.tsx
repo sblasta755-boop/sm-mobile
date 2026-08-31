@@ -9,6 +9,7 @@ import { Button } from "@/components/Button";
 import { StatusBadge, VerifiedBadge } from "@/components/StatusBadge";
 import { useSmartClean } from "@/features/store";
 import { clockIn as clockInRequest, clockOut as clockOutRequest, resolveQr } from "@/api/client";
+import { getCurrentCoords } from "@/services/geolocation";
 import { colors, radius, spacing, typography } from "@/theme";
 
 interface ScanResult {
@@ -19,6 +20,7 @@ interface ScanResult {
   taskId?: string;
   kind?: string;
   clockedOut?: boolean;
+  geofenceVerified?: boolean;
 }
 
 const SUGGESTIONS = ["SITE-SBP-001", "ROOM-SBP-BTH-02", "ZONE-SBP-REC-01", "STOCK-SBP-001"];
@@ -47,9 +49,15 @@ export default function ScanScreen() {
       setRecent((r) => [code, ...r.filter((c) => c !== code)].slice(0, 4));
 
       if (!state.accessToken) return;
+      // Fetched once per scan and reused for every call below — the
+      // backend rejects a geofenced scan outright when this is null (see
+      // evaluate_geofence), so a denied/unavailable location fails the
+      // scan rather than silently proceeding unverified.
+      const coords = await getCurrentCoords();
+
       let resolved: Awaited<ReturnType<typeof resolveQr>>;
       try {
-        resolved = await resolveQr(state.accessToken, code);
+        resolved = await resolveQr(state.accessToken, code, coords?.latitude, coords?.longitude);
       } catch (error) {
         setResult({ code, ok: false, reason: error instanceof Error ? error.message : "Scan failed" });
         return;
@@ -72,9 +80,19 @@ export default function ScanScreen() {
         );
         try {
           if (alreadyClockedIn) {
-            await clockOutRequest(state.accessToken, { siteId: site.id, qrValue: code });
+            await clockOutRequest(state.accessToken, {
+              siteId: site.id,
+              qrValue: code,
+              latitude: coords?.latitude,
+              longitude: coords?.longitude,
+            });
           } else {
-            await clockInRequest(state.accessToken, { siteId: site.id, qrValue: code });
+            await clockInRequest(state.accessToken, {
+              siteId: site.id,
+              qrValue: code,
+              latitude: coords?.latitude,
+              longitude: coords?.longitude,
+            });
           }
           await refreshBackendData();
         } catch (error) {
@@ -90,7 +108,14 @@ export default function ScanScreen() {
           });
           return;
         }
-        setResult({ code, ok: true, linkedName: site.name, kind: "site", clockedOut: alreadyClockedIn });
+        setResult({
+          code,
+          ok: true,
+          linkedName: site.name,
+          kind: "site",
+          clockedOut: alreadyClockedIn,
+          geofenceVerified: true,
+        });
         if (!alreadyClockedIn) {
           setApproval({ siteName: site.name, at: new Date().toISOString() });
         }
@@ -105,7 +130,14 @@ export default function ScanScreen() {
           return;
         }
         await refreshBackendData();
-        setResult({ code, ok: true, linkedName: location?.name, taskId: task.id, kind: resolved.kind });
+        setResult({
+          code,
+          ok: true,
+          linkedName: location?.name,
+          taskId: task.id,
+          kind: resolved.kind,
+          geofenceVerified: true,
+        });
         return;
       }
 
@@ -214,7 +246,10 @@ export default function ScanScreen() {
                   icon="time-outline"
                   text={`Timestamp ${new Date().toLocaleTimeString("en-ZA")}`}
                 />
-                <ChecklistLine icon="location" text="GPS within geofence" />
+                <ChecklistLine
+                  icon="location"
+                  text={result.geofenceVerified ? "GPS within geofence" : "Location check passed"}
+                />
                 <ChecklistLine icon="phone-portrait-outline" text="Device recognised" />
               </View>
               {result.kind === "site" && clocked && !result.clockedOut && (
