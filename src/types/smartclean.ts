@@ -138,6 +138,21 @@ export interface Site {
   active: boolean;
 }
 
+export interface TenantBranding {
+  // All optional — an unset field means "use the app default" (Šoma360
+  // name/mark/blue), not "render nothing". See useTenantBranding.
+  displayName?: string;
+  logoUrl?: string;
+  primaryColor?: string;
+}
+
+export interface Tenant {
+  id: string;
+  name: string;
+  slug: string;
+  branding: TenantBranding;
+}
+
 export interface Location {
   id: string;
   siteId: string;

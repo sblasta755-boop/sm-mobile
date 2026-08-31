@@ -10,6 +10,7 @@ import { StatusBadge, VerifiedBadge } from "@/components/StatusBadge";
 import { useSmartClean } from "@/features/store";
 import { clockIn as clockInRequest, clockOut as clockOutRequest, resolveQr } from "@/api/client";
 import { getCurrentCoords } from "@/services/geolocation";
+import { useTenantBranding } from "@/services/branding";
 import { colors, radius, spacing, typography } from "@/theme";
 
 interface ScanResult {
@@ -33,6 +34,7 @@ function extractCode(raw: string): string {
 
 export default function ScanScreen() {
   const { state, currentUser, refreshBackendData } = useSmartClean();
+  const branding = useTenantBranding();
   const [permission, requestPermission] = useCameraPermissions();
   const [cameraOn, setCameraOn] = useState(false);
   const [manual, setManual] = useState("");
@@ -199,7 +201,7 @@ export default function ScanScreen() {
       </View>
 
       <Text style={styles.helpText}>
-        Point at a Šoma360 QR sticker. You can also tap a suggestion or type a code.
+        Point at a {branding.name} QR sticker. You can also tap a suggestion or type a code.
       </Text>
 
       <View style={styles.suggestions}>

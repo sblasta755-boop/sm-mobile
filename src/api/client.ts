@@ -12,6 +12,7 @@ import type {
   Site,
   StockItem,
   Task,
+  Tenant,
 } from "@/types/smartclean";
 
 const extraUrl = (Constants.expoConfig?.extra?.apiBaseUrl as string | undefined) ?? "";
@@ -34,6 +35,7 @@ export interface BackendSession {
 
 export interface BackendBootstrap {
   user: DemoUser;
+  tenants: Tenant[];
   users: DemoUser[];
   sites: Site[];
   locations: Location[];
@@ -245,6 +247,19 @@ export function resolveQr(accessToken: string, value: string, latitude?: number,
   );
 }
 
+// ---- Tenant / branding ----
+
+/** Unauthenticated — for the login/splash screens, which need this
+ * deployment's branding before anyone has signed in. See the backend's
+ * TenantController.get_public_branding. */
+export function getPublicTenantBranding() {
+  return request<Tenant>("/tenant/public-branding", {});
+}
+
+export function getTenant(accessToken: string) {
+  return request<Tenant>("/tenant", {}, accessToken);
+}
+
 // ---- Users ----
 
 export function updateUser(accessToken: string, userId: string, payload: Record<string, unknown>) {
@@ -289,6 +304,7 @@ export async function uploadImage(accessToken: string, uri: string, filename: st
 function normalizeBootstrap(payload: Record<string, unknown>): BackendBootstrap {
   return {
     user: normalizeUser(payload.user as Record<string, unknown>),
+    tenants: list(payload.tenants) as unknown as Tenant[],
     users: list(payload.users).map(normalizeUser),
     sites: list(payload.sites).map((site) => ({
       clientId: "",
@@ -330,7 +346,7 @@ function normalizeBootstrap(payload: Record<string, unknown>): BackendBootstrap 
 }
 
 function normalizeUser(raw: Record<string, unknown>): DemoUser {
-  const name = String(raw.name ?? raw.displayName ?? raw.username ?? "Šoma360 User");
+  const name = String(raw.name ?? raw.displayName ?? raw.username ?? "Team member");
   return {
     id: String(raw.id),
     name,

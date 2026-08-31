@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { router } from "expo-router";
 import {
   Image,
@@ -13,6 +13,8 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useSmartClean } from "@/features/store";
+import { getPublicTenantBranding } from "@/api/client";
+import { resolveBranding, type ResolvedBranding } from "@/services/branding";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
 import { colors, radius, spacing, typography } from "@/theme";
@@ -20,6 +22,23 @@ import { colors, radius, spacing, typography } from "@/theme";
 export default function Login() {
   const { signIn } = useSmartClean();
   const insets = useSafeAreaInsets();
+  // Fetched unauthenticated — nobody's signed in yet, so state.tenant
+  // (only populated by bootstrap after sign-in) isn't available here.
+  const [branding, setBranding] = useState<ResolvedBranding>(() => resolveBranding(undefined));
+
+  useEffect(() => {
+    let cancelled = false;
+    getPublicTenantBranding()
+      .then((tenant) => {
+        if (!cancelled) setBranding(resolveBranding(tenant.branding));
+      })
+      .catch(() => {
+        // Best-effort — the login screen still works with default branding.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -56,10 +75,14 @@ export default function Login() {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.brandBlock}>
-          <View style={styles.logo}>
-            <Text style={styles.logoGlyph}>✦</Text>
-          </View>
-          <Text style={styles.brand}>Šoma360</Text>
+          {branding.logoUrl ? (
+            <Image source={{ uri: branding.logoUrl }} style={styles.logoImage} />
+          ) : (
+            <View style={[styles.logo, { backgroundColor: branding.primaryColor }]}>
+              <Text style={styles.logoGlyph}>{branding.mark}</Text>
+            </View>
+          )}
+          <Text style={styles.brand}>{branding.name}</Text>
           <Text style={styles.tagline}>Sign in to manage your shift</Text>
         </View>
 
@@ -170,8 +193,16 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 6 },
     elevation: 6,
   },
+  logoImage: {
+    width: 64,
+    height: 64,
+    borderRadius: radius.round,
+    marginBottom: spacing.sm,
+    resizeMode: "cover",
+  },
   logoGlyph: {
-    fontSize: 28,
+    fontSize: 20,
+    fontWeight: "800",
     color: colors.primaryForeground,
   },
   brand: {

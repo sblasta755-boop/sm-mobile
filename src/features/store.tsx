@@ -23,6 +23,7 @@ import type {
   Location,
   StockItem,
   Task,
+  Tenant,
 } from "@/types/smartclean";
 import { SecureSessionService, type StoredSession } from "@/storage/SecureSessionService";
 
@@ -35,6 +36,7 @@ interface State {
   loading: boolean;
   error: string | null;
   connectivity: Connectivity;
+  tenant: Tenant | null;
   users: DemoUser[];
   sites: Site[];
   locations: Location[];
@@ -82,6 +84,7 @@ function initial(): State {
     loading: false,
     error: null,
     connectivity: "online",
+    tenant: null,
     users: [],
     sites: [],
     locations: [],
@@ -100,6 +103,7 @@ function initial(): State {
 
 function bootstrapState(bootstrap: BackendBootstrap): Partial<State> {
   return {
+    tenant: bootstrap.tenants[0] ?? null,
     users: bootstrap.users.length ? bootstrap.users : [bootstrap.user],
     sites: bootstrap.sites,
     locations: bootstrap.locations,
