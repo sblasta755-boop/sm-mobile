@@ -21,7 +21,7 @@ Notifications.setNotificationHandler({
 });
 
 async function getExpoPushToken(): Promise<string | null> {
-  // Push tokens only exist on a real device — the simulator/emulator has
+  // Push tokens only exist on a real device - the simulator/emulator has
   // no APNs/FCM registration to hand back, and expo-notifications throws
   // if asked anyway. Fail quietly rather than surface an error the
   // developer can't act on.
@@ -48,9 +48,9 @@ async function getExpoPushToken(): Promise<string | null> {
 
 /**
  * Registers this device's Expo push token with the backend whenever a user
- * is signed in, and unregisters it on sign-out — mirrored by
+ * is signed in, and unregisters it on sign-out - mirrored by
  * app.controllers.push.PushTokenController on the server. Mount once, at
- * the root (inside SmartCleanProvider so useSmartClean works) — see
+ * the root (inside SmartCleanProvider so useSmartClean works) - see
  * app/_layout.tsx.
  */
 export function usePushRegistration() {
@@ -62,7 +62,7 @@ export function usePushRegistration() {
 
     async function syncRegistration() {
       if (!currentUser || !state.accessToken) {
-        // Signed out — best-effort unregister whatever we last registered
+        // Signed out - best-effort unregister whatever we last registered
         // so a stale token doesn't keep receiving this user's pushes on a
         // shared/reused device after they've logged out.
         if (registeredTokenRef.current) {
@@ -80,7 +80,7 @@ export function usePushRegistration() {
         await registerPushToken(state.accessToken, token, Device.osName?.toLowerCase() ?? "unknown");
         registeredTokenRef.current = token;
       } catch {
-        // Best-effort — a failed registration just means this device
+        // Best-effort - a failed registration just means this device
         // won't get pushes until the next successful sync (app reopen,
         // token refresh); in-app notifications are unaffected.
       }
@@ -92,7 +92,7 @@ export function usePushRegistration() {
     };
   }, [currentUser, state.accessToken]);
 
-  // Re-check on app foreground too — covers the case where permission was
+  // Re-check on app foreground too - covers the case where permission was
   // denied at first prompt and later granted from system Settings while
   // the app was backgrounded, without requiring a full re-login.
   useEffect(() => {
@@ -113,7 +113,7 @@ export function usePushRegistration() {
   }, [currentUser, state.accessToken]);
 
   // Tap handling: a push tap should take the user straight to what it's
-  // about, not just "open the app" — see routeForNotificationData below
+  // about, not just "open the app" - see routeForNotificationData below
   // for the category -> screen mapping. Registered once; expo-notifications
   // keeps its own listener list so this doesn't need the dependency array
   // dance the effects above do.

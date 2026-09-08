@@ -3,6 +3,11 @@ import * as Location from "expo-location";
 export interface DeviceCoords {
   latitude: number;
   longitude: number;
+  /** The device's own confidence radius (metres) for this fix -
+   * LocationObjectCoords.accuracy. Surfaced in the scan UI on a failed
+   * geofence check so "the phone isn't sure where it is" can be told
+   * apart from a genuine distance problem. */
+  accuracy: number | null;
 }
 
 /**
@@ -20,7 +25,11 @@ export async function getCurrentCoords(): Promise<DeviceCoords | null> {
     const position = await Location.getCurrentPositionAsync({
       accuracy: Location.Accuracy.High,
     });
-    return { latitude: position.coords.latitude, longitude: position.coords.longitude };
+    return {
+      latitude: position.coords.latitude,
+      longitude: position.coords.longitude,
+      accuracy: Number.isFinite(position.coords.accuracy) ? position.coords.accuracy : null,
+    };
   } catch {
     return null;
   }

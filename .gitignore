@@ -33,3 +33,8 @@ yarn-error.*
 
 # typescript
 *.tsbuildinfo
+
+# auto-generated build version (scripts/version.mjs, run via the
+# generate-version npm script) - regenerated fresh on every
+# start/build, never hand-edited or meant to be committed
+src/constants/version.ts

@@ -1,9 +1,10 @@
 import { router, useLocalSearchParams } from "expo-router";
-import { StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Screen } from "@/components/Screen";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
+import { BrokenGlassIcon } from "@/components/BrokenGlassIcon";
 import { Checkbox } from "@/components/Checkbox";
 import { ProgressBar } from "@/components/ProgressBar";
 import { StatusBadge, VerifiedBadge } from "@/components/StatusBadge";
@@ -11,6 +12,64 @@ import { useSmartClean } from "@/features/store";
 import { updateChecklistItem } from "@/api/client";
 import { toneForTask, humanStatus, taskSubmissionBlocked, taskStage, isChecklistUnlocked } from "@/domain/status";
 import { colors, radius, spacing, typography } from "@/theme";
+
+// steps_required checklist items store their value as a single
+// newline-joined string (same shape as a "note" item's value) so the
+// backend needs no schema change - this splits/joins it into the same
+// per-step input + "Add step" UI used for suggested steps elsewhere (see
+// app/(app)/incidents/new.tsx).
+function StepsField({
+  value,
+  disabled,
+  onChange,
+}: {
+  value: string;
+  disabled: boolean;
+  onChange: (value: string) => void;
+}) {
+  const steps = value ? value.split("\n") : [""];
+
+  const updateStep = (index: number, text: string) => {
+    onChange(steps.map((s, i) => (i === index ? text : s)).join("\n"));
+  };
+
+  const removeStep = (index: number) => {
+    onChange(steps.filter((_, i) => i !== index).join("\n"));
+  };
+
+  const addStep = () => {
+    onChange([...steps, ""].join("\n"));
+  };
+
+  return (
+    <View style={styles.stepsField}>
+      {steps.map((step, index) => (
+        <View key={index} style={styles.stepRow}>
+          <TextInput
+            value={step}
+            onChangeText={(text) => updateStep(index, text)}
+            placeholder={`Step ${index + 1}`}
+            placeholderTextColor={colors.mutedForeground}
+            editable={!disabled}
+            style={[styles.noteInput, styles.stepInput]}
+          />
+          <Pressable
+            accessibilityLabel="Remove step"
+            disabled={disabled}
+            onPress={() => removeStep(index)}
+            style={styles.stepRemoveButton}
+          >
+            <Ionicons name="close-circle-outline" size={20} color={colors.mutedForeground} />
+          </Pressable>
+        </View>
+      ))}
+      <Pressable style={styles.addStepButton} disabled={disabled} onPress={addStep}>
+        <Ionicons name="add" size={16} color={colors.foreground} />
+        <Text style={styles.addStepText}>Add step</Text>
+      </Pressable>
+    </View>
+  );
+}
 
 export default function TaskDetailScreen() {
   const { taskId } = useLocalSearchParams<{ taskId: string }>();
@@ -23,11 +82,23 @@ export default function TaskDetailScreen() {
       type: "UPDATE_TASK",
       taskId: task.id,
       patch: {
-        checklist: task.checklist.map((item) =>
-          item.id === itemId
-            ? { ...item, done: typeof value === "boolean" ? value : item.done, value: typeof value === "string" ? value : item.value }
-            : item,
-        ),
+        checklist: task.checklist.map((item) => {
+          if (item.id !== itemId) return item;
+          const nextValue = typeof value === "string" ? value : item.value;
+          return {
+            ...item,
+            // "steps_required" mirrors the backend's own derivation
+            // (TaskController.update_checklist) - done exactly when
+            // there's real text, not a manual toggle.
+            done:
+              item.type === "steps_required"
+                ? Boolean(nextValue?.trim())
+                : typeof value === "boolean"
+                  ? value
+                  : item.done,
+            value: nextValue,
+          };
+        }),
       },
     });
     try {
@@ -47,6 +118,74 @@ export default function TaskDetailScreen() {
         <Button variant="outline" style={styles.backButton} onPress={() => router.push("/home")}>
           Back home
         </Button>
+      </Screen>
+    );
+  }
+
+  // An hourly-compliance round this user was named a candidate for but
+  // isn't the current assignee of - either already claimed by someone
+  // else, or still on the placeholder first-candidate assignment and
+  // this user isn't them. The backend's own _assert_task_access already
+  // rejects every write this screen could attempt (checklist/evidence/
+  // submit all require assigneeId === this user), so this is a
+  // read-only "here's what's going on" screen instead of letting them
+  // tap around into API errors — mirrors the web app's
+  // mobile.tasks.$taskId.tsx.
+  const isUnclaimedCandidate =
+    task.isHourlyCompliance &&
+    task.assigneeId !== currentUser?.id &&
+    (task.hourlyComplianceCandidateIds ?? []).includes(currentUser?.id ?? "");
+  if (isUnclaimedCandidate) {
+    return (
+      <Screen title={task.title} backTo="/home">
+        <Card style={styles.clockInPromptCard}>
+          <Ionicons name="people-outline" size={28} color={colors.primary} style={styles.clockInPromptIcon} />
+          <Text style={styles.clockInPromptTitle}>
+            {task.hourlyComplianceClaimed ? "This round was taken" : "Not yet claimed"}
+          </Text>
+          <Text style={[styles.mutedSmall, styles.clockInPromptText]}>
+            {task.hourlyComplianceClaimed
+              ? "Someone else scanned the room QR first and claimed this round - no action needed from you."
+              : "You're one of several cleaners eligible for this round. Scan the room's QR code to claim it before someone else does."}
+          </Text>
+          <Button
+            style={styles.clockInPromptButton}
+            icon={<Ionicons name="scan-outline" size={16} color={colors.primaryForeground} />}
+            onPress={() => router.push("/scan")}
+          >
+            Scan room QR
+          </Button>
+          <Button variant="outline" style={styles.clockInPromptButton} onPress={() => router.push("/home")}>
+            Back home
+          </Button>
+        </Card>
+      </Screen>
+    );
+  }
+
+  // Blocks the whole screen, not just Submit - matches the backend's own
+  // hard enforcement (TaskController._assert_hourly_compliance_window_
+  // open) on every write (checklist/evidence/submit), same reasoning as
+  // the clock-in gate below: this stops a doomed request before it
+  // starts rather than letting a cleaner tap around into a rejected
+  // one. A round's window closing is the whole point of a *timed*
+  // compliance check - completing it hours late with nothing to show
+  // it wasn't on time would defeat that entirely.
+  if (task.hourlyComplianceLocked) {
+    return (
+      <Screen title={task.title} backTo="/home">
+        <Card style={styles.clockInPromptCard}>
+          <Ionicons name="lock-closed-outline" size={28} color={colors.destructive} style={styles.clockInPromptIcon} />
+          <Text style={styles.clockInPromptTitle}>This round&apos;s window has closed</Text>
+          <Text style={[styles.mutedSmall, styles.clockInPromptText]}>
+            {task.hourlyComplianceSlot
+              ? `The ${task.hourlyComplianceSlot} round's time window has passed - it's locked and can no longer be recorded.`
+              : "This round's time window has passed - it's locked and can no longer be recorded."}
+          </Text>
+          <Button variant="outline" style={styles.clockInPromptButton} onPress={() => router.push("/home")}>
+            Back home
+          </Button>
+        </Card>
       </Screen>
     );
   }
@@ -116,6 +255,24 @@ export default function TaskDetailScreen() {
 
   return (
     <Screen title={task.title}>
+      {task.incidentId && (
+        <Card style={styles.incidentCard}>
+          <BrokenGlassIcon size={16} color={colors.destructive} />
+          <Text style={styles.incidentText}>
+            {task.isInvestigation ? (
+              <>
+                This task is an <Text style={styles.incidentTextStrong}>incident investigation</Text>.
+                Your findings and photos go straight to your supervisor for review.
+              </>
+            ) : (
+              <>
+                This task was created from an <Text style={styles.incidentTextStrong}>incident report</Text>.
+                Completing it resolves that incident once your supervisor approves it.
+              </>
+            )}
+          </Text>
+        </Card>
+      )}
       <Card style={styles.headerCard}>
         <View style={styles.headerRow}>
           <Text style={styles.mutedSmall}>
@@ -165,32 +322,39 @@ export default function TaskDetailScreen() {
         </Card>
       )}
 
-      {stage === "finish" && !task.evidence.some((e) => e.kind === "after") && (
-        <Card style={styles.beforePromptCard}>
-          <View style={styles.beforePromptRow}>
-            <Ionicons name="camera-outline" size={18} color={colors.primary} />
-            <View style={styles.beforePromptText}>
-              <Text style={styles.beforePromptTitle}>Checklist done — take an After photo</Text>
-              <Text style={styles.mutedSmall}>
-                Capture an After photo (and an Issue photo if anything needs flagging) to finish up.
-              </Text>
+      {stage === "finish" &&
+        (task.requiresBeforeAfter
+          ? !task.evidence.some((e) => e.kind === "after")
+          : task.evidence.length === 0) && (
+          <Card style={styles.beforePromptCard}>
+            <View style={styles.beforePromptRow}>
+              <Ionicons name="camera-outline" size={18} color={colors.primary} />
+              <View style={styles.beforePromptText}>
+                <Text style={styles.beforePromptTitle}>
+                  {task.requiresBeforeAfter ? "Checklist done — take an After photo" : "Take a photo"}
+                </Text>
+                <Text style={styles.mutedSmall}>
+                  {task.requiresBeforeAfter
+                    ? "Capture an After photo (and an Issue photo if anything needs flagging) to finish up."
+                    : "Capture a photo of what you found to finish up."}
+                </Text>
+              </View>
             </View>
-          </View>
-          <Button
-            style={styles.beforePromptButton}
-            icon={<Ionicons name="camera-outline" size={16} color={colors.primaryForeground} />}
-            onPress={() => router.push(`/tasks/${task.id}/evidence`)}
-          >
-            Open camera
-          </Button>
-        </Card>
-      )}
+            <Button
+              style={styles.beforePromptButton}
+              icon={<Ionicons name="camera-outline" size={16} color={colors.primaryForeground} />}
+              onPress={() => router.push(`/tasks/${task.id}/evidence`)}
+            >
+              Open camera
+            </Button>
+          </Card>
+        )}
 
       <View style={styles.checklist}>
         {task.checklist.map((item) => (
           <Card key={item.id} style={item.done ? styles.checklistItemDone : styles.checklistItem}>
             <View style={styles.checklistRow}>
-              {item.type !== "note" && (
+              {item.type !== "note" && item.type !== "steps_required" && (
                 <Checkbox
                   checked={Boolean(item.done)}
                   // photo_required auto-ticks itself once both before/after
@@ -208,11 +372,23 @@ export default function TaskDetailScreen() {
                   {item.type === "photo_required" && (
                     <StatusBadge
                       tone={item.done ? "success" : "info"}
-                      label={item.done ? "Photo captured" : "Auto-completes with before & after photos"}
+                      label={
+                        item.done
+                          ? "Photo captured"
+                          : task.requiresBeforeAfter
+                            ? "Auto-completes with before & after photos"
+                            : "Auto-completes once you take a photo"
+                      }
                       icon="camera-outline"
                     />
                   )}
                   {item.type === "declaration" && <StatusBadge tone="muted" label="Declaration" />}
+                  {item.type === "steps_required" && (
+                    <StatusBadge
+                      tone={item.done ? "success" : "warning"}
+                      label={item.done ? "Steps written" : "Required to submit"}
+                    />
+                  )}
                 </View>
                 {item.type === "note" && (
                   <TextInput
@@ -223,6 +399,13 @@ export default function TaskDetailScreen() {
                     editable={checklistUnlocked}
                     value={item.value ?? ""}
                     onChangeText={(text) => toggleCheck(item.id, text)}
+                  />
+                )}
+                {item.type === "steps_required" && (
+                  <StepsField
+                    value={item.value ?? ""}
+                    disabled={!checklistUnlocked}
+                    onChange={(text) => toggleCheck(item.id, text)}
                   />
                 )}
               </View>
@@ -284,6 +467,23 @@ const styles = StyleSheet.create({
   },
   backButton: {
     marginTop: spacing.md,
+  },
+  incidentCard: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+    backgroundColor: colors.destructiveSoft,
+    borderColor: "#f3c9c4",
+  },
+  incidentText: {
+    flex: 1,
+    fontSize: typography.small,
+    color: colors.mutedForeground,
+  },
+  incidentTextStrong: {
+    fontWeight: "700",
+    color: colors.foreground,
   },
   headerCard: {
     marginBottom: spacing.md,
@@ -391,6 +591,39 @@ const styles = StyleSheet.create({
     fontSize: typography.small,
     color: colors.foreground,
     textAlignVertical: "top",
+  },
+  stepsField: {
+    marginTop: spacing.xs,
+    gap: spacing.xs,
+  },
+  stepRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+  },
+  stepInput: {
+    flex: 1,
+    marginTop: 0,
+    minHeight: 40,
+  },
+  stepRemoveButton: {
+    padding: 4,
+  },
+  addStepButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: 4,
+    borderWidth: 1,
+    borderColor: colors.input,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  addStepText: {
+    fontSize: typography.small,
+    fontWeight: "600",
+    color: colors.foreground,
   },
   actionsRow: {
     marginTop: spacing.lg,

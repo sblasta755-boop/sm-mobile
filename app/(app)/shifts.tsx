@@ -13,7 +13,13 @@ import type { TaskStatus } from "@/types/smartclean";
 export default function ShiftsScreen() {
   const { state, currentUser } = useSmartClean();
   const [activeGroup, setActiveGroup] = useState("Not started");
-  const myTasks = state.tasks.filter((t) => t.assigneeId === currentUser?.id);
+  // Hourly-compliance rounds have their own dedicated screen ("My hourly
+  // compliance rounds", reached from Home) rather than showing up here
+  // alongside regular cleaning tasks - excluded the same way home.tsx
+  // excludes them from its own "Assigned tasks"/progress count.
+  const myTasks = state.tasks.filter(
+    (t) => t.assigneeId === currentUser?.id && !t.isHourlyCompliance,
+  );
 
   const groups = useMemo(() => {
     const inGroup = (statuses: TaskStatus[]) => myTasks.filter((t) => statuses.includes(t.status));

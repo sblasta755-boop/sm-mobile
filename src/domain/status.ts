@@ -77,9 +77,14 @@ export function taskSubmissionBlocked(task: {
     (task.requiresBeforeAfter &&
       (!task.evidence.some((e) => e.kind === "before") ||
         !task.evidence.some((e) => e.kind === "after"))) ||
-    task.checklist.some(
-      (item) => item.type === "photo_required" && !task.evidence.some((e) => e.kind === "after"),
-    );
+    (task.checklist.some((item) => item.type === "photo_required") &&
+      // An investigation task (requiresBeforeAfter: false) just needs
+      // any one photo taken — see TaskController.add_evidence's
+      // evidence_bar_met split; a before/after task additionally needs
+      // an "after" specifically, already covered by the check above.
+      (task.requiresBeforeAfter
+        ? !task.evidence.some((e) => e.kind === "after")
+        : task.evidence.length === 0));
   const missingChecks = task.checklist.some((item) => item.type !== "note" && !item.done);
   return {
     blocked: alreadySubmitted || !task.qrVerified || missingEvidence || missingChecks,
@@ -102,15 +107,25 @@ export function taskSubmissionBlocked(task: {
 export type TaskStage = "scan" | "before" | "working" | "finish";
 
 export function taskStage(task: {
+  requiresBeforeAfter?: boolean;
   qrVerified?: boolean;
   checklist: { type: string; done?: boolean }[];
   evidence: { kind: string }[];
 }): TaskStage {
   if (!task.qrVerified) return "scan";
-  if (!task.evidence.some((e) => e.kind === "before")) return "before";
+  // The Before-photo gate only applies to a task that actually wants a
+  // before/after pair (requiresBeforeAfter — the normal cleaning-task
+  // shape). An investigation task (see IncidentController.
+  // assign_investigation) has no such concept — one plain "take a photo
+  // of what you found" item, no categorisation — so it skips straight to
+  // "working" instead of getting stuck waiting for a "Before" photo the
+  // task was never designed to ask for. Mirrors the web app's own
+  // taskStage.ts — keep both in sync.
+  if (task.requiresBeforeAfter && !task.evidence.some((e) => e.kind === "before")) return "before";
   // "photo_required" items don't count toward this gate — they can only
-  // ever become done by the backend auto-ticking them once both before
-  // and after evidence exist (see TaskController.add_evidence), so
+  // ever become done by the backend auto-ticking them once the task's
+  // own evidence bar is met (before+after for a requiresBeforeAfter
+  // task, any one photo otherwise — see TaskController.add_evidence), so
   // requiring them here alongside gating After's capture button on this
   // same stage was a deadlock: the checklist could never "complete"
   // without an After photo, and the After button could never unlock

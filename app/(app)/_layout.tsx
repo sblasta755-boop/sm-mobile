@@ -72,6 +72,22 @@ export default function AppTabsLayout() {
           tabBarIcon: ({ color, size }) => <Ionicons name="person" color={color} size={size} />,
         }}
       />
+
+      {/* Everything below is a real route under this (app) group but not
+          one of the 5 tabs above - expo-router's Tabs navigator auto-adds
+          any undeclared file route as its own tab (see the extra icons
+          that showed up once notifications/privacy/incidents/tasks/etc.
+          moved in here from top-level app/), so each needs href: null to
+          stay reachable via router.push() without cluttering the bar. */}
+      <Tabs.Screen name="hourly-compliance" options={{ href: null }} />
+      <Tabs.Screen name="notifications" options={{ href: null }} />
+      <Tabs.Screen name="privacy" options={{ href: null }} />
+      <Tabs.Screen name="profile/edit" options={{ href: null }} />
+      <Tabs.Screen name="incidents/new" options={{ href: null }} />
+      <Tabs.Screen name="corrective-actions/[actionId]" options={{ href: null }} />
+      <Tabs.Screen name="tasks/[taskId]/index" options={{ href: null }} />
+      <Tabs.Screen name="tasks/[taskId]/declaration" options={{ href: null }} />
+      <Tabs.Screen name="tasks/[taskId]/evidence" options={{ href: null }} />
     </Tabs>
   );
 }

@@ -13,6 +13,10 @@ export interface DemoUser {
   initials: string;
   siteIds: string[];
   email?: string;
+  // Free-text, stored in the backend's JSONB profile blob (no dedicated
+  // column) - same round-trip as profilePhotoDataUrl. Self-service
+  // editable from profile/edit.tsx, see updateUser + toUserRecord.
+  phone?: string;
   profilePhotoDataUrl?: string;
 }
 
@@ -52,7 +56,16 @@ export type Connectivity = "online" | "offline" | "slow";
 export interface ChecklistItem {
   id: string;
   label: string;
-  type: "checkbox" | "pass_fail" | "photo_required" | "note" | "declaration";
+  type:
+    | "checkbox"
+    | "pass_fail"
+    | "photo_required"
+    | "note"
+    | "declaration"
+    // Requires real text in `value` to count as done - see
+    // IncidentController.assign_investigation on the backend (the
+    // investigation task's "write your proposed steps" item).
+    | "steps_required";
   risk?: "low" | "medium" | "high";
   requiredEvidence?: boolean;
   done?: boolean;
@@ -80,6 +93,11 @@ export interface Task {
   locationName: string;
   title: string;
   priority: "low" | "medium" | "high";
+  // The task's calendar date, ISO timestamp - always sent by the
+  // backend (camel_task's scheduledAt) but this type never declared it
+  // until DateStrip's selectedDate started actually filtering the
+  // assigned-tasks list on Home (see app/(app)/home.tsx).
+  scheduledAt: string;
   dueTime: string;
   estimatedMinutes: number;
   status: TaskStatus;
@@ -99,6 +117,48 @@ export interface Task {
   approvedAt?: string;
   score?: number;
   note?: string;
+  /** Set for a task created from an incident - by either
+   * assignInvestigation (send a cleaner to assess first) or assignTask
+   * (the fix is already known), tying it back to the Incident it came
+   * from. See IncidentController on the backend. */
+  incidentId?: string;
+  /** True only for a task created by assignInvestigation - assignTask
+   * also sets incidentId above, so that alone can't tell "this task IS
+   * the investigation" (photo + proposed-steps checklist) apart from
+   * "this is normal fix work that happened to originate from an
+   * incident" (a plain checkbox checklist of already-known steps). See
+   * camel_task's isInvestigation on the backend. */
+  isInvestigation?: boolean;
+  /** True for a Task generated from a site's recurring hourly-compliance
+   * schedule (see app.services.hourly_compliance_schedule on the
+   * backend) - tags the task without changing anything about how it
+   * flows through the normal Task/Inspection lifecycle. */
+  isHourlyCompliance?: boolean;
+  /** The "HH:MM" slot this hourly-compliance task was generated for -
+   * only set alongside isHourlyCompliance. */
+  hourlyComplianceSlot?: string | null;
+  /** Every cleaner the schedule named eligible for this instance - the
+   * task itself only ever has one real assigneeId (above), starting out
+   * as the first name on this list. Any other candidate can claim it by
+   * scanning the room's QR first, which reassigns assigneeId to them
+   * and flips hourlyComplianceClaimed - use both together to show
+   * "Taken by <assignee>" (read-only) to every candidate who wasn't
+   * first. */
+  hourlyComplianceCandidateIds?: string[];
+  /** True once someone has actually claimed this instance by scanning
+   * first (assigneeId is then who claimed it) - false means assigneeId
+   * is still just the placeholder first-candidate from generation. */
+  hourlyComplianceClaimed?: boolean;
+  /** The real instant this round's time window closes (next slot's
+   * start, or local midnight for the day's last slot) - null for a
+   * normal task. See hourlyComplianceLocked for the derived check. */
+  hourlyComplianceWindowCloseAt?: string | null;
+  /** True once hourlyComplianceWindowCloseAt has passed - the round is
+   * locked and the backend rejects any further checklist/evidence/
+   * submit write for it (TaskController._assert_hourly_compliance_
+   * window_open), so the mobile screen shows this state up front
+   * instead of letting a cleaner tap around into a rejected request. */
+  hourlyComplianceLocked?: boolean;
 }
 
 export interface Inspection {
@@ -136,6 +196,16 @@ export interface Site {
   geofenceRadius: number;
   supervisorId: string;
   active: boolean;
+  // This site's own branding — takes priority over the tenant-wide
+  // default (Tenant.branding) whenever a field here is set. See
+  // resolveBranding.
+  branding: TenantBranding;
+  // Expected shift start/end, "HH:MM" 24-hour local time - undefined
+  // until a site_manager/supervisor sets it on the web app's Attendance
+  // screen (see updateSiteWorkingHours there); drives Home's shift
+  // banner and the backend's late clock-in watchdog
+  // (app/services/attendance_watchdog.py).
+  workingHours?: { start: string; end: string };
 }
 
 export interface TenantBranding {
@@ -175,6 +245,10 @@ export interface Incident {
   id: string;
   siteId: string;
   locationName: string;
+  // A staff-reported incident always has one (see
+  // IncidentCreateRequest.locationId on the backend); undefined for a
+  // public-QR report, which has no internal room/zone id to reference.
+  locationId?: string;
   category: string;
   priority: IncidentPriority;
   description: string;
@@ -183,6 +257,15 @@ export interface Incident {
   createdAt: string;
   offlineOriginated?: boolean;
   uri?: string;
+  /** Optional supporting photos uploaded with a staff-reported incident
+   * (see IncidentCreateRequest.filePaths on the backend). Always []
+   * rather than undefined when there are none. */
+  filePaths?: string[];
+  /** The task this incident was raised from, if any - set when a
+   * cleaner reports it via a task's "Issue" evidence capture (see
+   * tasks/[taskId]/evidence.tsx) rather than the standalone "Report
+   * incident" flow. See IncidentRecord.sourceTaskId on the backend. */
+  sourceTaskId?: string;
 }
 
 export interface Notification {

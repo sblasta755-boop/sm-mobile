@@ -4,9 +4,9 @@ import { Card } from "@/components/Card";
 import { colors, spacing, typography } from "@/theme";
 
 // Previously the profile menu's "Privacy & POPIA notice" row was a no-op
-// (onPress={() => {}}) — this is the real screen it now pushes to. Text
+// (onPress={() => {}}) - this is the real screen it now pushes to. Text
 // mirrors the web app's shared copy (see smart-property-operations/src/lib/
-// smartclean/privacyNotice.ts) — keep both in sync if either changes.
+// smartclean/privacyNotice.ts) - keep both in sync if either changes.
 const PRIVACY_NOTICE_PARAGRAPHS = [
   "Šoma360 collects operational data needed to run cleaning services at your sites: attendance events (QR scan + timestamp; GPS is only recorded where a device supplies it), task photos and checklist evidence, incident reports, and account/audit logs. Emails you receive (invites, password resets, incident and corrective-action alerts) are sent through this deployment's configured mail service.",
   "Under POPIA you may request access to, correction of, or deletion of your personal information by contacting your organisation's Šoma360 administrator. Retention and deletion are currently handled manually by your administrator rather than by an automated policy.",

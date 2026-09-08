@@ -28,7 +28,7 @@ export default function RootLayout() {
 }
 
 // usePushRegistration() calls useSmartClean(), which throws outside
-// SmartCleanProvider — a tiny inner component keeps the hook call inside
+// SmartCleanProvider - a tiny inner component keeps the hook call inside
 // the provider without restructuring RootLayout itself.
 function PushNotificationsBridge() {
   usePushRegistration();

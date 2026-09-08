@@ -1,11 +1,17 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { colors, radius, spacing, typography } from "@/theme";
 
-export function DateStrip() {
-  const today = useMemo(() => startOfDay(new Date()), []);
-  const [selectedDate, setSelectedDate] = useState(today);
+export function DateStrip({
+  today,
+  selectedDate,
+  onSelect,
+}: {
+  today: Date;
+  selectedDate: Date;
+  onSelect: (date: Date) => void;
+}) {
   const weekDays = useMemo(() => buildDateStrip(selectedDate), [selectedDate]);
   const selectedLabel = selectedDate.toLocaleDateString("en-ZA", { weekday: "long" });
   const selectedSubLabel = selectedDate.toLocaleDateString("en-ZA", {
@@ -26,7 +32,7 @@ export function DateStrip() {
       <View style={styles.row}>
         <Pressable
           accessibilityLabel="Previous dates"
-          onPress={() => setSelectedDate((date) => addDays(date, -1))}
+          onPress={() => onSelect(addDays(selectedDate, -1))}
           style={styles.arrow}
           hitSlop={8}
         >
@@ -40,7 +46,7 @@ export function DateStrip() {
             return (
               <Pressable
                 key={date.toISOString()}
-                onPress={() => setSelectedDate(date)}
+                onPress={() => onSelect(date)}
                 style={styles.day}
                 accessibilityState={{ selected: isSelected }}
               >
@@ -71,7 +77,7 @@ export function DateStrip() {
 
         <Pressable
           accessibilityLabel="Next dates"
-          onPress={() => setSelectedDate((date) => addDays(date, 1))}
+          onPress={() => onSelect(addDays(selectedDate, 1))}
           style={styles.arrow}
           hitSlop={8}
         >
@@ -97,13 +103,13 @@ function addDays(date: Date, days: number) {
   return startOfDay(next);
 }
 
-function startOfDay(date: Date) {
+export function startOfDay(date: Date) {
   const next = new Date(date);
   next.setHours(0, 0, 0, 0);
   return next;
 }
 
-function isSameDay(a: Date, b: Date) {
+export function isSameDay(a: Date, b: Date) {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 }
 

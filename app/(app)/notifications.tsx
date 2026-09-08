@@ -8,7 +8,7 @@ import { colors, radius, spacing, typography } from "@/theme";
 import type { Notification } from "@/types/smartclean";
 
 // Previously the profile menu's "Notifications" row was a no-op
-// (onPress={() => {}}) — this is the real screen it now pushes to. Mirrors
+// (onPress={() => {}}) - this is the real screen it now pushes to. Mirrors
 // the web app's mobile.notifications.tsx: bootstrap already scopes
 // state.notifications to what this user can see (tenant-wide broadcasts,
 // or ones targeted at them), so this reads it directly rather than
@@ -21,7 +21,7 @@ export default function NotificationsScreen() {
     if (n.read || !state.accessToken) return;
     dispatch({ type: "MARK_NOTIFICATION_READ", id: n.id, all: false });
     markNotificationRead(state.accessToken, n.id).catch(() => {
-      // Best-effort — the read state already flipped locally above; a
+      // Best-effort - the read state already flipped locally above; a
       // failed network call here just means the next full sync/reload
       // reconciles it, same tradeoff the web app's version makes.
     });
@@ -32,7 +32,7 @@ export default function NotificationsScreen() {
       {mine.length === 0 ? (
         <View style={styles.empty}>
           <Text style={styles.mutedSmall}>
-            Nothing yet — new task assignments and updates will show up here.
+            Nothing yet - new task assignments and updates will show up here.
           </Text>
         </View>
       ) : (

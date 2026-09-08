@@ -1,20 +1,56 @@
+import { useMemo, useState } from "react";
 import { router } from "expo-router";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { BrokenGlassIcon } from "@/components/BrokenGlassIcon";
 import { Screen } from "@/components/Screen";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { ProgressBar } from "@/components/ProgressBar";
 import { StatusBadge } from "@/components/StatusBadge";
-import { DateStrip } from "@/components/DateStrip";
+import { DateStrip, isSameDay, startOfDay } from "@/components/DateStrip";
 import { useSmartClean } from "@/features/store";
 import { toneForTask, humanStatus } from "@/domain/status";
 import { colors, radius, spacing, typography } from "@/theme";
 
 export default function HomeScreen() {
   const { state, currentUser } = useSmartClean();
+  const today = useMemo(() => startOfDay(new Date()), []);
+  const [selectedDate, setSelectedDate] = useState(today);
   const site = state.sites.find((s) => currentUser?.siteIds.includes(s.id));
-  const myTasks = state.tasks.filter((t) => t.assigneeId === currentUser?.id);
+  const supervisor = state.users.find((u) => u.id === site?.supervisorId);
+  // Hourly-compliance rounds get their own dedicated list/tab (see
+  // candidateRounds below and the "My hourly compliance rounds" banner) -
+  // excluded here so they don't double up in "Assigned tasks" and skew
+  // the "Task progress" done/total count with rounds that already have
+  // their own place to live.
+  const allMyTasks = state.tasks.filter(
+    (t) => t.assigneeId === currentUser?.id && !t.isHourlyCompliance,
+  );
+  // Hourly-compliance rounds where this user is a named candidate but
+  // isn't the current assignee - either still open for them to claim
+  // (scan the room QR first) or already claimed by someone else. Kept
+  // separate from allMyTasks/myTasks below rather than mixed in, since
+  // they're not this user's own work and would corrupt the
+  // "done/total" progress count that list drives. Mirrors the web
+  // app's mobile.home.tsx.
+  const candidateRounds = state.tasks.filter(
+    (t) =>
+      t.isHourlyCompliance &&
+      t.assigneeId !== currentUser?.id &&
+      (t.hourlyComplianceCandidateIds ?? []).includes(currentUser?.id ?? "") &&
+      // Once the window closes nobody can claim it any more (backend
+      // rejects the write), so an unclaimed round just becomes stale
+      // clutter here - drop it instead of leaving "Not yet claimed -
+      // first to scan wins" up for a slot that's long over.
+      !t.hourlyComplianceLocked,
+  );
+  // Selecting a date on DateStrip narrows "Assigned tasks" down to that
+  // day - previously the strip's own selectedDate never left the
+  // component, so tapping a date visibly moved the selector but changed
+  // nothing else on screen (mirrors the same fix on the web app's
+  // mobile.home.tsx).
+  const myTasks = allMyTasks.filter((t) => isSameDay(new Date(t.scheduledAt), selectedDate));
   const done = myTasks.filter((t) => ["approved", "closed"].includes(t.status)).length;
   const openCA = state.correctiveActions.filter(
     (c) => c.assigneeId === currentUser?.id && c.status !== "closed",
@@ -22,18 +58,24 @@ export default function HomeScreen() {
   const clocked = currentUser ? state.attendance[currentUser.id]?.clockedInAt : undefined;
 
   return (
-    <Screen headerContent={<DateStrip />}>
+    <Screen
+      headerContent={
+        <DateStrip today={today} selectedDate={selectedDate} onSelect={setSelectedDate} />
+      }
+    >
       <Card padded={false} style={styles.shiftCard}>
         <View style={styles.shiftOverlay}>
           <View style={styles.shiftTopRow}>
             <View style={styles.shiftInfo}>
               <Text style={styles.shiftEyebrow}>Today&apos;s shift</Text>
-              <Text style={styles.shiftTime}>07:00 - 16:00</Text>
+              <Text style={styles.shiftTime}>
+                {site?.workingHours ? `${site.workingHours.start} - ${site.workingHours.end}` : "07:00 - 16:00"}
+              </Text>
               <View style={styles.shiftMetaRow}>
                 <Ionicons name="location" size={11} color="rgba(255,255,255,0.8)" />
                 <Text style={styles.shiftMeta}>{site?.name}</Text>
               </View>
-              <Text style={styles.shiftMeta}>Supervisor: Thandi Ndlovu</Text>
+              {supervisor && <Text style={styles.shiftMeta}>Supervisor: {supervisor.name}</Text>}
             </View>
             <StatusBadge tone={clocked ? "success" : "neutral"} label={clocked ? "Clocked in" : "Not clocked in"} />
           </View>
@@ -43,11 +85,20 @@ export default function HomeScreen() {
               Scan site QR to clock in
             </Button>
           ) : (
-            <View style={styles.clockedPill}>
-              <Text style={styles.clockedText}>
-                Clocked in at{" "}
-                {new Date(clocked).toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit" })}
-              </Text>
+            <View style={styles.clockedActions}>
+              <View style={styles.clockedPill}>
+                <Text style={styles.clockedText}>
+                  Clocked in at{" "}
+                  {new Date(clocked).toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit" })}
+                </Text>
+              </View>
+              <Button
+                variant="outline"
+                icon={<Ionicons name="log-out-outline" size={18} color={colors.foreground} />}
+                onPress={() => router.push("/scan")}
+              >
+                Scan site QR to clock out
+              </Button>
             </View>
           )}
         </View>
@@ -64,11 +115,19 @@ export default function HomeScreen() {
       </Card>
 
       <View style={styles.sectionHeaderRow}>
-        <Text style={styles.sectionTitle}>Assigned tasks</Text>
+        <Text style={styles.sectionTitle}>
+          Assigned tasks
+          {!isSameDay(selectedDate, today)
+            ? ` - ${selectedDate.toLocaleDateString("en-ZA", { weekday: "short", day: "numeric", month: "short" })}`
+            : ""}
+        </Text>
         <Pressable onPress={() => router.push("/shifts")}>
           <Text style={styles.link}>View all</Text>
         </Pressable>
       </View>
+      {myTasks.length === 0 && (
+        <Text style={styles.emptyTasks}>No tasks assigned for this day.</Text>
+      )}
       <View style={styles.list}>
         {myTasks.slice(0, 3).map((t) => (
           <Pressable key={t.id} onPress={() => router.push(`/tasks/${t.id}`)}>
@@ -92,6 +151,43 @@ export default function HomeScreen() {
           </Pressable>
         ))}
       </View>
+
+      {candidateRounds.length > 0 && (
+        <View style={styles.caSection}>
+          <Text style={styles.caSectionTitle}>Hourly compliance rounds</Text>
+          {candidateRounds.map((t) => {
+            const claimedByName = t.hourlyComplianceClaimed
+              ? (state.users.find((u) => u.id === t.assigneeId)?.name ?? "someone else")
+              : null;
+            return (
+              <Pressable key={t.id} onPress={() => router.push(`/tasks/${t.id}`)}>
+                <Card style={styles.taskCard}>
+                  <Ionicons name="shield-checkmark-outline" size={20} color={colors.mutedForeground} />
+                  <View style={styles.taskInfo}>
+                    <Text style={styles.taskTitle} numberOfLines={1}>
+                      {t.title}
+                    </Text>
+                    <Text style={styles.mutedSmall} numberOfLines={1}>
+                      {claimedByName ? `Taken by ${claimedByName}` : "Not yet claimed - first to scan wins"}
+                    </Text>
+                  </View>
+                </Card>
+              </Pressable>
+            );
+          })}
+        </View>
+      )}
+
+      <Pressable onPress={() => router.push("/hourly-compliance")}>
+        <Card style={styles.hourlyCard}>
+          <Ionicons name="shield-checkmark" size={20} color={colors.primary} />
+          <View style={styles.taskInfo}>
+            <Text style={styles.taskTitle}>My hourly compliance rounds</Text>
+            <Text style={styles.mutedSmall}>See the checklist items assigned to you today</Text>
+          </View>
+          <Ionicons name="arrow-forward" size={16} color={colors.foreground} />
+        </Card>
+      </Pressable>
 
       {openCA.length > 0 && (
         <View style={styles.caSection}>
@@ -117,8 +213,11 @@ export default function HomeScreen() {
       )}
 
       <View style={styles.quickActions}>
-        <Button variant="outline" icon={<Ionicons name="alert-circle-outline" size={16} color={colors.foreground} />} onPress={() => router.push("/incidents/new")}>
-          Report issue
+        {/* Incidents are always tied to a scanned room/zone now, so this
+            sends the cleaner to Scan first rather than straight to the
+            report form - see app/(app)/incidents/new.tsx. */}
+        <Button variant="outline" icon={<BrokenGlassIcon size={16} color={colors.foreground} />} onPress={() => router.push("/scan")}>
+          Report incident
         </Button>
         <Button variant="outline" onPress={() => router.push("/profile")}>
           Sync status
@@ -172,6 +271,9 @@ const styles = StyleSheet.create({
     fontSize: typography.tiny,
     color: "rgba(255,255,255,0.8)",
   },
+  clockedActions: {
+    gap: spacing.sm,
+  },
   clockedPill: {
     borderRadius: radius.lg,
     backgroundColor: "rgba(255,255,255,0.15)",
@@ -213,6 +315,17 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontWeight: "600",
   },
+  emptyTasks: {
+    borderWidth: 1,
+    borderStyle: "dashed",
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    textAlign: "center",
+    fontSize: typography.small,
+    color: colors.mutedForeground,
+    marginBottom: spacing.sm,
+  },
   list: {
     gap: spacing.sm,
   },
@@ -242,6 +355,14 @@ const styles = StyleSheet.create({
   taskBadges: {
     alignItems: "flex-end",
     gap: 4,
+  },
+  hourlyCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    marginTop: spacing.lg,
+    backgroundColor: colors.accent,
+    borderColor: colors.primary,
   },
   caSection: {
     marginTop: spacing.lg,

@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { router } from "expo-router";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -6,9 +7,11 @@ import { Screen } from "@/components/Screen";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { StatusBadge } from "@/components/StatusBadge";
+import { BrokenGlassIcon } from "@/components/BrokenGlassIcon";
 import { useSmartClean } from "@/features/store";
 import { fileUrl, toUserRecord, updateUser, uploadImage } from "@/api/client";
 import { colors, radius, spacing, typography } from "@/theme";
+import { APP_VERSION } from "@/constants/version";
 
 export default function ProfileScreen() {
   const { state, dispatch, currentUser, signOut } = useSmartClean();
@@ -85,10 +88,14 @@ export default function ProfileScreen() {
       </Card>
 
       <View style={styles.rows}>
-        <Row icon="notifications-outline" label="Notifications" onPress={() => router.push("/notifications")} />
-        <Row icon="alert-circle-outline" label="Report an incident" onPress={() => router.push("/incidents/new")} />
-        <Row icon="shield-checkmark-outline" label="Privacy & POPIA notice" onPress={() => router.push("/privacy")} />
-        <Row icon="help-circle-outline" label="Help & support" onPress={() => {}} />
+        <Row icon={<Ionicons name="person-outline" size={16} color={colors.primary} />} label="Edit profile" onPress={() => router.push("/profile/edit")} />
+        <Row icon={<Ionicons name="notifications-outline" size={16} color={colors.primary} />} label="Notifications" onPress={() => router.push("/notifications")} />
+        {/* Incidents are always tied to a scanned room/zone now, so this
+            sends the cleaner to Scan first rather than straight to the
+            report form - see app/(app)/incidents/new.tsx. */}
+        <Row icon={<BrokenGlassIcon size={16} color={colors.primary} />} label="Report incident" onPress={() => router.push("/scan")} />
+        <Row icon={<Ionicons name="shield-checkmark-outline" size={16} color={colors.primary} />} label="Privacy & POPIA notice" onPress={() => router.push("/privacy")} />
+        <Row icon={<Ionicons name="help-circle-outline" size={16} color={colors.primary} />} label="Help & support" onPress={() => {}} />
       </View>
 
       <View style={styles.bottomActions}>
@@ -106,6 +113,17 @@ export default function ProfileScreen() {
       <Button variant="destructive" style={styles.signOut} icon={<Ionicons name="log-out-outline" size={16} color={colors.white} />} onPress={handleSignOut}>
         Sign out
       </Button>
+
+      {/* Build version stamp - APP_VERSION, generated at build/start
+          time by scripts/version.mjs (git describe --tags --always,
+          same mechanism the web app's vite.config.ts uses for its own
+          VITE_GIT_VERSION - see mobile.profile.tsx there) into
+          src/constants/version.ts (gitignored, regenerated every run -
+          see package.json's generate-version script, now actually
+          wired into start/android/ios/web/export:web, which it wasn't
+          before). Lets you confirm which build is actually running
+          without digging through devtools. */}
+      <Text style={styles.versionStamp}>v{APP_VERSION}</Text>
     </Screen>
   );
 }
@@ -124,16 +142,19 @@ function Row({
   label,
   onPress,
 }: {
-  icon: keyof typeof Ionicons.glyphMap;
+  // ReactNode rather than a bare Ionicons glyph name so a call site can
+  // also pass a non-Ionicons icon (e.g. BrokenGlassIcon below, which
+  // Ionicons has no equivalent for) - every existing caller just wraps
+  // its glyph name in <Ionicons name=... /> instead of passing the name
+  // directly.
+  icon: ReactNode;
   label: string;
   onPress: () => void;
 }) {
   return (
     <Pressable onPress={onPress}>
       <Card style={styles.row}>
-        <View style={styles.rowIcon}>
-          <Ionicons name={icon} size={16} color={colors.primary} />
-        </View>
+        <View style={styles.rowIcon}>{icon}</View>
         <Text style={styles.rowLabel}>{label}</Text>
         <Ionicons name="chevron-forward" size={16} color={colors.mutedForeground} />
       </Card>
@@ -262,5 +283,11 @@ const styles = StyleSheet.create({
   },
   signOut: {
     marginTop: spacing.sm,
+  },
+  versionStamp: {
+    marginTop: spacing.lg,
+    textAlign: "center",
+    fontSize: 10,
+    color: colors.mutedForeground,
   },
 });

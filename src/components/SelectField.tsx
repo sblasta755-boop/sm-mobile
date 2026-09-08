@@ -9,21 +9,27 @@ export function SelectField({
   options,
   onChange,
   capitalize,
+  disabled,
 }: {
   label: string;
   value: string;
   options: readonly string[];
   onChange: (value: string) => void;
   capitalize?: boolean;
+  disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
 
   return (
     <View style={styles.field}>
       <Text style={styles.label}>{label}</Text>
-      <Pressable style={styles.trigger} onPress={() => setOpen(true)}>
+      <Pressable
+        style={[styles.trigger, disabled && styles.triggerDisabled]}
+        onPress={() => !disabled && setOpen(true)}
+        disabled={disabled}
+      >
         <Text style={[styles.triggerText, capitalize && styles.capitalize]}>{value}</Text>
-        <Ionicons name="chevron-down" size={16} color={colors.mutedForeground} />
+        {!disabled && <Ionicons name="chevron-down" size={16} color={colors.mutedForeground} />}
       </Pressable>
 
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
@@ -72,6 +78,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     backgroundColor: colors.card,
+  },
+  triggerDisabled: {
+    opacity: 0.6,
   },
   triggerText: {
     fontSize: typography.body,

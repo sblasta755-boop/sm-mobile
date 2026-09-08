@@ -71,8 +71,9 @@
       "apiBaseUrl": "",
       "router": {},
       "eas": {
-        "projectId": "a71fdba6-05c4-4b13-babc-b77bdda39b19"
+        "projectId": "518c03bf-7aeb-4258-9924-97d8c48de803"
       }
-    }
+    },
+    "owner": "sblasta755"
   }
 }

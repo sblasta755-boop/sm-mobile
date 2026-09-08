@@ -41,7 +41,7 @@ export default function CorrectiveActionDetailScreen() {
   }
 
   return (
-    <Screen title="Corrective action">
+    <Screen title="Corrective action" backTo="/corrective-actions">
       <Card style={styles.card}>
         <View style={styles.headerRow}>
           <Text style={styles.reason} numberOfLines={2}>

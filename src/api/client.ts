@@ -166,10 +166,50 @@ export async function request<T>(
     }
   }
   if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`Backend ${response.status}: ${body}`);
+    const { message, detail } = await extractError(response);
+    throw new ApiError(message, detail);
   }
   return (await response.json()) as T;
+}
+
+// Backend errors come back as {"error": {"code": <http status>, "message":
+// <AppError payload>, "requestId": ...}} - see
+// app/core/errors.py:http_exception_handler on the backend, which wraps
+// every HTTPException this way (not FastAPI's own default {"detail":
+// ...} shape). <AppError payload> is itself either a plain string, or
+// {"code": ..., "message": "...", "detail"?: {...}} for the AppError
+// subclasses that pass one - see AppError/raise_http. A small number of
+// AppErrors (currently just the geofence rejection) carry that
+// structured `detail` (distanceMeters, siteLatitude, ... - see
+// evaluate_geofence) for callers that want to do more than show a
+// toast (e.g. render a map of how far off the device was). Mirrors the
+// web client's ApiError/extractError - keep both in sync.
+export class ApiError extends Error {
+  detail?: Record<string, unknown>;
+  constructor(message: string, detail?: Record<string, unknown>) {
+    super(message);
+    this.name = "ApiError";
+    this.detail = detail;
+  }
+}
+
+async function extractError(
+  response: Response,
+): Promise<{ message: string; detail?: Record<string, unknown> }> {
+  const body = await response.text();
+  try {
+    const parsed = JSON.parse(body) as {
+      error?: { message?: { message?: string; detail?: Record<string, unknown> } | string };
+    };
+    const inner = parsed?.error?.message;
+    if (typeof inner === "string") return { message: inner };
+    if (inner && typeof inner.message === "string") {
+      return { message: inner.message, detail: inner.detail };
+    }
+  } catch {
+    // Not JSON - fall through to the raw body below.
+  }
+  return { message: `Backend ${response.status}: ${body}` };
 }
 
 // ---- Tasks ----
@@ -237,12 +277,87 @@ export function clockOut(accessToken: string, payload: { siteId: string; qrValue
   return request<Record<string, unknown>>("/attendance/clock-out", { method: "POST", body: JSON.stringify(payload) }, accessToken);
 }
 
+// ---- Hourly compliance ----
+
+// Mirrors the web client's smartclean/api.ts hourly-compliance section -
+// keep both in sync with app/controllers/hourly_compliance.py on the
+// backend. Only the two calls a cleaner actually needs on mobile are
+// exposed here (list assignments/checks, record a check); verifying,
+// disputing, assigning, and reviewing stay supervisor-only desktop
+// actions and aren't wired into this app.
+
+export interface HourlyComplianceCheck {
+  id: string;
+  siteId: string;
+  itemId: string;
+  checkDate: string;
+  timeSlot: string;
+  status: "ok" | "warn" | "fail";
+  note: string | null;
+  checkedBy: string | null;
+  checkedAt: string;
+  verificationStatus: "pending" | "verified" | "disputed";
+  verifiedBy: string | null;
+  verifiedAt: string | null;
+  verificationNote: string | null;
+}
+
+export function listHourlyComplianceChecks(accessToken: string, siteId: string, checkDate: string) {
+  return request<HourlyComplianceCheck[]>(
+    `/hourly-compliance?siteId=${encodeURIComponent(siteId)}&checkDate=${encodeURIComponent(checkDate)}`,
+    {},
+    accessToken,
+  );
+}
+
+export function recordHourlyComplianceCheck(
+  accessToken: string,
+  payload: {
+    siteId: string;
+    itemId: string;
+    checkDate: string;
+    timeSlot: string;
+    status: "ok" | "warn" | "fail";
+    note?: string;
+  },
+) {
+  return request<HourlyComplianceCheck>(
+    "/hourly-compliance",
+    { method: "POST", body: JSON.stringify(payload) },
+    accessToken,
+  );
+}
+
+export interface HourlyComplianceAssignment {
+  id: string;
+  siteId: string;
+  itemId: string;
+  assignmentDate: string;
+  assigneeId: string;
+  assignedBy: string;
+  assignedAt: string;
+}
+
+export function listHourlyComplianceAssignments(accessToken: string, siteId: string, assignmentDate: string) {
+  return request<HourlyComplianceAssignment[]>(
+    `/hourly-compliance/assignment?siteId=${encodeURIComponent(siteId)}&assignmentDate=${encodeURIComponent(assignmentDate)}`,
+    {},
+    accessToken,
+  );
+}
+
 // ---- QR / codes ----
 
-export function resolveQr(accessToken: string, value: string, latitude?: number, longitude?: number) {
+export function resolveQr(
+  accessToken: string,
+  value: string,
+  latitude?: number,
+  longitude?: number,
+  confirmClaim?: boolean,
+) {
   return request<Record<string, unknown>>(
     "/codes/resolve",
-    { method: "POST", body: JSON.stringify({ value, latitude, longitude }) },
+    { method: "POST", body: JSON.stringify({ value, latitude, longitude, confirmClaim }) },
     accessToken,
   );
 }
@@ -275,8 +390,17 @@ export function toUserRecord(user: DemoUser, overrides: Record<string, unknown> 
     displayName: user.name,
     email: user.email ?? `${user.id}@smartclean.local`,
     role: user.role,
-    status: "active",
+    // Must match the backend's exact status string (case-sensitive — see
+    // UserController.update_user's self-service check, and
+    // AuthController.login, which both compare against "Active" exactly).
+    // This was "active" (lowercase) until now, which meant every
+    // self-service update from this app — including the profile photo
+    // upload above — silently 403'd: is_self_service compares
+    // str(record["status"]) != target.status, and "active" != "Active"
+    // unconditionally.
+    status: "Active",
     profilePhotoDataUrl: user.profilePhotoDataUrl,
+    phone: user.phone,
     siteIds: user.siteIds,
     ...overrides,
   };
@@ -294,8 +418,8 @@ export async function uploadImage(accessToken: string, uri: string, filename: st
     body: form,
   });
   if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`Backend ${response.status}: ${body}`);
+    const { message, detail } = await extractError(response);
+    throw new ApiError(message, detail);
   }
   const data = (await response.json()) as { filePath: string };
   return data.filePath;
@@ -348,6 +472,11 @@ function normalizeBootstrap(payload: Record<string, unknown>): BackendBootstrap 
 function normalizeUser(raw: Record<string, unknown>): DemoUser {
   const name = String(raw.name ?? raw.displayName ?? raw.username ?? "Team member");
   return {
+    // Spread raw first so fields this function doesn't explicitly list
+    // (e.g. phone) survive - previously this only picked 6 known fields
+    // and silently dropped everything else the backend sent, the same
+    // gap the web client's normalizeUser had before it was fixed.
+    ...(raw as unknown as Partial<DemoUser>),
     id: String(raw.id),
     name,
     role: String(raw.role ?? "cleaner") as DemoUser["role"],

@@ -1,9 +1,22 @@
 import { useState, type ReactNode } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { router, usePathname } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useSmartClean } from "@/features/store";
 import { ProfileMenuSheet } from "@/components/ProfileMenuSheet";
 import { colors, spacing, typography } from "@/theme";
+
+// The 5 bottom-tab roots (see app/(app)/_layout.tsx's <Tabs.Screen>
+// entries) don't get a back button - they're always reachable from the
+// tab bar, so "back" there would either loop to another root tab or
+// exit the app. Every other screen (Notifications, Profile edit, Scan
+// results, Hourly compliance, Incidents/new, task Evidence/Declaration,
+// Corrective action detail, Privacy, ...) is reached by drilling in
+// from one of these, and - with the whole app's headerShown: false -
+// had no back affordance at all (no native header, no gesture on iOS,
+// nothing on-screen even where Android's hardware back still works).
+const TAB_ROOT_PATHS = new Set(["/home", "/shifts", "/scan", "/corrective-actions", "/profile"]);
 
 /**
  * Shared authenticated-screen chrome: header (title or custom header content),
@@ -16,36 +29,67 @@ export function Screen({
   title,
   headerContent,
   scroll = true,
+  /** Overrides the default "go back in history" behaviour with a fixed
+   * destination - use when a screen can be reached from more than one
+   * place and should always return to one specific screen regardless
+   * (e.g. task sub-screens always returning to that task). */
+  backTo,
 }: {
   children: ReactNode;
   title?: string;
   headerContent?: ReactNode;
   scroll?: boolean;
+  backTo?: string;
 }) {
   const { state, currentUser } = useSmartClean();
   const insets = useSafeAreaInsets();
   const [menuOpen, setMenuOpen] = useState(false);
   const site = state.sites.find((s) => currentUser?.siteIds.includes(s.id));
+  const pathname = usePathname();
+  const showBack = !TAB_ROOT_PATHS.has(pathname);
 
   const Content = scroll ? ScrollView : View;
+
+  const goBack = () => {
+    if (backTo) {
+      // backTo is caller-supplied (often an interpolated `/tasks/${id}`
+      // path - see e.g. tasks/[taskId]/evidence.tsx), so it can't be
+      // narrowed to expo-router's typed Href union the way an inline
+      // literal path can.
+      router.push(backTo as Parameters<typeof router.push>[0]);
+    } else if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace("/home");
+    }
+  };
+
+  const BackButton = showBack ? (
+    <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={goBack} style={styles.backButton}>
+      <Ionicons name="chevron-back" size={20} color={colors.foreground} />
+    </Pressable>
+  ) : null;
 
   return (
     <View style={styles.screen}>
       <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
         {headerContent ? (
           <View style={styles.headerRow}>
-            <View style={styles.headerSpacer} />
+            {BackButton ?? <View style={styles.headerSpacer} />}
             <View style={styles.headerCenter}>{headerContent}</View>
             <ProfileTrigger currentUser={currentUser} onPress={() => setMenuOpen(true)} />
           </View>
         ) : (
           <>
             <View style={styles.headerRow}>
-              <View style={styles.headerText}>
-                <Text style={styles.eyebrow}>{currentUser?.role.replace(/_/g, " ") ?? ""}</Text>
-                <Text style={styles.username} numberOfLines={1}>
-                  {currentUser?.name ?? "Guest"}
-                </Text>
+              <View style={styles.headerTextRow}>
+                {BackButton}
+                <View style={styles.headerText}>
+                  <Text style={styles.eyebrow}>{currentUser?.role.replace(/_/g, " ") ?? ""}</Text>
+                  <Text style={styles.username} numberOfLines={1}>
+                    {currentUser?.name ?? "Guest"}
+                  </Text>
+                </View>
               </View>
               <ProfileTrigger currentUser={currentUser} onPress={() => setMenuOpen(true)} />
             </View>
@@ -112,9 +156,26 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
   },
+  headerTextRow: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+  },
   headerText: {
     flex: 1,
     minWidth: 0,
+  },
+  backButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.card,
+    alignItems: "center",
+    justifyContent: "center",
   },
   eyebrow: {
     fontSize: typography.tiny,
