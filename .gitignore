@@ -15,6 +15,11 @@ expo-env.d.ts
 *.key
 *.mobileprovision
 
+# build artifacts (too large for git; distribute via releases/EAS instead)
+*.apk
+*.aab
+*.ipa
+
 # metro
 .metro-health-check*
 
