@@ -2,12 +2,16 @@ import { Redirect, Tabs } from "expo-router";
 import { StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useHasModule } from "@/features/modules";
 import { useSmartClean } from "@/features/store";
 import { colors, sizes, spacing, typography } from "@/theme";
 
 export default function AppTabsLayout() {
   const { currentUser, state } = useSmartClean();
   const insets = useSafeAreaInsets();
+  // Corrective actions is the only gateable module with a tab of its
+  // own. Fails open before bootstrap lands - see useHasModule.
+  const hasCorrectiveActions = useHasModule("corrective_actions");
 
   if (state.sessionRestored && !currentUser) {
     return <Redirect href="/login" />;
@@ -63,6 +67,13 @@ export default function AppTabsLayout() {
         options={{
           title: "Actions",
           tabBarIcon: ({ color, size }) => <Ionicons name="checkbox" color={color} size={size} />,
+          // href: null both hides this from the bar AND makes it
+          // unreachable by router.push - the same mechanism the non-tab
+          // routes below already use. An organisation whose plan omits
+          // corrective actions gets a 4-tab bar rather than a tab that
+          // 402s on tap. Spread rather than `href: undefined`, which is
+          // not reliably equivalent to omitting the prop.
+          ...(hasCorrectiveActions ? {} : { href: null }),
         }}
       />
       <Tabs.Screen

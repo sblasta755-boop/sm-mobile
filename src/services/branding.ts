@@ -52,7 +52,7 @@ function mergeBranding(
  * falling back to the tenant-wide default, falling back to the app
  * default. Every mobile user is a cleaner or supervisor working at one
  * site, so unlike the web app's useTenantBranding this doesn't need to
- * special-case operations_manager/system_admin (mobile has no setup
+ * special-case operations_manager/org_admin (mobile has no setup
  * screens for them to use anyway — branding is read-only here). */
 export function useTenantBranding(): ResolvedBranding {
   const { state, currentUser } = useSmartClean();

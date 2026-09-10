@@ -4,7 +4,46 @@ export type Role =
   | "supervisor"
   | "cleaner"
   | "client_auditor"
+  // The top role inside a customer organisation - was "system_admin"
+  // before migration 20260909_0018 renamed it (see the web app's
+  // types.ts for the full rationale).
+  | "org_admin"
+  // Šoma360's own operator staff (was "platform_owner" before the same
+  // rename). They administer organisations from the web console and
+  // never sign in here, but the union has to cover the value or parsing
+  // a user record would narrow wrongly.
   | "system_admin";
+
+export type SubscriptionTier = "trial" | "starter" | "professional" | "enterprise";
+
+/** "none" is not a backend status - it is what the server reports for an
+ * organisation with no subscription row at all, which the request gate
+ * treats as blocked. Keeping it here means the UI fails closed the same
+ * way the API does. */
+export type SubscriptionStatus =
+  | "none"
+  | "trialing"
+  | "active"
+  | "past_due"
+  | "suspended"
+  | "cancelled";
+
+export interface SubscriptionState {
+  tier: SubscriptionTier | null;
+  tierLabel: string | null;
+  status: SubscriptionStatus;
+  /** The RESOLVED effective module keys - core plus whatever the tier
+   * grants. The server sends the answer rather than the tier so this
+   * client never reimplements the matrix and drifts from it. */
+  modules: string[];
+  seats: number | null;
+  currentPeriodEnd: string | null;
+  trialEndsAt: string | null;
+  daysRemaining: number | null;
+  isTrial: boolean;
+  inGrace: boolean;
+  billingEmail?: string | null;
+}
 
 export interface DemoUser {
   id: string;

@@ -11,6 +11,7 @@ import type {
   QrCode,
   Site,
   StockItem,
+  SubscriptionState,
   Task,
   Tenant,
 } from "@/types/smartclean";
@@ -36,19 +37,26 @@ export interface BackendSession {
 export interface BackendBootstrap {
   user: DemoUser;
   tenants: Tenant[];
+  /** The organisation's plan and unlocked modules. Optional so a build
+   * running against an older backend still type-checks. */
+  subscription?: SubscriptionState;
   users: DemoUser[];
   sites: Site[];
   locations: Location[];
   qrCodes: QrCode[];
   tasks: Task[];
-  inspections: Inspection[];
-  correctiveActions: CorrectiveAction[];
-  incidents: Incident[];
+  // Module-gated server-side. The backend sends [] for a tier that does
+  // not include one of these today and will omit the key entirely once
+  // every client handles it - hence optional here, and ?? [] in
+  // bootstrapState().
+  inspections?: Inspection[];
+  correctiveActions?: CorrectiveAction[];
+  incidents?: Incident[];
   notifications: Notification[];
   attendance: Record<string, { clockedInAt?: string; siteId?: string }>;
-  turnovers: AirbnbTurnover[];
-  stock: StockItem[];
-  assets: Asset[];
+  turnovers?: AirbnbTurnover[];
+  stock?: StockItem[];
+  assets?: Asset[];
 }
 
 export async function loginToBackend(username: string, password: string) {
@@ -110,6 +118,11 @@ let sessionHandlers: {
   getRefreshToken: () => string | null;
   onRefreshed: (session: BackendSession) => void;
   onRefreshFailed: () => void;
+  /** Called on any 402 from the subscription gate. The provider refetches
+   * bootstrap: a 402 means this app's idea of the plan is stale (a tier
+   * changed, or the subscription lapsed, under us). Optional so existing
+   * callers keep type-checking. */
+  onSubscriptionBlocked?: (code: string | undefined, detail?: Record<string, unknown>) => void;
 } | null = null;
 
 export function setSessionHandlers(handlers: typeof sessionHandlers) {
@@ -166,8 +179,7 @@ export async function request<T>(
     }
   }
   if (!response.ok) {
-    const { message, detail } = await extractError(response);
-    throw new ApiError(message, detail);
+    await throwForStatus(response);
   }
   return (await response.json()) as T;
 }
@@ -195,21 +207,56 @@ export class ApiError extends Error {
 
 async function extractError(
   response: Response,
-): Promise<{ message: string; detail?: Record<string, unknown> }> {
+): Promise<{ message: string; code?: string; detail?: Record<string, unknown> }> {
   const body = await response.text();
   try {
     const parsed = JSON.parse(body) as {
-      error?: { message?: { message?: string; detail?: Record<string, unknown> } | string };
+      error?: {
+        message?: { code?: string; message?: string; detail?: Record<string, unknown> } | string;
+      };
     };
     const inner = parsed?.error?.message;
     if (typeof inner === "string") return { message: inner };
     if (inner && typeof inner.message === "string") {
-      return { message: inner.message, detail: inner.detail };
+      // `code` separates the two 402s - module_locked (the plan lacks
+      // this feature) from subscription_inactive (the account is not in
+      // good standing) - which need different messages.
+      return { message: inner.message, code: inner.code, detail: inner.detail };
     }
   } catch {
     // Not JSON - fall through to the raw body below.
   }
   return { message: `Backend ${response.status}: ${body}` };
+}
+
+/** A 402 from the subscription gate. Extends ApiError rather than Error
+ * so every existing `instanceof ApiError` catch keeps working. Mirrors
+ * the web client's SubscriptionError - keep both in sync. */
+export class SubscriptionError extends ApiError {
+  /** "module_locked" | "subscription_inactive" */
+  code?: string;
+
+  constructor(message: string, code?: string, detail?: Record<string, unknown>) {
+    super(message, detail);
+    this.name = "SubscriptionError";
+    this.code = code;
+  }
+
+  get isModuleLocked(): boolean {
+    return this.code === "module_locked";
+  }
+}
+
+/** Shared non-OK handling, so any call site that cannot go through
+ * request() (a FormData upload, say) still agrees about what a 402 and
+ * an error envelope mean. */
+async function throwForStatus(response: Response): Promise<never> {
+  const { message, code, detail } = await extractError(response);
+  if (response.status === 402) {
+    sessionHandlers?.onSubscriptionBlocked?.(code, detail);
+    throw new SubscriptionError(message, code, detail);
+  }
+  throw new ApiError(message, detail);
 }
 
 // ---- Tasks ----
@@ -417,9 +464,12 @@ export async function uploadImage(accessToken: string, uri: string, filename: st
     headers: { Authorization: `Bearer ${accessToken}` },
     body: form,
   });
+  // FormData body, so this cannot go through request() (which forces
+  // application/json). /upload/images is a core module, so a 402 here
+  // means the subscription itself is inactive rather than a locked
+  // feature - either way it must not surface as "Backend 402".
   if (!response.ok) {
-    const { message, detail } = await extractError(response);
-    throw new ApiError(message, detail);
+    await throwForStatus(response);
   }
   const data = (await response.json()) as { filePath: string };
   return data.filePath;
@@ -429,6 +479,9 @@ function normalizeBootstrap(payload: Record<string, unknown>): BackendBootstrap 
   return {
     user: normalizeUser(payload.user as Record<string, unknown>),
     tenants: list(payload.tenants) as unknown as Tenant[],
+    // Passed through as-is: the server already sends camelCase and the
+    // RESOLVED module list, so there is nothing to derive here.
+    subscription: payload.subscription as SubscriptionState | undefined,
     users: list(payload.users).map(normalizeUser),
     sites: list(payload.sites).map((site) => ({
       clientId: "",

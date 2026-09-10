@@ -22,6 +22,7 @@ import type {
   Site,
   Location,
   StockItem,
+  SubscriptionState,
   Task,
   Tenant,
 } from "@/types/smartclean";
@@ -50,6 +51,10 @@ interface State {
   stock: StockItem[];
   assets: Asset[];
   attendance: Record<string, { clockedInAt?: string; siteId?: string; locationCapturedAt?: string }>;
+  /** The organisation's plan and unlocked modules. Null until bootstrap
+   * lands; consumers treat that as "not yet known" and fail open, since
+   * the server enforces the real answer. */
+  subscription: SubscriptionState | null;
 }
 
 type Action =
@@ -98,31 +103,37 @@ function initial(): State {
     stock: [],
     assets: [],
     attendance: {},
+    subscription: null,
   };
 }
 
 function bootstrapState(bootstrap: BackendBootstrap): Partial<State> {
   return {
-    tenant: bootstrap.tenants[0] ?? null,
-    users: bootstrap.users.length ? bootstrap.users : [bootstrap.user],
-    sites: bootstrap.sites,
-    locations: bootstrap.locations,
-    qrCodes: bootstrap.qrCodes,
-    tasks: bootstrap.tasks,
-    inspections: bootstrap.inspections,
-    correctiveActions: bootstrap.correctiveActions,
-    incidents: bootstrap.incidents,
-    notifications: bootstrap.notifications,
+    // Every read is defensive against a missing key, not only the
+    // module-gated ones: a partial payload should degrade to an empty
+    // screen, never to a TypeError that takes the provider down and
+    // leaves a cleaner staring at a blank app mid-shift.
+    tenant: bootstrap.tenants?.[0] ?? null,
+    users: bootstrap.users?.length ? bootstrap.users : [bootstrap.user],
+    sites: bootstrap.sites ?? [],
+    locations: bootstrap.locations ?? [],
+    qrCodes: bootstrap.qrCodes ?? [],
+    tasks: bootstrap.tasks ?? [],
+    inspections: bootstrap.inspections ?? [],
+    correctiveActions: bootstrap.correctiveActions ?? [],
+    incidents: bootstrap.incidents ?? [],
+    notifications: bootstrap.notifications ?? [],
     // Previously never sourced from the backend — state.attendance only
     // changed via local-only CLOCK_IN/CLOCK_OUT reducer actions that
     // nothing dispatched (the scan screen only calls clockIn() +
     // refreshBackendData()), so a real clock-in never showed up as
     // "Clocked in" on Home. Now backed by AttendanceController.today_status
     // via bootstrap.attendance — same fix already applied on web.
-    attendance: bootstrap.attendance,
-    turnovers: bootstrap.turnovers,
-    stock: bootstrap.stock,
-    assets: bootstrap.assets,
+    attendance: bootstrap.attendance ?? {},
+    turnovers: bootstrap.turnovers ?? [],
+    stock: bootstrap.stock ?? [],
+    assets: bootstrap.assets ?? [],
+    subscription: bootstrap.subscription ?? null,
   };
 }
 
@@ -284,6 +295,25 @@ export function SmartCleanProvider({ children }: { children: ReactNode }) {
         // prompt instead of every subsequent request silently 401ing.
         void SecureSessionService.clear();
         dispatch({ type: "SIGN_OUT" });
+      },
+      onSubscriptionBlocked: () => {
+        // A 402 means this app's idea of the plan is out of date — a tier
+        // changed, or the subscription lapsed, since the last bootstrap.
+        // Refetch so the tab bar and screens match what the server will
+        // actually serve.
+        //
+        // Deliberately NOT a sign-out: the session is valid, it is the
+        // organisation's plan that changed, and dropping a cleaner to a
+        // login screen mid-shift would be both wrong and alarming.
+        const accessToken = stateRef.current.accessToken;
+        if (!accessToken) return;
+        void loadBackendBootstrap(accessToken)
+          .then((bootstrap) => dispatch({ type: "HYDRATE", bootstrap }))
+          // Bootstrap is ungated so this should not itself 402; if it
+          // fails there is nothing useful to do beyond leaving the stale
+          // module list in place. The original 402 still reaches the
+          // caller as a SubscriptionError.
+          .catch(() => undefined);
       },
     });
     return () => setSessionHandlers(null);

@@ -9,12 +9,21 @@ import { Button } from "@/components/Button";
 import { ProgressBar } from "@/components/ProgressBar";
 import { StatusBadge } from "@/components/StatusBadge";
 import { DateStrip, isSameDay, startOfDay } from "@/components/DateStrip";
+import { useHasModule } from "@/features/modules";
 import { useSmartClean } from "@/features/store";
 import { toneForTask, humanStatus } from "@/domain/status";
 import { colors, radius, spacing, typography } from "@/theme";
 
 export default function HomeScreen() {
   const { state, currentUser } = useSmartClean();
+  // Entry points to the three gateable screens a cleaner can reach.
+  // Hiding them is presentation only - the server 402s these routes for
+  // an organisation whose plan excludes them - but offering a button
+  // that can only fail is worse than not offering it. All three fail
+  // open until bootstrap lands; see useHasModule.
+  const hasHourlyCompliance = useHasModule("hourly_compliance");
+  const hasCorrectiveActions = useHasModule("corrective_actions");
+  const hasIncidents = useHasModule("incidents");
   const today = useMemo(() => startOfDay(new Date()), []);
   const [selectedDate, setSelectedDate] = useState(today);
   const site = state.sites.find((s) => currentUser?.siteIds.includes(s.id));
@@ -178,6 +187,7 @@ export default function HomeScreen() {
         </View>
       )}
 
+      {hasHourlyCompliance && (
       <Pressable onPress={() => router.push("/hourly-compliance")}>
         <Card style={styles.hourlyCard}>
           <Ionicons name="shield-checkmark" size={20} color={colors.primary} />
@@ -188,8 +198,9 @@ export default function HomeScreen() {
           <Ionicons name="arrow-forward" size={16} color={colors.foreground} />
         </Card>
       </Pressable>
+      )}
 
-      {openCA.length > 0 && (
+      {hasCorrectiveActions && openCA.length > 0 && (
         <View style={styles.caSection}>
           <Text style={styles.caSectionTitle}>Open corrective actions</Text>
           {openCA.map((c) => (
@@ -216,9 +227,11 @@ export default function HomeScreen() {
         {/* Incidents are always tied to a scanned room/zone now, so this
             sends the cleaner to Scan first rather than straight to the
             report form - see app/(app)/incidents/new.tsx. */}
-        <Button variant="outline" icon={<BrokenGlassIcon size={16} color={colors.foreground} />} onPress={() => router.push("/scan")}>
-          Report incident
-        </Button>
+        {hasIncidents && (
+          <Button variant="outline" icon={<BrokenGlassIcon size={16} color={colors.foreground} />} onPress={() => router.push("/scan")}>
+            Report incident
+          </Button>
+        )}
         <Button variant="outline" onPress={() => router.push("/profile")}>
           Sync status
         </Button>
