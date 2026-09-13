@@ -1,6 +1,7 @@
 {
   "cli": {
-    "version": ">= 12.0.0"
+    "version": ">= 12.0.0",
+    "appVersionSource": "local"
   },
   "build": {
     "development": {
@@ -10,8 +11,8 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_BASE_URL": "https://soma360-backend-backend.onrender.com/api/v1",
-        "EXPO_PUBLIC_WS_API_URL": "ws://soma360-backend-backend.onrender.com/api/v1"
+        "EXPO_PUBLIC_API_BASE_URL": "https://soma360-backend.onrender.com/api/v1",
+        "EXPO_PUBLIC_WS_API_URL": "ws://soma360-backend.onrender.com/api/v1"
       }
     },
     "preview": {
@@ -20,8 +21,8 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_BASE_URL": "https://soma360-backend-backend.onrender.com/api/v1",
-        "EXPO_PUBLIC_WS_API_URL": "ws://soma360-backend-backend.onrender.com/api/v1"
+        "EXPO_PUBLIC_API_BASE_URL": "https://soma360-backend.onrender.com/api/v1",
+        "EXPO_PUBLIC_WS_API_URL": "ws://soma360-backend.onrender.com/api/v1"
       }
     },
     "production": {}

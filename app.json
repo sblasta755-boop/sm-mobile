@@ -62,7 +62,8 @@
           "color": "#21779b"
         }
       ],
-      "expo-font"
+      "expo-font",
+      "./modules/room-scan/app.plugin.js"
     ],
     "experiments": {
       "typedRoutes": true
@@ -71,9 +72,9 @@
       "apiBaseUrl": "",
       "router": {},
       "eas": {
-        "projectId": "518c03bf-7aeb-4258-9924-97d8c48de803"
+        "projectId": "6009705e-54e9-41be-9f0d-440074a66959"
       }
     },
-    "owner": "sblasta755"
+    "owner": "sblasta124"
   }
 }

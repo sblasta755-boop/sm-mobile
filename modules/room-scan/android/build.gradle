@@ -1,0 +1,27 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'za.co.smartclean.modules'
+version = '1.0.0'
+
+android {
+  namespace "expo.modules.roomscan"
+  defaultConfig {
+    minSdkVersion 24
+    versionCode 1
+    versionName "1.0.0"
+  }
+}
+
+dependencies {
+  // VERIFY the current stable ARCore version against Google's Maven
+  // repo (https://maven.google.com or ARCore's release notes) before
+  // relying on this - this number has not been checked against a live
+  // source in this environment (no network access here), and this
+  // module has never been compiled against it.
+  implementation "com.google.ar:core:1.49.0" // VERIFY
+
+  implementation "androidx.appcompat:appcompat:1.7.1"
+}

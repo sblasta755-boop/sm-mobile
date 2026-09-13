@@ -245,6 +245,33 @@ export interface Site {
   // banner and the backend's late clock-in watchdog
   // (app/services/attendance_watchdog.py).
   workingHours?: { start: string; end: string };
+  // Floors + rooms layout (Enterprise-only "site_layout" module) - set
+  // and mostly edited on the web app's Organisation setup screen.
+  // Undefined for a site with no floors defined yet.
+  profile?: SiteSpaceProfile;
+}
+
+export interface SiteFloorPlanImage {
+  filePath: string;
+  width: number;
+  height: number;
+  uploadedAt: string;
+}
+
+export interface SiteFloorProfile {
+  id: string;
+  name: string;
+  // Optional backdrop for the visual layout canvas - undefined means the
+  // canvas falls back to a blank drag/resize grid.
+  planImage?: SiteFloorPlanImage;
+  // Real-world width (meters) this floor's normalized 0-1 canvas
+  // represents - see the same field in the web app's types.ts.
+  canvasWidthMeters?: number;
+}
+
+export interface SiteSpaceProfile {
+  floors: SiteFloorProfile[];
+  updatedAt?: string;
 }
 
 export interface TenantBranding {
@@ -262,12 +289,42 @@ export interface Tenant {
   branding: TenantBranding;
 }
 
+export interface LocationLayoutPoint {
+  x: number;
+  y: number;
+}
+
+export interface LocationLayout {
+  // Normalized 0-1, relative to the floor's canvas/floor-plan-image
+  // bounds - see the same field on the backend model and the web app's
+  // FloorPlanCanvas.tsx, which this mirrors.
+  x?: number;
+  y?: number;
+  w?: number;
+  h?: number;
+  rotation?: number;
+  updatedAt?: string;
+  // Present for a polygon room (a manual on-screen sketch, from this
+  // app's own RoomSketchCanvas) - ordered wall-corner vertices,
+  // normalized 0-1. x/y/w/h above are always this polygon's own bounding
+  // box either way, computed server-side.
+  points?: LocationLayoutPoint[];
+}
+
 export interface Location {
   id: string;
   siteId: string;
   name: string;
   type: "reception" | "bathroom" | "boardroom" | "kitchen" | "office" | "stockroom";
   qr: string;
+  // Which floor this room belongs to (matches a SiteFloorProfile.name on
+  // the site's layout) - undefined for a location whose site has no
+  // floors defined, or predates floor tracking.
+  floor?: string;
+  // This room's placement on its floor's visual layout canvas
+  // (Enterprise-only "site_layout" module, see the web app for the full
+  // editor). {} means nobody has arranged it yet.
+  layout?: LocationLayout;
 }
 
 export interface QrCode {

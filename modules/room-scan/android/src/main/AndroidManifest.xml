@@ -1,0 +1,18 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <uses-permission android:name="android.permission.CAMERA" />
+
+  <!-- required=false: devices without AR-capable hardware/Play Services
+       for AR must still be able to install the app - this app supports
+       non-AR-capable Android devices too (the fallback flows: photo
+       backdrop, manual sketch). Omitting this would hide the app from
+       them on the Play Store entirely. -->
+  <uses-feature android:name="android.hardware.camera.ar" android:required="false" />
+
+  <application>
+    <!-- Tells Google Play to opportunistically install/update "Google
+         Play Services for AR" on capable devices. ArCoreAvailability's
+         runtime checkAvailability() call is the authoritative gate this
+         module actually relies on either way. -->
+    <meta-data android:name="com.google.ar.core" android:value="optional" />
+  </application>
+</manifest>

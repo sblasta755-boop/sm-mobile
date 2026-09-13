@@ -7,9 +7,11 @@ import type {
   Incident,
   Inspection,
   Location,
+  LocationLayoutPoint,
   Notification,
   QrCode,
   Site,
+  SiteFloorPlanImage,
   StockItem,
   SubscriptionState,
   Task,
@@ -473,6 +475,57 @@ export async function uploadImage(accessToken: string, uri: string, filename: st
   }
   const data = (await response.json()) as { filePath: string };
   return data.filePath;
+}
+
+// ---- Site layout (Enterprise-only "site_layout" module) ----
+
+/** Whole-site PATCH. Note update_site does a SHALLOW merge at the
+ * `geofence` key on the backend (see SiteController.update_site) - a
+ * `spaceProfile` patch REPLACES the entire spaceProfile object, it does
+ * not deep-merge per floor. Callers that want to change one floor must
+ * send back the complete `floors` array (every floor, not just the
+ * changed one) - see updateFloorPlanImage below, which does exactly
+ * that. */
+export function updateSite(accessToken: string, siteId: string, payload: Record<string, unknown>) {
+  return request<Site>(`/sites/${siteId}`, { method: "PATCH", body: JSON.stringify(payload) }, accessToken);
+}
+
+/** Sets (or replaces) one floor's backdrop image, preserving every other
+ * floor's data - the read-modify-write the shallow-merge gotcha above
+ * requires. `site` must be the caller's current, already-loaded Site
+ * (from state.sites), not refetched here, since there is no GET
+ * /sites/{id} single-site endpoint on this app's surface. */
+export function updateFloorPlanImage(
+  accessToken: string,
+  site: Site,
+  floorId: string,
+  planImage: SiteFloorPlanImage,
+) {
+  const floors = (site.profile?.floors ?? []).map((floor) =>
+    floor.id === floorId ? { ...floor, planImage } : floor,
+  );
+  return updateSite(accessToken, site.id, {
+    geofence: { spaceProfile: { floors, updatedAt: new Date().toISOString() } },
+  });
+}
+
+export function updateLocationPosition(
+  accessToken: string,
+  locationId: string,
+  payload: {
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+    rotation?: number;
+    points?: LocationLayoutPoint[];
+  },
+) {
+  return request<Location>(
+    `/site-layout/locations/${locationId}/position`,
+    { method: "PATCH", body: JSON.stringify(payload) },
+    accessToken,
+  );
 }
 
 function normalizeBootstrap(payload: Record<string, unknown>): BackendBootstrap {

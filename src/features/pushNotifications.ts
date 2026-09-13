@@ -54,7 +54,7 @@ async function getExpoPushToken(): Promise<string | null> {
  * app/_layout.tsx.
  */
 export function usePushRegistration() {
-  const { state, currentUser } = useSmartClean();
+  const { state, currentUser, refreshBackendData } = useSmartClean();
   const registeredTokenRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -126,6 +126,21 @@ export function usePushRegistration() {
     });
     return () => sub.remove();
   }, []);
+
+  // A push that arrives while the app is already open only ever drove the
+  // banner/sound (see setNotificationHandler above) - it never told the
+  // store anything changed. The server only sends one of these when a new
+  // task, corrective action, etc. actually landed for this user, so it is
+  // as good a signal to refetch as any poll and costs nothing extra: no
+  // interval, no request unless something real happened. Without this, a
+  // task assigned mid-shift stayed invisible until the user force-closed
+  // and reopened the app (which is the only other thing that refetches).
+  useEffect(() => {
+    const sub = Notifications.addNotificationReceivedListener(() => {
+      void refreshBackendData();
+    });
+    return () => sub.remove();
+  }, [refreshBackendData]);
 }
 
 /**

@@ -75,12 +75,19 @@ export default function Login() {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.brandBlock}>
+          {/* A tenant's own uploaded logo is a remote URL; with none set
+              we fall back to the bundled product mark rather than to
+              initials in a coloured square. require() rather than a uri
+              because a bundled asset has no URL to fetch - the two
+              source shapes are not interchangeable in React Native. */}
           {branding.logoUrl ? (
             <Image source={{ uri: branding.logoUrl }} style={styles.logoImage} />
           ) : (
-            <View style={[styles.logo, { backgroundColor: branding.primaryColor }]}>
-              <Text style={styles.logoGlyph}>{branding.mark}</Text>
-            </View>
+            <Image
+              source={require("../assets/logo-mark.png")}
+              style={styles.logoImage}
+              resizeMode="contain"
+            />
           )}
           <Text style={styles.brand}>{branding.name}</Text>
           <Text style={styles.tagline}>Sign in to manage your shift</Text>

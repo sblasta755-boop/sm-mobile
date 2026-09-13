@@ -1,0 +1,9 @@
+{
+  "name": "room-scan",
+  "version": "1.0.0",
+  "description": "Local Expo Module for AR room scanning in the site_layout feature. iOS uses Apple RoomPlan (16+, A12+ chip); Android uses a bespoke ARCore plane-detection + wall-fitting pipeline (no first-party equivalent exists there) - see each platform's own README/comments under ios/ and android/.",
+  "main": "index.ts",
+  "types": "index.ts",
+  "scripts": {},
+  "license": "UNLICENSED"
+}

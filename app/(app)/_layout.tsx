@@ -99,6 +99,10 @@ export default function AppTabsLayout() {
       <Tabs.Screen name="tasks/[taskId]/index" options={{ href: null }} />
       <Tabs.Screen name="tasks/[taskId]/declaration" options={{ href: null }} />
       <Tabs.Screen name="tasks/[taskId]/evidence" options={{ href: null }} />
+      <Tabs.Screen name="site-layout/index" options={{ href: null }} />
+      <Tabs.Screen name="site-layout/photo-backdrop" options={{ href: null }} />
+      <Tabs.Screen name="site-layout/sketch" options={{ href: null }} />
+      <Tabs.Screen name="site-layout/scan" options={{ href: null }} />
     </Tabs>
   );
 }

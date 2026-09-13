@@ -9,12 +9,14 @@ import { Button } from "@/components/Button";
 import { StatusBadge } from "@/components/StatusBadge";
 import { BrokenGlassIcon } from "@/components/BrokenGlassIcon";
 import { useSmartClean } from "@/features/store";
+import { useCanManageSiteLayout } from "@/features/roles";
 import { fileUrl, toUserRecord, updateUser, uploadImage } from "@/api/client";
 import { colors, radius, spacing, typography } from "@/theme";
 import { APP_VERSION } from "@/constants/version";
 
 export default function ProfileScreen() {
   const { state, dispatch, currentUser, signOut } = useSmartClean();
+  const canManageSiteLayout = useCanManageSiteLayout();
   const site = state.sites.find((s) => currentUser?.siteIds.includes(s.id));
   const clocked = currentUser ? state.attendance[currentUser.id]?.clockedInAt : undefined;
   const myTasks = state.tasks.filter((t) => t.assigneeId === currentUser?.id);
@@ -95,6 +97,11 @@ export default function ProfileScreen() {
             report form - see app/(app)/incidents/new.tsx. */}
         <Row icon={<BrokenGlassIcon size={16} color={colors.primary} />} label="Report incident" onPress={() => router.push("/scan")} />
         <Row icon={<Ionicons name="shield-checkmark-outline" size={16} color={colors.primary} />} label="Privacy & POPIA notice" onPress={() => router.push("/privacy")} />
+        {/* Management tooling, not field-ops - a cleaner never needs to
+            arrange a floor plan. See useCanManageSiteLayout. */}
+        {canManageSiteLayout && (
+          <Row icon={<Ionicons name="grid-outline" size={16} color={colors.primary} />} label="Site layout" onPress={() => router.push("/site-layout")} />
+        )}
         <Row icon={<Ionicons name="help-circle-outline" size={16} color={colors.primary} />} label="Help & support" onPress={() => {}} />
       </View>
 

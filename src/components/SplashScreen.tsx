@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { Animated, Easing, StyleSheet, Text, View } from "react-native";
+import { Animated, Easing, Image, StyleSheet, Text, View } from "react-native";
 import { colors, radius, spacing, typography } from "@/theme";
 
 /**
@@ -123,7 +123,11 @@ export function SplashScreen() {
             },
           ]}
         >
-          <Text style={styles.logoGlyph}>✦</Text>
+          <Image
+            source={require("../../assets/logo-mark.png")}
+            style={styles.logoImage}
+            resizeMode="contain"
+          />
         </Animated.View>
       </View>
 
@@ -171,7 +175,11 @@ const styles = StyleSheet.create({
     width: BADGE_SIZE,
     height: BADGE_SIZE,
     borderRadius: radius.round,
-    backgroundColor: colors.primary,
+    // Light ground, not colors.primary: the logo's building mark is
+    // itself brand blue, so it would vanish into a solid blue badge.
+    // The shadow stays keyed to primary, which is what gives the badge
+    // its lift against the splash background.
+    backgroundColor: "#ffffff",
     alignItems: "center",
     justifyContent: "center",
     shadowColor: colors.primary,
@@ -180,9 +188,10 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 8 },
     elevation: 8,
   },
-  logoGlyph: {
-    fontSize: 40,
-    color: colors.primaryForeground,
+  logoImage: {
+    // Inset within the circular badge so the mark doesn't touch the edge.
+    width: BADGE_SIZE * 0.66,
+    height: BADGE_SIZE * 0.66,
   },
   brand: {
     fontSize: typography.title,
