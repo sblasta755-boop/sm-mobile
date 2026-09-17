@@ -54,9 +54,15 @@ export interface DemoUser {
   email?: string;
   // Free-text, stored in the backend's JSONB profile blob (no dedicated
   // column) - same round-trip as profilePhotoDataUrl. Self-service
-  // editable from profile/edit.tsx, see updateUser + toUserRecord.
+  // editable from app/(shared)/profile-edit.tsx, see updateUser +
+  // toUserRecord.
   phone?: string;
   profilePhotoDataUrl?: string;
+  // ISO timestamp of account creation - always sent by the backend
+  // (user_to_record reads it straight off the live User.created_at
+  // column) but optional here since older cached state predates this
+  // field. Used by the performance-profile PDF's "member since" line.
+  createdAt?: string;
 }
 
 export type TaskStatus =
@@ -173,6 +179,20 @@ export interface Task {
    * backend) - tags the task without changing anything about how it
    * flows through the normal Task/Inspection lifecycle. */
   isHourlyCompliance?: boolean;
+  /** How this task repeats, set only on a recurring task's own template
+   * (the task a supervisor created with "Recurring" ticked on the web
+   * Add-task form) - absent on a normal once-off task and on the daily
+   * instances the template generates, which carry recurringParentId
+   * instead. A generated instance is an ordinary task in every other
+   * respect, so nothing on this screen needs to special-case it. See
+   * app.services.recurring_tasks on the backend. */
+  recurrence?: { pattern: "daily" | "weekdays" | "dates"; dates: string[] };
+  /** Whether the template is still generating instances - null for a
+   * task that doesn't repeat at all. */
+  recurrenceActive?: boolean | null;
+  /** The template task this one was generated from - set on every
+   * generated daily instance, absent otherwise. */
+  recurringParentId?: string | null;
   /** The "HH:MM" slot this hourly-compliance task was generated for -
    * only set alongside isHourlyCompliance. */
   hourlyComplianceSlot?: string | null;

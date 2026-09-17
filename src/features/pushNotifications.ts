@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { AppState } from "react-native";
+import { AppState, Platform } from "react-native";
 import * as Device from "expo-device";
 import * as Notifications from "expo-notifications";
 import Constants from "expo-constants";
@@ -20,12 +20,48 @@ Notifications.setNotificationHandler({
   }),
 });
 
+// Android 8+ delivers every notification through a channel, and a channel's
+// importance is fixed at creation time - a push that arrives before any
+// channel exists lands on an implicitly-created "Miscellaneous" one at
+// default importance, which means no heads-up banner and no sound even
+// though delivery technically succeeded. FCMv1 routes to the channel named
+// by the expo-notifications plugin's `defaultChannel` in app.json, so this
+// id must stay in sync with that value.
+export const ANDROID_CHANNEL_ID = "default";
+
+async function ensureAndroidChannel(): Promise<void> {
+  if (Platform.OS !== "android") return;
+  try {
+    await Notifications.setNotificationChannelAsync(ANDROID_CHANNEL_ID, {
+      name: "Task and shift alerts",
+      // HIGH, not DEFAULT: these are work assignments a cleaner is expected
+      // to act on during a shift, so they warrant a heads-up banner rather
+      // than a silent tray entry.
+      importance: Notifications.AndroidImportance.HIGH,
+      lightColor: "#21779b",
+      sound: "default",
+      enableVibrate: true,
+    });
+  } catch (error) {
+    // Never fatal - a missing channel degrades presentation, not delivery.
+    console.warn("[push] Failed to create Android notification channel", error);
+  }
+}
+
 async function getExpoPushToken(): Promise<string | null> {
   // Push tokens only exist on a real device - the simulator/emulator has
   // no APNs/FCM registration to hand back, and expo-notifications throws
-  // if asked anyway. Fail quietly rather than surface an error the
-  // developer can't act on.
-  if (!Device.isDevice) return null;
+  // if asked anyway. Warn rather than throw: this is expected on a
+  // simulator, but silence here was previously indistinguishable from a
+  // genuinely broken push setup.
+  if (!Device.isDevice) {
+    console.warn("[push] Not a physical device - push tokens are unavailable");
+    return null;
+  }
+
+  // Before the permission prompt, so the channel's importance is already
+  // fixed by the time the first notification can arrive.
+  await ensureAndroidChannel();
 
   const { status: existingStatus } = await Notifications.getPermissionsAsync();
   let finalStatus = existingStatus;
@@ -33,15 +69,27 @@ async function getExpoPushToken(): Promise<string | null> {
     const { status } = await Notifications.requestPermissionsAsync();
     finalStatus = status;
   }
-  if (finalStatus !== "granted") return null;
+  if (finalStatus !== "granted") {
+    console.warn("[push] Notification permission not granted, status=%s", finalStatus);
+    return null;
+  }
 
   const projectId = Constants.expoConfig?.extra?.eas?.projectId;
-  if (!projectId) return null;
+  if (!projectId) {
+    console.warn("[push] No EAS projectId in expoConfig.extra.eas - cannot fetch a push token");
+    return null;
+  }
 
   try {
     const { data } = await Notifications.getExpoPushTokenAsync({ projectId });
+    console.log("[push] Expo push token acquired:", data);
     return data;
-  } catch {
+  } catch (error) {
+    // The usual cause on a standalone Android build is missing FCM V1
+    // credentials on the EAS project - the build succeeds and permissions
+    // are granted, but there is no Firebase sender to register against.
+    // See https://docs.expo.dev/push-notifications/fcm-credentials/
+    console.warn("[push] getExpoPushTokenAsync failed", error);
     return null;
   }
 }
@@ -79,10 +127,12 @@ export function usePushRegistration() {
       try {
         await registerPushToken(state.accessToken, token, Device.osName?.toLowerCase() ?? "unknown");
         registeredTokenRef.current = token;
-      } catch {
+        console.log("[push] Token registered with backend");
+      } catch (error) {
         // Best-effort - a failed registration just means this device
         // won't get pushes until the next successful sync (app reopen,
         // token refresh); in-app notifications are unaffected.
+        console.warn("[push] Backend token registration failed", error);
       }
     }
 
@@ -103,8 +153,11 @@ export function usePushRegistration() {
             registerPushToken(state.accessToken!, token, Device.osName?.toLowerCase() ?? "unknown")
               .then(() => {
                 registeredTokenRef.current = token;
+                console.log("[push] Token registered with backend on foreground");
               })
-              .catch(() => {});
+              .catch((error) => {
+                console.warn("[push] Foreground token registration failed", error);
+              });
           }
         });
       }
@@ -169,5 +222,7 @@ export function navigateForNotificationData(
     router.push(`/corrective-actions/${relatedId}`);
     return;
   }
+  // Lives in app/(shared)/ now rather than the cleaner's tab group, so
+  // tapping a push lands correctly whichever app the role is in.
   router.push("/notifications");
 }

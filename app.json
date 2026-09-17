@@ -35,7 +35,9 @@
         "android.permission.RECORD_AUDIO",
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION",
-        "android.permission.POST_NOTIFICATIONS"
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT"
       ]
     },
     "web": {
@@ -59,7 +61,14 @@
       [
         "expo-notifications",
         {
-          "color": "#21779b"
+          "color": "#21779b",
+          "defaultChannel": "default"
+        }
+      ],
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Šoma360 uses Face ID to unlock your saved session on this device."
         }
       ],
       "expo-font",
@@ -72,9 +81,9 @@
       "apiBaseUrl": "",
       "router": {},
       "eas": {
-        "projectId": "6009705e-54e9-41be-9f0d-440074a66959"
+        "projectId": "960bfff5-1b2b-4d10-9b82-9f84bce45e16"
       }
     },
-    "owner": "sblasta124"
+    "owner": "sblasta11"
   }
 }

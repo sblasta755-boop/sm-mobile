@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { router, useLocalSearchParams } from "expo-router";
-import { Image, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Image, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { Screen } from "@/components/Screen";
@@ -51,6 +51,10 @@ export default function NewIncidentScreen() {
   // gallery upload can't provide.
   const [permission, requestPermission] = useCameraPermissions();
   const [cameraOn, setCameraOn] = useState(false);
+  // 16:9 inline preview is too short to frame a shot on a portrait
+  // phone - expanding takes the same CameraView full-screen. Off by
+  // default so the rest of the incident form stays visible.
+  const [cameraExpanded, setCameraExpanded] = useState(false);
   const cameraRef = useRef<CameraView | null>(null);
   // The location must come from a scanned QR code (see the "scan first"
   // gate below) - there's no manual room/zone picker any more, so the
@@ -188,6 +192,11 @@ export default function NewIncidentScreen() {
             placeholderTextColor={colors.mutedForeground}
             style={[styles.input, styles.textarea]}
           />
+          {description.length > 0 && description.length < 5 && (
+            <Text style={styles.hintText}>
+              A few more words needed - at least 5 characters to submit.
+            </Text>
+          )}
         </View>
 
         <View style={styles.field}>
@@ -229,24 +238,60 @@ export default function NewIncidentScreen() {
           </Text>
 
           {cameraOn ? (
-            <View style={styles.cameraFrame}>
-              <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing="back" />
-              <View pointerEvents="none" style={styles.reticle} />
-              <View style={styles.cameraActions}>
-                <Button
-                  variant="outline"
-                  style={styles.cameraActionButton}
-                  disabled={uploadingPhoto || photoPaths.length >= MAX_PHOTOS}
-                  loading={uploadingPhoto}
-                  onPress={capturePhoto}
+            // Expanding grows this frame in place rather than opening a
+            // Modal. A Modal is full-screen by definition: it hid the rest
+            // of the form and pushed the controls under the status bar and
+            // the gesture bar. Inline, the preview stays within the
+            // screen's normal chrome, so the system bars can't be collided
+            // with and no safe-area insets are needed. Only the frame's
+            // aspect ratio changes between the two states.
+              <View style={cameraExpanded ? styles.cameraFrameExpanded : styles.cameraFrame}>
+                <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing="back" />
+                <View pointerEvents="none" style={styles.reticle} />
+                {uploadingPhoto && (
+                  // The Take photo button already spins, but the preview
+                  // is what the eye is on - without this the viewfinder
+                  // looks completely unchanged while the upload runs.
+                  <View style={styles.captureOverlay}>
+                    <ActivityIndicator color={colors.white} />
+                    <Text style={styles.captureOverlayText}>Uploading photo…</Text>
+                  </View>
+                )}
+                <Pressable
+                  accessibilityLabel={cameraExpanded ? "Shrink camera" : "Expand camera"}
+                  onPress={() => setCameraExpanded((open) => !open)}
+                  style={styles.cameraExpandButton}
                 >
-                  Take photo
-                </Button>
-                <Button variant="outline" style={styles.cameraActionButton} onPress={stopCamera}>
-                  Close
-                </Button>
+                  <Ionicons
+                    name={cameraExpanded ? "contract-outline" : "expand-outline"}
+                    size={20}
+                    color="#ffffff"
+                  />
+                </Pressable>
+                <View style={styles.cameraActions}>
+                  <Button
+                    variant="outline"
+                    style={styles.cameraActionButton}
+                    disabled={uploadingPhoto || photoPaths.length >= MAX_PHOTOS}
+                    loading={uploadingPhoto}
+                    onPress={capturePhoto}
+                  >
+                    Take photo
+                  </Button>
+                  <Button
+                    variant="outline"
+                    style={styles.cameraActionButton}
+                    onPress={() => {
+                      // Collapse with the stream so the next capture
+                      // doesn't reopen full-screen unasked.
+                      setCameraExpanded(false);
+                      stopCamera();
+                    }}
+                  >
+                    Close
+                  </Button>
+                </View>
               </View>
-            </View>
           ) : (
             photoPaths.length < MAX_PHOTOS && (
               <Button variant="outline" onPress={startCamera}>
@@ -309,6 +354,11 @@ const styles = StyleSheet.create({
   textarea: {
     minHeight: 100,
     textAlignVertical: "top",
+  },
+  hintText: {
+    fontSize: typography.tiny,
+    color: colors.mutedForeground,
+    marginTop: spacing.xs,
   },
   emptyLocations: {
     fontSize: typography.small,
@@ -394,6 +444,40 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     backgroundColor: "#020617",
     marginTop: spacing.xs,
+  },
+  // Expanded is a taller portrait frame, not a full-screen takeover -
+  // see the same style on the task evidence screen. 3/4 gives roughly
+  // twice the height of the 16/9 collapsed state, which is what made
+  // framing a shot hard, while the form's own chrome stays visible.
+  cameraFrameExpanded: {
+    aspectRatio: 3 / 4,
+    borderRadius: radius.lg,
+    overflow: "hidden",
+    backgroundColor: "#020617",
+    marginTop: spacing.xs,
+  },
+  captureOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.xs,
+    backgroundColor: colors.overlay,
+  },
+  captureOverlayText: {
+    fontSize: typography.small,
+    fontWeight: "600",
+    color: colors.white,
+  },
+  cameraExpandButton: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    width: 36,
+    height: 36,
+    borderRadius: radius.md,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0,0,0,0.55)",
   },
   reticle: {
     position: "absolute",

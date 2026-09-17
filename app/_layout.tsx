@@ -5,6 +5,7 @@ import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { SmartCleanProvider } from "@/features/store";
 import { usePushRegistration } from "@/features/pushNotifications";
+import { useDeviceHealthReporting } from "@/features/deviceHealth";
 
 // Keep the native splash image up until our animated in-app splash
 // (rendered from app/index.tsx while the session restores) has mounted,
@@ -32,5 +33,6 @@ export default function RootLayout() {
 // the provider without restructuring RootLayout itself.
 function PushNotificationsBridge() {
   usePushRegistration();
+  useDeviceHealthReporting();
   return null;
 }

@@ -7,7 +7,7 @@ import { useSmartClean } from "@/features/store";
 import { ProfileMenuSheet } from "@/components/ProfileMenuSheet";
 import { colors, spacing, typography } from "@/theme";
 
-// The 5 bottom-tab roots (see app/(app)/_layout.tsx's <Tabs.Screen>
+// Every group's bottom-tab roots (see each _layout.tsx's <Tabs.Screen>
 // entries) don't get a back button - they're always reachable from the
 // tab bar, so "back" there would either loop to another root tab or
 // exit the app. Every other screen (Notifications, Profile edit, Scan
@@ -16,7 +16,34 @@ import { colors, spacing, typography } from "@/theme";
 // from one of these, and - with the whole app's headerShown: false -
 // had no back affordance at all (no native header, no gesture on iOS,
 // nothing on-screen even where Android's hardware back still works).
-const TAB_ROOT_PATHS = new Set(["/home", "/shifts", "/scan", "/corrective-actions", "/profile"]);
+//
+// This listed only the cleaner group's 5 roots at first, because that
+// was the only group when it was written. A manager, supervisor or
+// auditor sitting on their own home tab therefore got a back button
+// that pointed out of their app.
+const TAB_ROOT_PATHS = new Set([
+  // (app) - the cleaner's field app
+  "/home",
+  "/shifts",
+  "/scan",
+  "/corrective-actions",
+  "/profile",
+  // (manage)
+  "/manage-home",
+  "/manage-team",
+  "/manage-add-staff",
+  "/manage-approvals",
+  "/manage-profile",
+  // (supervise)
+  "/supervise-home",
+  "/supervise-inspections",
+  "/supervise-actions",
+  "/supervise-profile",
+  // (audit)
+  "/audit-home",
+  "/audit-quality",
+  "/audit-profile",
+]);
 
 /**
  * Shared authenticated-screen chrome: header (title or custom header content),

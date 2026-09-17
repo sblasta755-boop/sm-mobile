@@ -250,6 +250,13 @@ export default function ScanRoomScreen() {
           >
             Start scan
           </Button>
+          {!room ? (
+            <Text style={styles.hint}>Select a room above to enable Start scan.</Text>
+          ) : (
+            supported === null && (
+              <Text style={styles.hint}>Checking this device's scanning support…</Text>
+            )
+          )}
         </>
       )}
 

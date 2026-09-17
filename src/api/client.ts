@@ -17,6 +17,7 @@ import type {
   Task,
   Tenant,
 } from "@/types/smartclean";
+import { formatTime } from "@/services/formatDateTime";
 
 const extraUrl = (Constants.expoConfig?.extra?.apiBaseUrl as string | undefined) ?? "";
 export const API_BASE_URL = (
@@ -67,6 +68,8 @@ export async function loginToBackend(username: string, password: string) {
     refreshToken: string;
     expiresIn: number;
     user: Record<string, unknown>;
+    mustChangePassword?: boolean;
+    hasSeenWelcome?: boolean;
   }>("/auth/login", {
     method: "POST",
     body: JSON.stringify({ username, password }),
@@ -77,7 +80,12 @@ export async function loginToBackend(username: string, password: string) {
     expiresAt: new Date(Date.now() + auth.expiresIn * 1000).toISOString(),
   };
   const bootstrap = await loadBackendBootstrap(session.accessToken);
-  return { session, bootstrap };
+  return {
+    session,
+    bootstrap,
+    mustChangePassword: auth.mustChangePassword ?? false,
+    hasSeenWelcome: auth.hasSeenWelcome ?? true,
+  };
 }
 
 export async function logoutFromBackend(accessToken: string, refreshToken: string) {
@@ -326,6 +334,67 @@ export function clockOut(accessToken: string, payload: { siteId: string; qrValue
   return request<Record<string, unknown>>("/attendance/clock-out", { method: "POST", body: JSON.stringify(payload) }, accessToken);
 }
 
+export interface AttendanceDay {
+  id: string;
+  userId: string;
+  siteId: string;
+  siteName?: string;
+  workDate: string;
+  clockInAt?: string;
+  clockOutAt?: string;
+  workedMinutes?: number;
+  expectedStart?: string;
+  expectedEnd?: string;
+  exceptions: string[];
+  approvalState: string;
+}
+
+/** The caller's own computed attendance days ("YYYY-MM-DD" start/end,
+ * inclusive, max 62 days) - worked minutes and exceptions per day, for
+ * the performance-profile PDF's attendance section. Self-service: the
+ * backend always scopes this to whoever the access token belongs to. */
+export function getMyAttendanceDays(accessToken: string, start: string, end: string) {
+  return request<AttendanceDay[]>(
+    `/attendance/my-history?start=${start}&end=${end}`,
+    {},
+    accessToken,
+  );
+}
+
+// ---- Device health ----
+
+/** One battery sample from this device - reported at clock-in/out and
+ * periodically while the app is open (see useDeviceHealthReporting).
+ * Self-service: the backend always writes against whoever the access
+ * token belongs to, so there's nothing else to pass. */
+export function reportDeviceHealth(
+  accessToken: string,
+  payload: { batteryLevel: number; isCharging: boolean; deviceModel?: string; osVersion?: string },
+) {
+  return request<Record<string, unknown>>(
+    "/device-health/report",
+    { method: "POST", body: JSON.stringify(payload) },
+    accessToken,
+  );
+}
+
+export interface DeviceHealthTeamEntry {
+  userId: string;
+  userName: string;
+  batteryLevel: number;
+  isCharging: boolean;
+  deviceModel?: string;
+  osVersion?: string;
+  reportedAt: string;
+}
+
+/** The latest known battery reading for each person on the caller's
+ * roster - org_admin/operations_manager/site_manager/supervisor only,
+ * same audience as attendance/timesheet. */
+export function getDeviceHealthTeam(accessToken: string) {
+  return request<DeviceHealthTeamEntry[]>("/device-health/team", {}, accessToken);
+}
+
 // ---- Hourly compliance ----
 
 // Mirrors the web client's smartclean/api.ts hourly-compliance section -
@@ -544,7 +613,11 @@ function normalizeBootstrap(payload: Record<string, unknown>): BackendBootstrap 
     locations: list(payload.locations) as unknown as Location[],
     qrCodes: list(payload.qrCodes) as unknown as QrCode[],
     tasks: list(payload.tasks).map((task) => ({
-      dueTime: String(task.dueTime ?? task.dueAt ?? task.scheduledAt ?? ""),
+      // Formatted here rather than at each "Due {dueTime}" render site:
+      // this used to be String(...) of a raw ISO timestamp, which is
+      // exactly what Home/Shifts/task detail then printed. Time only -
+      // a task list is already grouped by day.
+      dueTime: formatTime((task.dueTime ?? task.dueAt ?? task.scheduledAt) as string | undefined),
       estimatedMinutes: Number(task.estimatedMinutes ?? 30),
       ...task,
       evidence: list(task.evidence).map((evidence) => ({ imgSeed: 0, ...evidence })),
@@ -628,4 +701,488 @@ export function unregisterPushToken(accessToken: string, token: string) {
     { method: "DELETE", body: JSON.stringify({ token }) },
     accessToken,
   );
+}
+
+// ---- Platform console ----
+//
+// Mirrors app.api.v1.platform on the backend, which is gated by
+// get_platform_owner: the system_admin role AND membership of the
+// platform tenant. Only Šoma360's own operator staff can call any of
+// these; a customer's org_admin gets a 403 whatever their plan.
+//
+// These screens read from here and NEVER from store bootstrap state.
+// Bootstrap is tenant-scoped, and a platform admin's own tenant has no
+// customer sites, tasks or users - so anything sourced from the store
+// would render convincingly empty rather than wrong-and-obvious.
+
+export interface PlatformOrganisation {
+  id: string;
+  name: string;
+  slug: string;
+  status: string;
+  createdAt: string | null;
+  userCount: number;
+  subscription: {
+    tier: string;
+    tierLabel: string | null;
+    status: string;
+    seats: number | null;
+    currentPeriodEnd: string | null;
+    trialEndsAt: string | null;
+    billingEmail: string | null;
+    modules: string[];
+  } | null;
+}
+
+export interface PlatformSummary {
+  totalOrganisations: number;
+  totalActiveUsers: number;
+  byTier: Record<string, number>;
+  byStatus: Record<string, number>;
+  signupsLast30Days: Record<string, number>;
+  recentActivity: {
+    id: string;
+    tenantId: string;
+    tenantName: string;
+    action: string;
+    actorEmail: string | null;
+    occurredAt: string;
+  }[];
+}
+
+/** One onboarding grant, as the operator's console sees it.
+ *
+ * Deliberately carries no claimId/claimSecret - those belong to the
+ * scanning device alone. `matchWord` is the point of the approval
+ * screen: the operator reads it against what the customer says. */
+export interface OnboardingGrant {
+  id: string;
+  tenantId: string;
+  organisationName: string | null;
+  adminUserId: string;
+  status: "pending" | "scanned" | "approved" | "rejected" | "revoked";
+  attempt: number;
+  matchWord: string | null;
+  deviceLabel: string | null;
+  scanIp: string | null;
+  scannedAt: string | null;
+  activatesAt: string | null;
+  expiresAt: string | null;
+  rejectedReason: string | null;
+  collectedAt: string | null;
+  isLive: boolean;
+  /** Only present while the grant is still claimable - a spent code
+   * cannot be re-rendered from a stale screen. */
+  signedValue: string | null;
+  createdAt: string | null;
+}
+
+export function getPlatformSummary(accessToken: string) {
+  return request<PlatformSummary>("/platform/organisations/summary", {}, accessToken);
+}
+
+export function listPlatformOrganisations(accessToken: string, page = 1, pageSize = 25) {
+  return request<{ items: PlatformOrganisation[]; total: number }>(
+    `/platform/organisations?page=${page}&pageSize=${pageSize}`,
+    {},
+    accessToken,
+  );
+}
+
+export function getPlatformOrganisation(accessToken: string, tenantId: string) {
+  return request<PlatformOrganisation>(`/platform/organisations/${tenantId}`, {}, accessToken);
+}
+
+export interface PlatformSite {
+  id: string;
+  name: string;
+  address: string;
+  active: boolean;
+  tenantId: string;
+  tenantName: string;
+  latitude: number;
+  longitude: number;
+  radiusMeters: number | null;
+}
+
+/** Every customer site with real coordinates, across every organisation
+ * - a site with no geofence configured is silently excluded server-side
+ * (see PlatformController.list_all_sites), same as the web console's
+ * Sites map. No pagination - the organisation detail screen's own Sites
+ * section filters this down to one tenantId client-side, same pattern
+ * as web's PlatformSitesTab. */
+export function listPlatformSites(accessToken: string) {
+  return request<PlatformSite[]>("/platform/organisations/sites", {}, accessToken);
+}
+
+export function setPlatformOrganisationState(
+  accessToken: string,
+  tenantId: string,
+  action: "suspend" | "reactivate" | "cancel",
+) {
+  return request<PlatformOrganisation>(
+    `/platform/organisations/${tenantId}/${action}`,
+    { method: "POST" },
+    accessToken,
+  );
+}
+
+export function updatePlatformSubscription(
+  accessToken: string,
+  tenantId: string,
+  payload: { tier?: string; seats?: number | null },
+) {
+  return request<PlatformOrganisation>(
+    `/platform/organisations/${tenantId}/subscription`,
+    { method: "PATCH", body: JSON.stringify(payload) },
+    accessToken,
+  );
+}
+
+/** Create an organisation. deliveryMethod "qr" suppresses the invite
+ * email and mints an onboarding grant instead - the two are mutually
+ * exclusive server-side, since two live ways into one account means the
+ * unwatched one is the liability. */
+export function provisionOrganisation(
+  accessToken: string,
+  payload: {
+    organisationName: string;
+    adminDisplayName: string;
+    adminEmail: string;
+    tier: string;
+    seats?: number | null;
+    deliveryMethod?: "email" | "qr";
+  },
+) {
+  return request<PlatformOrganisation & { adminUserId: string; adminEmail: string; deliveryMethod: string }>(
+    "/platform/organisations",
+    { method: "POST", body: JSON.stringify(payload) },
+    accessToken,
+  );
+}
+
+// ---- QR onboarding, operator side ----
+
+export function getOnboardingStatus(accessToken: string, tenantId: string) {
+  return request<{ grant: OnboardingGrant | null }>(
+    `/platform/organisations/${tenantId}/onboarding`,
+    {},
+    accessToken,
+  );
+}
+
+/** Opens the 15-minute live window. This - not provisioning - is when
+ * the code becomes scannable, which is what makes a screenshot taken
+ * earlier useless. */
+export function revealOnboardingCode(accessToken: string, tenantId: string) {
+  return request<OnboardingGrant>(
+    `/platform/organisations/${tenantId}/onboarding/reveal`,
+    { method: "POST" },
+    accessToken,
+  );
+}
+
+export function reopenOnboardingCode(accessToken: string, tenantId: string) {
+  return request<OnboardingGrant>(
+    `/platform/organisations/${tenantId}/onboarding/reopen`,
+    { method: "POST" },
+    accessToken,
+  );
+}
+
+export function revokeOnboardingCode(accessToken: string, tenantId: string) {
+  return request<OnboardingGrant>(
+    `/platform/organisations/${tenantId}/onboarding/revoke`,
+    { method: "POST" },
+    accessToken,
+  );
+}
+
+export function listPendingOnboarding(accessToken: string) {
+  return request<OnboardingGrant[]>("/platform/onboarding/pending", {}, accessToken);
+}
+
+export function approveOnboarding(accessToken: string, grantId: string) {
+  return request<OnboardingGrant>(
+    `/platform/onboarding/${grantId}/approve`,
+    { method: "POST" },
+    accessToken,
+  );
+}
+
+export function rejectOnboarding(accessToken: string, grantId: string, reason?: string) {
+  return request<OnboardingGrant>(
+    `/platform/onboarding/${grantId}/reject`,
+    { method: "POST", body: JSON.stringify({ reason: reason ?? null }) },
+    accessToken,
+  );
+}
+
+/** The QR image URL. Authenticated, unlike /codes/render/qr.svg - this
+ * code is a claim on an account that doesn't exist yet, so it's served
+ * only to the operator who owns it. Fetched rather than used as an
+ * <Image src>, since RN can't attach an Authorization header to one. */
+export async function fetchOnboardingQrSvg(
+  accessToken: string,
+  tenantId: string,
+): Promise<string> {
+  const response = await fetch(
+    `${API_BASE_URL}/platform/organisations/${tenantId}/onboarding/qr.svg`,
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+  );
+  if (!response.ok) {
+    await throwForStatus(response);
+  }
+  return response.text();
+}
+
+// ---- QR onboarding, customer side ----
+//
+// Unauthenticated by necessity: the device calling these has no account
+// yet. None returns a credential except collectOnboarding, and only
+// after a platform admin approved the scan AND this device proves it
+// holds the claim secret it generated locally.
+
+export function scanOnboardingCode(value: string, deviceLabel?: string) {
+  return request<{
+    claimId: string;
+    claimSecret: string;
+    matchWord: string;
+    organisationName: string | null;
+    status: string;
+    expiresAt: string | null;
+  }>("/auth/onboarding/scan", {
+    method: "POST",
+    body: JSON.stringify({ value, deviceLabel: deviceLabel ?? null }),
+  });
+}
+
+export function pollOnboarding(claimId: string, claimSecret: string) {
+  return request<{
+    status: string;
+    organisationName: string | null;
+    matchWord: string | null;
+    rejectedReason: string | null;
+    ready: boolean;
+    expiresAt: string | null;
+  }>("/auth/onboarding/poll", {
+    method: "POST",
+    body: JSON.stringify({ claimId, claimSecret }),
+  });
+}
+
+export async function collectOnboarding(claimId: string, claimSecret: string) {
+  const auth = await request<{
+    accessToken: string;
+    refreshToken: string;
+    expiresIn: number;
+    user: Record<string, unknown>;
+    mustChangePassword: boolean;
+    hasSeenWelcome?: boolean;
+  }>("/auth/onboarding/collect", {
+    method: "POST",
+    body: JSON.stringify({ claimId, claimSecret }),
+  });
+  const session: BackendSession = {
+    accessToken: auth.accessToken,
+    refreshToken: auth.refreshToken,
+    expiresAt: new Date(Date.now() + auth.expiresIn * 1000).toISOString(),
+  };
+  const bootstrap = await loadBackendBootstrap(session.accessToken);
+  return {
+    session,
+    bootstrap,
+    mustChangePassword: auth.mustChangePassword,
+    hasSeenWelcome: auth.hasSeenWelcome ?? false,
+  };
+}
+
+/** Sets the first password for an account flagged mustChangePassword.
+ * Takes no current password - see AuthController.set_initial_password
+ * for why /auth/change-password cannot serve these accounts. */
+export function setInitialPassword(accessToken: string, password: string) {
+  return request<{ success: boolean }>(
+    "/auth/set-initial-password",
+    { method: "POST", body: JSON.stringify({ password }) },
+    accessToken,
+  );
+}
+
+/** Discharges the one-time post-onboarding welcome screen so it never
+ * shows again for this account, on any device. */
+export function markWelcomeSeen(accessToken: string) {
+  return request<{ success: boolean }>(
+    "/auth/welcome-seen",
+    { method: "POST", body: JSON.stringify({}) },
+    accessToken,
+  );
+}
+
+// ---- QR staff onboarding ----
+//
+// Mirrors app.api.v1.users' /staff-onboarding routes (manager side) and
+// app.api.v1.auth's (the new starter's side). The same handshake the
+// platform console uses for whole organisations, issued here by an
+// organisation's own managers for people they may already add via
+// POST /users - see StaffOnboardingController's docstring for why this
+// is a delivery channel rather than a new power.
+
+/** One staff grant, as a manager's screen sees it. No claim pair: that
+ * belongs to the scanning device alone. */
+export interface StaffGrant {
+  id: string;
+  staffUserId: string;
+  staffName: string | null;
+  staffEmail: string | null;
+  role: string | null;
+  siteName: string | null;
+  status: "pending" | "scanned" | "approved" | "rejected" | "revoked";
+  attempt: number;
+  matchWord: string | null;
+  deviceLabel: string | null;
+  scanIp: string | null;
+  scannedAt: string | null;
+  expiresAt: string | null;
+  rejectedReason: string | null;
+  collectedAt: string | null;
+  isLive: boolean;
+  signedValue: string | null;
+  createdAt: string | null;
+}
+
+export function createStaffOnboarding(
+  accessToken: string,
+  payload: { displayName: string; email: string; role: string; siteId?: string | null },
+) {
+  return request<StaffGrant>(
+    "/users/staff-onboarding",
+    { method: "POST", body: JSON.stringify(payload) },
+    accessToken,
+  );
+}
+
+export function listPendingStaffOnboarding(accessToken: string) {
+  return request<StaffGrant[]>("/users/staff-onboarding/pending", {}, accessToken);
+}
+
+export function approveStaffOnboarding(accessToken: string, grantId: string) {
+  return request<StaffGrant>(
+    `/users/staff-onboarding/${grantId}/approve`,
+    { method: "POST" },
+    accessToken,
+  );
+}
+
+export function rejectStaffOnboarding(accessToken: string, grantId: string, reason?: string) {
+  return request<StaffGrant>(
+    `/users/staff-onboarding/${grantId}/reject`,
+    { method: "POST", body: JSON.stringify({ reason: reason ?? null }) },
+    accessToken,
+  );
+}
+
+export function getStaffOnboardingStatus(accessToken: string, staffUserId: string) {
+  return request<{ grant: StaffGrant | null }>(
+    `/users/${staffUserId}/staff-onboarding`,
+    {},
+    accessToken,
+  );
+}
+
+/** Opens the 15-minute live window. A POST, not a side effect of
+ * fetching the image: the QR endpoint is a GET that may be refetched at
+ * any time, and revealing on each fetch would mean the window never
+ * actually expired. */
+export function revealStaffOnboardingCode(accessToken: string, staffUserId: string) {
+  return request<StaffGrant>(
+    `/users/${staffUserId}/staff-onboarding/reveal`,
+    { method: "POST" },
+    accessToken,
+  );
+}
+
+export function reopenStaffOnboardingCode(accessToken: string, staffUserId: string) {
+  return request<StaffGrant>(
+    `/users/${staffUserId}/staff-onboarding/reopen`,
+    { method: "POST" },
+    accessToken,
+  );
+}
+
+/** The QR image. Authenticated, so fetched rather than used as an
+ * <Image src> - RN cannot attach an Authorization header to one. */
+export async function fetchStaffOnboardingQrSvg(
+  accessToken: string,
+  staffUserId: string,
+): Promise<string> {
+  const response = await fetch(
+    `${API_BASE_URL}/users/${staffUserId}/staff-onboarding/qr.svg`,
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+  );
+  if (!response.ok) {
+    await throwForStatus(response);
+  }
+  return response.text();
+}
+
+// ---- QR staff onboarding, the new starter's side ----
+//
+// Unauthenticated: the person calling these has an account that is not
+// usable yet. Nothing returns a credential except collect, and only
+// after a manager approved the scan AND this device proves it holds the
+// claim secret it generated locally.
+
+export function scanStaffOnboardingCode(value: string, deviceLabel?: string) {
+  return request<{
+    claimId: string;
+    claimSecret: string;
+    matchWord: string;
+    organisationName: string | null;
+    staffFirstName: string | null;
+    status: string;
+    expiresAt: string | null;
+  }>("/auth/staff-onboarding/scan", {
+    method: "POST",
+    body: JSON.stringify({ value, deviceLabel: deviceLabel ?? null }),
+  });
+}
+
+export function pollStaffOnboarding(claimId: string, claimSecret: string) {
+  return request<{
+    status: string;
+    organisationName: string | null;
+    matchWord: string | null;
+    rejectedReason: string | null;
+    ready: boolean;
+    expiresAt: string | null;
+  }>("/auth/staff-onboarding/poll", {
+    method: "POST",
+    body: JSON.stringify({ claimId, claimSecret }),
+  });
+}
+
+export async function collectStaffOnboarding(claimId: string, claimSecret: string) {
+  const auth = await request<{
+    accessToken: string;
+    refreshToken: string;
+    expiresIn: number;
+    user: Record<string, unknown>;
+    mustChangePassword: boolean;
+    hasSeenWelcome?: boolean;
+  }>("/auth/staff-onboarding/collect", {
+    method: "POST",
+    body: JSON.stringify({ claimId, claimSecret }),
+  });
+  const session: BackendSession = {
+    accessToken: auth.accessToken,
+    refreshToken: auth.refreshToken,
+    expiresAt: new Date(Date.now() + auth.expiresIn * 1000).toISOString(),
+  };
+  const bootstrap = await loadBackendBootstrap(session.accessToken);
+  return {
+    session,
+    bootstrap,
+    mustChangePassword: auth.mustChangePassword,
+    hasSeenWelcome: auth.hasSeenWelcome ?? false,
+  };
 }

@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { router, useLocalSearchParams } from "expo-router";
-import { Image, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { Ionicons } from "@expo/vector-icons";
 import { Screen } from "@/components/Screen";
@@ -29,6 +29,12 @@ export default function EvidenceScreen() {
   const [busy, setBusy] = useState(false);
   const [activeKind, setActiveKind] = useState<EvidenceKind | null>(null);
   const [openSection, setOpenSection] = useState<EvidenceKind | null>(null);
+  // The inline preview is a 16:9 frame inside an accordion section (see
+  // styles.cameraFrame), which on a portrait phone leaves a letterbox
+  // strip barely tall enough to line a shot up. Expanding takes the
+  // same CameraView full-screen. Off by default so the other categories
+  // and the thumbnails stay visible while capturing.
+  const [cameraExpanded, setCameraExpanded] = useState(false);
   const cameraRef = useRef<CameraView | null>(null);
 
   if (!task) {
@@ -113,6 +119,15 @@ export default function EvidenceScreen() {
       : "Take a Before photo first, then work through the checklist";
   };
 
+  // Always collapse when the stream goes away: the expanded overlay is
+  // rendered off cameraOn, so stopping while expanded would leave
+  // cameraExpanded set and the next capture would open full-screen
+  // without the cleaner asking for it.
+  function collapseAndStop() {
+    setCameraExpanded(false);
+    stopCamera();
+  }
+
   function stopCamera() {
     setCameraOn(false);
     setActiveKind(null);
@@ -172,7 +187,10 @@ export default function EvidenceScreen() {
                 onPress={() => {
                   const next = isOpen ? null : kind;
                   setOpenSection(next);
-                  if (isActive && next !== kind) stopCamera();
+                  // collapseAndStop, not stopCamera - switching category
+                  // while expanded would otherwise tear the stream down
+                  // but leave the expanded flag set.
+                  if (isActive && next !== kind) collapseAndStop();
                 }}
               >
                 <View style={styles.sectionHeaderLeft}>
@@ -233,9 +251,31 @@ export default function EvidenceScreen() {
                       <Text style={styles.mutedSmall}>{description}</Text>
 
                       {isActive && cameraOn ? (
-                        <View style={styles.cameraFrame}>
+                        // Expanding grows this frame in place rather than
+                        // opening a Modal. A Modal is full-screen by
+                        // definition: it hid the rest of the screen and
+                        // pushed the controls under the status bar and the
+                        // gesture bar. Inline, the preview stays within the
+                        // screen's normal chrome - Screen's own layout
+                        // already accounts for the system bars, so nothing
+                        // can collide with them and no safe-area insets are
+                        // needed here at all. Only the frame's aspect ratio
+                        // changes between the two states.
+                        <View style={cameraExpanded ? styles.cameraFrameExpanded : styles.cameraFrame}>
                           <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing="back" />
                           <View pointerEvents="none" style={styles.reticle} />
+                          {busy && <CaptureOverlay label="Saving photo…" />}
+                          <Pressable
+                            accessibilityLabel={cameraExpanded ? "Shrink camera" : "Expand camera"}
+                            onPress={() => setCameraExpanded((open) => !open)}
+                            style={styles.cameraExpandButton}
+                          >
+                            <Ionicons
+                              name={cameraExpanded ? "contract-outline" : "expand-outline"}
+                              size={20}
+                              color="#ffffff"
+                            />
+                          </Pressable>
                           <View style={styles.cameraActions}>
                             <Button
                               variant="outline"
@@ -246,7 +286,7 @@ export default function EvidenceScreen() {
                             >
                               Take photo
                             </Button>
-                            <Button variant="outline" style={styles.cameraActionButton} onPress={stopCamera}>
+                            <Button variant="outline" style={styles.cameraActionButton} onPress={collapseAndStop}>
                               Close
                             </Button>
                           </View>
@@ -280,6 +320,21 @@ export default function EvidenceScreen() {
         Back to task
       </Button>
     </Screen>
+  );
+}
+
+// Covers the viewfinder while a capture uploads. The Take photo button
+// already spins, but the preview is where the eye is - without this the
+// camera looks completely unresponsive for the couple of seconds the
+// upload and addTaskEvidence call take, which is exactly when people
+// tap again. Not pointerEvents="none": swallowing taps is half the
+// point.
+function CaptureOverlay({ label }: { label: string }) {
+  return (
+    <View style={styles.captureOverlay}>
+      <ActivityIndicator color={colors.white} />
+      <Text style={styles.captureOverlayText}>{label}</Text>
+    </View>
   );
 }
 
@@ -367,6 +422,40 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     overflow: "hidden",
     backgroundColor: "#020617",
+  },
+  // Expanded is a taller portrait frame, not a full-screen takeover: a
+  // Modal hid the rest of the screen and put the controls under the
+  // system bars. 3/4 gives roughly twice the height of the 16/9
+  // collapsed state - enough to actually frame a shot - while the
+  // screen's header, the other categories and the tab bar stay visible.
+  cameraFrameExpanded: {
+    aspectRatio: 3 / 4,
+    borderRadius: radius.lg,
+    overflow: "hidden",
+    backgroundColor: "#020617",
+  },
+  captureOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.xs,
+    backgroundColor: colors.overlay,
+  },
+  captureOverlayText: {
+    fontSize: typography.small,
+    fontWeight: "600",
+    color: colors.white,
+  },
+  cameraExpandButton: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    width: 36,
+    height: 36,
+    borderRadius: radius.md,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0,0,0,0.55)",
   },
   reticle: {
     position: "absolute",

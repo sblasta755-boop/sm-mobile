@@ -9,6 +9,7 @@ import { useSmartClean } from "@/features/store";
 import { updateCorrectiveAction } from "@/api/client";
 import { humanStatus } from "@/domain/status";
 import { colors, spacing, typography } from "@/theme";
+import { formatDateTime } from "@/services/formatDateTime";
 
 export default function CorrectiveActionDetailScreen() {
   const { actionId } = useLocalSearchParams<{ actionId: string }>();
@@ -78,7 +79,7 @@ export default function CorrectiveActionDetailScreen() {
         <View style={styles.timeline}>
           {ca.timeline.map((t, i) => (
             <View key={i} style={styles.timelineItem}>
-              <Text style={styles.timelineAt}>{new Date(t.at).toLocaleString("en-ZA")}</Text>
+              <Text style={styles.timelineAt}>{formatDateTime(t.at)}</Text>
               <Text style={styles.timelineText}>
                 <Text style={styles.timelineActor}>{t.actor}: </Text>
                 {t.text}

@@ -1,6 +1,7 @@
+import { useState } from "react";
 import type { ReactNode } from "react";
 import { router } from "expo-router";
-import { Image, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { Screen } from "@/components/Screen";
@@ -8,6 +9,7 @@ import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { StatusBadge } from "@/components/StatusBadge";
 import { BrokenGlassIcon } from "@/components/BrokenGlassIcon";
+import { BiometricLockRow } from "@/components/BiometricLockRow";
 import { useSmartClean } from "@/features/store";
 import { useCanManageSiteLayout } from "@/features/roles";
 import { fileUrl, toUserRecord, updateUser, uploadImage } from "@/api/client";
@@ -17,13 +19,17 @@ import { APP_VERSION } from "@/constants/version";
 export default function ProfileScreen() {
   const { state, dispatch, currentUser, signOut } = useSmartClean();
   const canManageSiteLayout = useCanManageSiteLayout();
+  // The avatar upload had no feedback at all: tapping it opened the
+  // picker, then the photo silently uploaded and the user updated while
+  // the avatar sat unchanged. People tapped it again mid-upload.
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const site = state.sites.find((s) => currentUser?.siteIds.includes(s.id));
   const clocked = currentUser ? state.attendance[currentUser.id]?.clockedInAt : undefined;
   const myTasks = state.tasks.filter((t) => t.assigneeId === currentUser?.id);
   const done = myTasks.filter((t) => ["approved", "closed"].includes(t.status)).length;
 
   async function pickPhoto() {
-    if (!currentUser || !state.accessToken) return;
+    if (!currentUser || !state.accessToken || uploadingPhoto) return;
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) return;
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -35,6 +41,9 @@ export default function ProfileScreen() {
     if (result.canceled || !result.assets[0]) return;
     const asset = result.assets[0];
     const mime = asset.mimeType ?? "image/jpeg";
+    // Set only after the picker returns: the upload is the slow part,
+    // and spinning while the OS photo picker is open would be wrong.
+    setUploadingPhoto(true);
     try {
       const filePath = await uploadImage(state.accessToken, asset.uri, asset.fileName ?? "profile.jpg", mime);
       const photoUrl = fileUrl(filePath);
@@ -42,6 +51,8 @@ export default function ProfileScreen() {
       dispatch({ type: "UPDATE_USER", userId: currentUser.id, patch: { profilePhotoDataUrl: photoUrl } });
     } catch {
       // best-effort — leave existing photo unchanged
+    } finally {
+      setUploadingPhoto(false);
     }
   }
 
@@ -53,7 +64,12 @@ export default function ProfileScreen() {
   return (
     <Screen title="Profile">
       <Card style={styles.profileCard}>
-        <Pressable style={styles.avatarWrap} onPress={pickPhoto} accessibilityLabel="Change profile photo">
+        <Pressable
+          style={styles.avatarWrap}
+          onPress={pickPhoto}
+          disabled={uploadingPhoto}
+          accessibilityLabel="Change profile photo"
+        >
           {currentUser?.profilePhotoDataUrl ? (
             <Image source={{ uri: currentUser.profilePhotoDataUrl }} style={styles.avatarImage} />
           ) : (
@@ -62,6 +78,11 @@ export default function ProfileScreen() {
           <View style={styles.avatarBadge}>
             <Ionicons name="camera" size={12} color={colors.foreground} />
           </View>
+          {uploadingPhoto && (
+            <View style={styles.avatarUploading}>
+              <ActivityIndicator color={colors.white} />
+            </View>
+          )}
         </Pressable>
         <View style={styles.profileInfo}>
           <Text style={styles.profileName} numberOfLines={1}>
@@ -90,19 +111,25 @@ export default function ProfileScreen() {
       </Card>
 
       <View style={styles.rows}>
-        <Row icon={<Ionicons name="person-outline" size={16} color={colors.primary} />} label="Edit profile" onPress={() => router.push("/profile/edit")} />
+        <Row icon={<Ionicons name="person-outline" size={16} color={colors.primary} />} label="Edit profile" onPress={() => router.push("/profile-edit")} />
         <Row icon={<Ionicons name="notifications-outline" size={16} color={colors.primary} />} label="Notifications" onPress={() => router.push("/notifications")} />
         {/* Incidents are always tied to a scanned room/zone now, so this
             sends the cleaner to Scan first rather than straight to the
             report form - see app/(app)/incidents/new.tsx. */}
         <Row icon={<BrokenGlassIcon size={16} color={colors.primary} />} label="Report incident" onPress={() => router.push("/scan")} />
         <Row icon={<Ionicons name="shield-checkmark-outline" size={16} color={colors.primary} />} label="Privacy & POPIA notice" onPress={() => router.push("/privacy")} />
+        <Row icon={<Ionicons name="document-text-outline" size={16} color={colors.primary} />} label="Performance profile" onPress={() => router.push("/performance-profile")} />
         {/* Management tooling, not field-ops - a cleaner never needs to
             arrange a floor plan. See useCanManageSiteLayout. */}
         {canManageSiteLayout && (
           <Row icon={<Ionicons name="grid-outline" size={16} color={colors.primary} />} label="Site layout" onPress={() => router.push("/site-layout")} />
         )}
         <Row icon={<Ionicons name="help-circle-outline" size={16} color={colors.primary} />} label="Help & support" onPress={() => {}} />
+        {/* Renders nothing on a device with no sensor or nothing
+            enrolled - see BiometricLockRow. */}
+        <Card>
+          <BiometricLockRow />
+        </Card>
       </View>
 
       <View style={styles.bottomActions}>
@@ -194,6 +221,13 @@ const styles = StyleSheet.create({
     color: colors.primaryForeground,
     fontWeight: "800",
     fontSize: typography.h2,
+  },
+  avatarUploading: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 999,
+    backgroundColor: colors.overlay,
   },
   avatarBadge: {
     position: "absolute",

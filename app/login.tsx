@@ -17,6 +17,7 @@ import { getPublicTenantBranding } from "@/api/client";
 import { resolveBranding, type ResolvedBranding } from "@/services/branding";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
+import { Ionicons } from "@expo/vector-icons";
 import { colors, radius, spacing, typography } from "@/theme";
 
 export default function Login() {
@@ -53,7 +54,7 @@ export default function Login() {
     setError(null);
     try {
       await signIn(username.trim(), password);
-      router.replace("/home");
+      router.replace("/");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
     } finally {
@@ -154,9 +155,71 @@ export default function Login() {
           <Button onPress={submit} disabled={!canSubmit} loading={busy} style={styles.submitButton}>
             Sign in
           </Button>
+
+          {/* Kept inside the card, attached to the form it's about -
+              as a floating line between the card and the onboarding
+              block it read as a third, unrelated orphan. */}
+          <Text style={styles.footer}>Ask your site supervisor if you need access.</Text>
         </Card>
 
-        <Text style={styles.footer}>Ask your site supervisor if you need access.</Text>
+        {/* The two onboarding paths are the same kind of action - scan
+            a code to get started - so they're grouped into one block
+            instead of floating as two bare text links of different
+            sizes. Each is a real row (icon, label, chevron) at a
+            legible size with a 44pt target, rather than underline-less
+            centred text that gives no sign it's tappable. The divider
+            labels the group so it reads as "the other way in" rather
+            than loose text under the form.
+
+            Two entry points, deliberately separate. The backend refuses
+            an organisation code presented to the staff endpoint and vice
+            versa (expected_kind on find_by_scan_value), so a single
+            shared scanner would send half its users to a confusing
+            "this code isn't valid". The staff row leads because it is
+            used far more often - every new employee, versus one code
+            per organisation ever. */}
+        <View style={styles.dividerRow}>
+          <View style={styles.dividerLine} />
+          <Text style={styles.dividerText}>New to {branding.name}?</Text>
+          <View style={styles.dividerLine} />
+        </View>
+
+        <View style={styles.onboardGroup}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Scan the code your manager is showing you"
+            onPress={() => router.push("/staff-onboard-scan")}
+            style={({ pressed }) => [styles.onboardRow, pressed && styles.onboardRowPressed]}
+          >
+            <View style={styles.onboardIcon}>
+              <Ionicons name="qr-code-outline" size={18} color={colors.primary} />
+            </View>
+            <View style={styles.onboardCopy}>
+              <Text style={styles.onboardTitle}>Joining your team</Text>
+              <Text style={styles.onboardHint}>Scan the code your manager is showing you</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={colors.mutedForeground} />
+          </Pressable>
+
+          <View style={styles.onboardSeparator} />
+
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Setting up a new organisation? Scan your onboarding code"
+            onPress={() => router.push("/onboard-scan")}
+            style={({ pressed }) => [styles.onboardRow, pressed && styles.onboardRowPressed]}
+          >
+            <View style={styles.onboardIcon}>
+              <Ionicons name="business-outline" size={18} color={colors.primary} />
+            </View>
+            <View style={styles.onboardCopy}>
+              <Text style={styles.onboardTitle}>Setting up an organisation</Text>
+              <Text style={styles.onboardHint}>Scan your onboarding code</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={colors.mutedForeground} />
+          </Pressable>
+        </View>
+
       </ScrollView>
 
       <View style={[styles.poweredBy, { paddingBottom: insets.bottom + spacing.sm }]}>
@@ -286,6 +349,72 @@ const styles = StyleSheet.create({
     textAlign: "center",
     fontSize: typography.small,
     color: colors.mutedForeground,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingTop: spacing.md,
+  },
+  dividerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    marginTop: spacing.xl,
+    marginBottom: spacing.md,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: colors.border,
+  },
+  dividerText: {
+    fontSize: typography.small,
+    fontWeight: "600",
+    color: colors.mutedForeground,
+  },
+  onboardGroup: {
+    backgroundColor: colors.card,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: colors.border,
+    overflow: "hidden",
+  },
+  onboardRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    // 44pt minimum touch target - the old bare text links were well
+    // under it, and the secondary one was 10px type as well.
+    minHeight: 56,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+  },
+  onboardRowPressed: {
+    backgroundColor: colors.secondary,
+  },
+  onboardIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: radius.round,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.accent,
+  },
+  onboardCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  onboardTitle: {
+    fontSize: typography.body,
+    fontWeight: "700",
+    color: colors.foreground,
+  },
+  onboardHint: {
+    fontSize: typography.small,
+    color: colors.mutedForeground,
+  },
+  onboardSeparator: {
+    height: 1,
+    marginLeft: spacing.lg + 34 + spacing.md,
+    backgroundColor: colors.border,
   },
   poweredBy: {
     flexDirection: "row",

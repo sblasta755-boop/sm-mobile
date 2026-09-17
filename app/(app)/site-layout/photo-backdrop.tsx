@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { router, useLocalSearchParams } from "expo-router";
-import { Image, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Image, StyleSheet, Text, View } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { Ionicons } from "@expo/vector-icons";
@@ -32,39 +32,65 @@ export default function PhotoBackdropScreen() {
   const [pickedUri, setPickedUri] = useState<string | null>(null);
   const [pickedDimensions, setPickedDimensions] = useState<{ width: number; height: number } | null>(null);
   const [busy, setBusy] = useState(false);
+  // save() had a spinner (see the Save button) but the three steps
+  // before it didn't: capturing, picking from the library and opening
+  // the camera all await, and all three left the button looking idle.
+  // capturePhoto is the slow one on a real device - takePictureAsync
+  // can run for a second or more, which is exactly when people tap
+  // Capture again.
+  const [capturing, setCapturing] = useState(false);
+  const [picking, setPicking] = useState(false);
+  const [openingCamera, setOpeningCamera] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function pickFromLibrary() {
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) return;
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"],
-      quality: 0.8,
-    });
-    if (result.canceled || !result.assets[0]) return;
-    const asset = result.assets[0];
-    setPickedUri(asset.uri);
-    setPickedDimensions({ width: asset.width, height: asset.height });
-    setCameraOn(false);
+    if (picking) return;
+    setPicking(true);
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) return;
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        quality: 0.8,
+      });
+      if (result.canceled || !result.assets[0]) return;
+      const asset = result.assets[0];
+      setPickedUri(asset.uri);
+      setPickedDimensions({ width: asset.width, height: asset.height });
+      setCameraOn(false);
+    } finally {
+      setPicking(false);
+    }
   }
 
   async function startCamera() {
-    if (!permission?.granted) {
-      const res = await requestPermission();
-      if (!res.granted) return;
+    if (openingCamera) return;
+    setOpeningCamera(true);
+    try {
+      if (!permission?.granted) {
+        const res = await requestPermission();
+        if (!res.granted) return;
+      }
+      setCameraOn(true);
+    } finally {
+      setOpeningCamera(false);
     }
-    setCameraOn(true);
   }
 
   const cameraRef = useRef<CameraView | null>(null);
 
   async function capturePhoto() {
-    if (!cameraRef.current) return;
-    const photo = await cameraRef.current.takePictureAsync({ quality: 0.8, base64: false, skipProcessing: true });
-    if (!photo?.uri) return;
-    setPickedUri(photo.uri);
-    setPickedDimensions({ width: photo.width, height: photo.height });
-    setCameraOn(false);
+    if (!cameraRef.current || capturing) return;
+    setCapturing(true);
+    try {
+      const photo = await cameraRef.current.takePictureAsync({ quality: 0.8, base64: false, skipProcessing: true });
+      if (!photo?.uri) return;
+      setPickedUri(photo.uri);
+      setPickedDimensions({ width: photo.width, height: photo.height });
+      setCameraOn(false);
+    } finally {
+      setCapturing(false);
+    }
   }
 
   async function save() {
@@ -108,6 +134,14 @@ export default function PhotoBackdropScreen() {
       {cameraOn ? (
         <Card style={styles.cameraCard} padded={false}>
           <CameraView ref={cameraRef} style={styles.camera} />
+          {capturing && (
+            // Over the viewfinder, not just on the button - the preview
+            // is where the eye is while waiting for the shutter.
+            <View style={styles.captureOverlay}>
+              <ActivityIndicator color={colors.white} />
+              <Text style={styles.captureOverlayText}>Capturing…</Text>
+            </View>
+          )}
           <View style={styles.cameraActions}>
             <Button
               variant="ghost"
@@ -117,7 +151,12 @@ export default function PhotoBackdropScreen() {
             >
               Cancel
             </Button>
-            <Button onPress={capturePhoto} fullWidth={false} style={styles.cameraActionButton}>
+            <Button
+              onPress={capturePhoto}
+              loading={capturing}
+              fullWidth={false}
+              style={styles.cameraActionButton}
+            >
               Capture
             </Button>
           </View>
@@ -135,6 +174,7 @@ export default function PhotoBackdropScreen() {
             variant="outline"
             icon={<Ionicons name="camera-outline" size={16} color={colors.foreground} />}
             onPress={startCamera}
+            loading={openingCamera}
             fullWidth={false}
             style={styles.pickButton}
           >
@@ -144,6 +184,7 @@ export default function PhotoBackdropScreen() {
             variant="outline"
             icon={<Ionicons name="images-outline" size={16} color={colors.foreground} />}
             onPress={pickFromLibrary}
+            loading={picking}
             fullWidth={false}
             style={styles.pickButton}
           >
@@ -171,6 +212,18 @@ export default function PhotoBackdropScreen() {
 }
 
 const styles = StyleSheet.create({
+  captureOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.xs,
+    backgroundColor: colors.overlay,
+  },
+  captureOverlayText: {
+    fontSize: typography.small,
+    fontWeight: "600",
+    color: colors.white,
+  },
   hint: {
     fontSize: typography.body,
     color: colors.mutedForeground,

@@ -5,6 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Screen } from "@/components/Screen";
 import { Card } from "@/components/Card";
 import { StatusBadge } from "@/components/StatusBadge";
+import { DateStrip, isSameDay, startOfDay } from "@/components/DateStrip";
 import { useSmartClean } from "@/features/store";
 import { toneForTask, humanStatus } from "@/domain/status";
 import { colors, radius, spacing, typography } from "@/theme";
@@ -13,12 +14,28 @@ import type { TaskStatus } from "@/types/smartclean";
 export default function ShiftsScreen() {
   const { state, currentUser } = useSmartClean();
   const [activeGroup, setActiveGroup] = useState("Not started");
+  const today = useMemo(() => startOfDay(new Date()), []);
+  const [selectedDate, setSelectedDate] = useState(today);
   // Hourly-compliance rounds have their own dedicated screen ("My hourly
   // compliance rounds", reached from Home) rather than showing up here
   // alongside regular cleaning tasks - excluded the same way home.tsx
   // excludes them from its own "Assigned tasks"/progress count.
-  const myTasks = state.tasks.filter(
-    (t) => t.assigneeId === currentUser?.id && !t.isHourlyCompliance,
+  //
+  // Filtered to the selected day, which this screen previously did not
+  // do at all: "My shift" listed every open task ever assigned to this
+  // cleaner, so yesterday's unfinished work sat on today's shift with
+  // nothing to say it was old. Keyed on scheduledAt - the field that
+  // says which day a task is FOR - matching how home.tsx filters its own
+  // assigned-tasks list.
+  const myTasks = useMemo(
+    () =>
+      state.tasks.filter(
+        (t) =>
+          t.assigneeId === currentUser?.id &&
+          !t.isHourlyCompliance &&
+          isSameDay(new Date(t.scheduledAt), selectedDate),
+      ),
+    [state.tasks, currentUser, selectedDate],
   );
 
   const groups = useMemo(() => {
@@ -34,7 +51,11 @@ export default function ShiftsScreen() {
   const active = groups.find((group) => group.label === activeGroup) ?? groups[0];
 
   return (
-    <Screen title="My shift">
+    <Screen
+      headerContent={
+        <DateStrip today={today} selectedDate={selectedDate} onSelect={setSelectedDate} />
+      }
+    >
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabsRow} contentContainerStyle={styles.tabsContent}>
         {groups.map((group) => {
           const selected = group.label === active.label;
@@ -55,12 +76,22 @@ export default function ShiftsScreen() {
 
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>{active.label}</Text>
-        <Text style={styles.mutedSmall}>{active.items.length} tasks</Text>
+        <Text style={styles.mutedSmall}>
+          {active.items.length} task{active.items.length === 1 ? "" : "s"}
+        </Text>
       </View>
 
       {active.items.length === 0 ? (
         <View style={styles.empty}>
-          <Text style={styles.mutedSmall}>Nothing here.</Text>
+          <Text style={styles.mutedSmall}>
+            {isSameDay(selectedDate, today)
+              ? "Nothing here today."
+              : `Nothing on ${selectedDate.toLocaleDateString("en-ZA", {
+                  weekday: "short",
+                  day: "numeric",
+                  month: "short",
+                })}.`}
+          </Text>
         </View>
       ) : (
         <View style={styles.list}>

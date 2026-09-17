@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import { router } from "expo-router";
-import { Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from "expo-camera";
 import { Ionicons } from "@expo/vector-icons";
 import { Screen } from "@/components/Screen";
@@ -11,6 +11,7 @@ import { GeofenceDistanceMap } from "@/components/GeofenceDistanceMap";
 import { BrokenGlassIcon } from "@/components/BrokenGlassIcon";
 import { useSmartClean } from "@/features/store";
 import { ApiError, clockIn as clockInRequest, clockOut as clockOutRequest, resolveQr } from "@/api/client";
+import { reportBatteryOnce } from "@/features/deviceHealth";
 import { getCurrentCoords } from "@/services/geolocation";
 import { useTenantBranding } from "@/services/branding";
 import { colors, radius, spacing, typography } from "@/theme";
@@ -97,6 +98,12 @@ export default function ScanScreen() {
     longitude: number | undefined;
   } | null>(null);
   const [confirmingClaim, setConfirmingClaim] = useState(false);
+  // Covers the whole scan round-trip (geolocation -> resolveQr ->
+  // clock in/out -> refreshBackendData), which can run for seconds on a
+  // slow connection. Without it the camera closed and the screen sat
+  // unchanged, so cleaners tapped a suggestion or Scan again thinking
+  // nothing had happened. Mirrors the web screen's own scanningCode.
+  const [scanning, setScanning] = useState(false);
   const scanLockRef = useRef(false);
 
   const clocked = currentUser ? state.attendance[currentUser.id]?.clockedInAt : undefined;
@@ -107,6 +114,8 @@ export default function ScanScreen() {
       setRecent((r) => [code, ...r.filter((c) => c !== code)].slice(0, 4));
 
       if (!state.accessToken) return;
+      setScanning(true);
+      try {
       // Fetched once per scan and reused for every call below — the
       // backend rejects a geofenced scan outright when this is null (see
       // evaluate_geofence), so a denied/unavailable location fails the
@@ -150,6 +159,14 @@ export default function ScanScreen() {
         // rather than clock-out trusting a stored site code with no
         // fresh verification. Which one happens depends on whether this
         // user is already clocked in.
+        // Which direction to attempt. This is a HINT only: the server
+        // derives the real answer from the last recorded event and
+        // refuses a clock-in when already in (or a clock-out when not),
+        // so a stale cached value here produces a clear "You are already
+        // clocked in." rather than a silently duplicated event. It used
+        // to be the ONLY thing keeping these alternating - nothing
+        // server-side checked, so two clock-ins both succeeded and the
+        // first one vanished from the record.
         const alreadyClockedIn = Boolean(
           currentUser && state.attendance[currentUser.id]?.clockedInAt,
         );
@@ -169,6 +186,10 @@ export default function ScanScreen() {
               longitude: coords?.longitude,
             });
           }
+          // Best-effort, never blocks the clock event itself - see
+          // reportBatteryOnce's own comment for why a failed read/report
+          // here must not surface as a clock-in/out failure.
+          void reportBatteryOnce(state.accessToken);
           await refreshBackendData();
         } catch (error) {
           setResult({
@@ -253,7 +274,13 @@ export default function ScanScreen() {
         return;
       }
 
-      setResult({ code, ok: true, kind: (resolved.kind as string | undefined) ?? undefined });
+        setResult({ code, ok: true, kind: (resolved.kind as string | undefined) ?? undefined });
+      } finally {
+        // finally, not a tail call: every branch above returns early
+        // (geofence rejection, clock-in failure, no task here), and each
+        // one must clear the spinner too.
+        setScanning(false);
+      }
     },
     [state.accessToken, state.attendance, currentUser, refreshBackendData],
   );
@@ -358,6 +385,16 @@ export default function ScanScreen() {
             </Button>
           </View>
         )}
+        {scanning && (
+          // onBarcodeScanned closes the camera and fires scan() without
+          // awaiting it, so without this the frame goes blank and stays
+          // blank for the whole round-trip - the exact moment people
+          // scan again.
+          <View style={styles.scanningOverlay}>
+            <ActivityIndicator color={colors.white} />
+            <Text style={styles.scanningText}>Checking code…</Text>
+          </View>
+        )}
       </View>
 
       <Text style={styles.helpText}>
@@ -366,7 +403,12 @@ export default function ScanScreen() {
 
       <View style={styles.suggestions}>
         {SUGGESTIONS.map((s) => (
-          <Pressable key={s} style={styles.suggestionChip} onPress={() => scan(s)}>
+          <Pressable
+            key={s}
+            style={[styles.suggestionChip, scanning && styles.suggestionChipDisabled]}
+            disabled={scanning}
+            onPress={() => scan(s)}
+          >
             <Text style={styles.suggestionText}>{s}</Text>
           </Pressable>
         ))}
@@ -381,7 +423,12 @@ export default function ScanScreen() {
           autoCapitalize="characters"
           style={styles.input}
         />
-        <Button style={styles.manualButton} fullWidth={false} onPress={() => manual && scan(manual)}>
+        <Button
+          style={styles.manualButton}
+          fullWidth={false}
+          loading={scanning}
+          onPress={() => manual && scan(manual)}
+        >
           Scan
         </Button>
       </View>
@@ -678,6 +725,21 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     paddingHorizontal: spacing.sm,
     paddingVertical: 6,
+  },
+  suggestionChipDisabled: {
+    opacity: 0.5,
+  },
+  scanningOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.xs,
+    backgroundColor: colors.overlay,
+  },
+  scanningText: {
+    fontSize: typography.small,
+    fontWeight: "600",
+    color: colors.white,
   },
   suggestionText: {
     fontSize: typography.tiny,

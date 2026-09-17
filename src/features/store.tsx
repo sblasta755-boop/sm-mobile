@@ -5,8 +5,10 @@ import {
   loadBackendBootstrap,
   loginToBackend,
   logoutFromBackend,
+  markWelcomeSeen as markWelcomeSeenOnBackend,
   setSessionHandlers,
   type BackendBootstrap,
+  type BackendSession,
 } from "@/api/client";
 import type {
   AirbnbTurnover,
@@ -27,6 +29,7 @@ import type {
   Tenant,
 } from "@/types/smartclean";
 import { SecureSessionService, type StoredSession } from "@/storage/SecureSessionService";
+import { getCapability, isLockEnabled } from "@/services/biometrics";
 
 interface State {
   currentUserId: string | null;
@@ -55,12 +58,67 @@ interface State {
    * lands; consumers treat that as "not yet known" and fail open, since
    * the server enforces the real answer. */
   subscription: SubscriptionState | null;
+  /** A restored session that is being withheld until the user passes a
+   * Face ID / fingerprint prompt.
+   *
+   * Only ever true for a session restored from SecureStore on launch,
+   * and only when the user turned the lock on for this device (see
+   * services/biometrics.ts). A fresh sign-in is never locked - they just
+   * proved who they are.
+   *
+   * Deliberately NOT persisted: it is derived on every launch from the
+   * stored preference, so a killed app cannot come back unlocked, and
+   * the persist effect below strips it along with the tokens. */
+  locked: boolean;
+  /** This session cannot do anything until a password is chosen.
+   *
+   * Set by the backend on every session-issuing response (login,
+   * refresh, and the QR onboarding collect - see AuthResponse there).
+   * True today only for accounts onboarded by QR approval, which hold a
+   * random password nobody has ever seen.
+   *
+   * Persisted with the rest of the state so quitting the app mid-flow
+   * and reopening it lands back on the password screen rather than in a
+   * half-onboarded app. The server re-asserts it on the next login or
+   * refresh regardless, so a tampered local value buys nothing. */
+  mustChangePassword: boolean;
+  /** Whether this account still owes the one-time welcome screen shown
+   * right after finishing QR onboarding.
+   *
+   * Set by the backend on every session-issuing response, same as
+   * mustChangePassword - but inverted: true (nothing to show) for every
+   * account except one a QR onboarding controller just started fresh,
+   * so shipping this feature does not retroactively surface the screen
+   * for existing users. See AuthResponse.hasSeenWelcome on the backend.
+   *
+   * Persisted with the rest of the state for the same reason
+   * mustChangePassword is - quitting mid-flow and reopening the app
+   * must not skip the screen. The server re-asserts it on the next
+   * login or refresh regardless. */
+  hasSeenWelcome: boolean;
 }
 
 type Action =
   | { type: "RESTORE"; state: Partial<State> | null; session: StoredSession | null }
   | { type: "SET_LOADING"; loading: boolean; error?: string | null }
-  | { type: "SET_AUTH"; accessToken: string; refreshToken: string; expiresAt: string; bootstrap: BackendBootstrap }
+  | {
+      type: "SET_AUTH";
+      accessToken: string;
+      refreshToken: string;
+      expiresAt: string;
+      bootstrap: BackendBootstrap;
+      /** Omitted by ordinary sign-in, which has no opinion; the reducer
+       * defaults it to false. The onboarding collect path passes true. */
+      mustChangePassword?: boolean;
+      /** Omitted by ordinary sign-in, which has no opinion; the reducer
+       * defaults it to true (nothing to show). The onboarding collect
+       * path passes false. */
+      hasSeenWelcome?: boolean;
+    }
+  | { type: "LOCK" }
+  | { type: "UNLOCK" }
+  | { type: "PASSWORD_CHANGED" }
+  | { type: "WELCOME_SEEN" }
   | { type: "SET_SESSION"; accessToken: string; refreshToken: string; expiresAt: string }
   | { type: "HYDRATE"; bootstrap: BackendBootstrap }
   | { type: "SET_CONNECTIVITY"; value: Connectivity }
@@ -104,6 +162,9 @@ function initial(): State {
     assets: [],
     attendance: {},
     subscription: null,
+    locked: false,
+    mustChangePassword: false,
+    hasSeenWelcome: true,
   };
 }
 
@@ -158,8 +219,31 @@ function reducer(state: State, action: Action): State {
         loading: false,
         error: null,
         sessionRestored: true,
+        // A sign-in just proved who this is - there is nothing left for
+        // a biometric prompt to establish, so never start a fresh
+        // session locked.
+        locked: false,
+        // Explicitly reset on every sign-in rather than left alone: a
+        // previous session's outstanding obligation must not leak onto
+        // whoever signs in next on the same device.
+        mustChangePassword: action.mustChangePassword ?? false,
+        // Same reset-on-every-sign-in reasoning as mustChangePassword,
+        // just the opposite default: no opinion means nothing to show.
+        hasSeenWelcome: action.hasSeenWelcome ?? true,
         ...bootstrapState(action.bootstrap),
       };
+    case "LOCK":
+      return { ...state, locked: true };
+    case "UNLOCK":
+      return { ...state, locked: false };
+    case "PASSWORD_CHANGED":
+      // The obligation is discharged. Only this flag changes - the
+      // session stays exactly as it is, because set_initial_password
+      // deliberately does NOT revoke refresh tokens (doing so would log
+      // out the very device being onboarded, mid-flow).
+      return { ...state, mustChangePassword: false };
+    case "WELCOME_SEEN":
+      return { ...state, hasSeenWelcome: true };
     case "SET_SESSION":
       // From request()'s transparent refresh-and-retry in api/client.ts
       // — only the tokens change here, not bootstrap data, since a
@@ -248,8 +332,22 @@ const StoreContext = createContext<{
   currentUser: DemoUser | undefined;
   dispatch: React.Dispatch<Action>;
   signIn: (username: string, password: string) => Promise<void>;
+  /** For sessions obtained without credentials - see the QR onboarding
+   * collect path in app/(onboard)/waiting.tsx. */
+  signInWithSession: (
+    session: BackendSession,
+    bootstrap: BackendBootstrap,
+    options?: { mustChangePassword?: boolean; hasSeenWelcome?: boolean },
+  ) => Promise<void>;
   signOut: () => Promise<void>;
+  /** Reveal a session that was restored locked - called by app/lock.tsx
+   * once the Face ID / fingerprint prompt succeeds. */
+  unlock: () => void;
   refreshBackendData: () => Promise<void>;
+  /** Discharges the one-time post-onboarding welcome screen, on the
+   * backend and locally, so it never shows again on any device. Called
+   * by the welcome screen itself once the user dismisses it. */
+  markWelcomeSeen: () => Promise<void>;
 } | null>(null);
 
 export function SmartCleanProvider({ children }: { children: ReactNode }) {
@@ -332,7 +430,7 @@ export function SmartCleanProvider({ children }: { children: ReactNode }) {
   const signIn = async (username: string, password: string) => {
     dispatch({ type: "SET_LOADING", loading: true });
     try {
-      const { session, bootstrap } = await loginToBackend(username, password);
+      const { session, bootstrap, mustChangePassword, hasSeenWelcome } = await loginToBackend(username, password);
       await SecureSessionService.set(session);
       // SET_AUTH below already carries a fresh bootstrap — mark the
       // restore-on-mount effect as satisfied so it doesn't immediately
@@ -345,11 +443,41 @@ export function SmartCleanProvider({ children }: { children: ReactNode }) {
         refreshToken: session.refreshToken,
         expiresAt: session.expiresAt,
         bootstrap,
+        mustChangePassword,
+        hasSeenWelcome,
       });
     } catch (error) {
       dispatch({ type: "SET_LOADING", loading: false, error: error instanceof Error ? error.message : "Login failed" });
       throw error;
     }
+  };
+
+  /** Adopt a session this app did not obtain by username and password.
+   *
+   * The QR onboarding collect path already holds tokens and a bootstrap
+   * by the time it gets here - the platform admin's approval minted
+   * them - so it cannot go through signIn(), which starts from
+   * credentials the onboarded admin does not have.
+   *
+   * Kept on the store rather than done with a bare dispatch at the call
+   * site so the SecureStore write and the didRestoreFetch guard are not
+   * forgotten: both are easy to miss and neither fails loudly. */
+  const signInWithSession = async (
+    session: BackendSession,
+    bootstrap: BackendBootstrap,
+    options?: { mustChangePassword?: boolean; hasSeenWelcome?: boolean },
+  ) => {
+    await SecureSessionService.set(session);
+    didRestoreFetch.current = true;
+    dispatch({
+      type: "SET_AUTH",
+      accessToken: session.accessToken,
+      refreshToken: session.refreshToken,
+      expiresAt: session.expiresAt,
+      bootstrap,
+      mustChangePassword: options?.mustChangePassword ?? false,
+      hasSeenWelcome: options?.hasSeenWelcome ?? true,
+    });
   };
 
   const signOut = async () => {
@@ -365,16 +493,39 @@ export function SmartCleanProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const markWelcomeSeen = async () => {
+    // Local state flips immediately so the screen cannot be shown twice
+    // in the same session even if the request is slow or fails - the
+    // next login/refresh re-asserts the server's own answer regardless.
+    dispatch({ type: "WELCOME_SEEN" });
+    if (!state.accessToken) return;
+    try {
+      await markWelcomeSeenOnBackend(state.accessToken);
+    } catch {
+      // best-effort — worst case the next session sees the screen once more
+    }
+  };
+
   useEffect(() => {
     let cancelled = false;
     async function restore() {
       const [raw, session] = await Promise.all([AsyncStorage.getItem(STORAGE_KEY), SecureSessionService.get()]);
       if (cancelled) return;
       const persisted = raw ? (JSON.parse(raw) as Partial<State>) : null;
+      // Only a session that actually exists can be locked, and only when
+      // the user asked for it AND the device can still honour it - a
+      // sensor that has been reset or un-enrolled since must not strand
+      // them behind a prompt that can never succeed. Checked here rather
+      // than on the lock screen so the app never briefly renders the
+      // unlocked UI before redirecting.
+      const locked = session
+        ? (await isLockEnabled()) && (await getCapability()).available
+        : false;
+      if (cancelled) return;
       dispatch({
         type: "RESTORE",
         state: session
-          ? { ...persisted, accessToken: session.accessToken, refreshToken: session.refreshToken, authExpiresAt: session.expiresAt }
+          ? { ...persisted, accessToken: session.accessToken, refreshToken: session.refreshToken, authExpiresAt: session.expiresAt, locked }
           : null,
         session,
       });
@@ -401,14 +552,26 @@ export function SmartCleanProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!state.sessionRestored) return;
-    const { accessToken: _accessToken, refreshToken: _refreshToken, authExpiresAt: _authExpiresAt, sessionRestored: _sessionRestored, ...persistable } = state;
+    const { accessToken: _accessToken, refreshToken: _refreshToken, authExpiresAt: _authExpiresAt, sessionRestored: _sessionRestored, locked: _locked, ...persistable } = state;
     AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(persistable));
   }, [state]);
 
   const currentUser = state.users.find((user) => user.id === state.currentUserId);
 
+  const unlock = () => dispatch({ type: "UNLOCK" });
+
   const value = useMemo(
-    () => ({ state, currentUser, dispatch, signIn, signOut, refreshBackendData }),
+    () => ({
+      state,
+      currentUser,
+      dispatch,
+      signIn,
+      signInWithSession,
+      signOut,
+      unlock,
+      refreshBackendData,
+      markWelcomeSeen,
+    }),
     [currentUser, state],
   );
 

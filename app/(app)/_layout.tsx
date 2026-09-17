@@ -91,9 +91,11 @@ export default function AppTabsLayout() {
           moved in here from top-level app/), so each needs href: null to
           stay reachable via router.push() without cluttering the bar. */}
       <Tabs.Screen name="hourly-compliance" options={{ href: null }} />
-      <Tabs.Screen name="notifications" options={{ href: null }} />
-      <Tabs.Screen name="privacy" options={{ href: null }} />
-      <Tabs.Screen name="profile/edit" options={{ href: null }} />
+      <Tabs.Screen name="performance-profile" options={{ href: null }} />
+      {/* notifications, privacy and profile/edit used to be declared
+          here. They now live in app/(shared)/ so that every role's
+          profile can reach them, not just the cleaner's - see that
+          group's _layout.tsx. */}
       <Tabs.Screen name="incidents/new" options={{ href: null }} />
       <Tabs.Screen name="corrective-actions/[actionId]" options={{ href: null }} />
       <Tabs.Screen name="tasks/[taskId]/index" options={{ href: null }} />

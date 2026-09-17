@@ -99,6 +99,12 @@ export default function DeclarationScreen() {
             </Text>
           )}
         </View>
+        {agree && !signature.trim() && (
+          <Text style={styles.mutedSmall}>Sign above to enable submission.</Text>
+        )}
+        {!agree && signatureMatches && (
+          <Text style={styles.mutedSmall}>Tick the box above to enable submission.</Text>
+        )}
       </Card>
 
       <Button disabled={busy || !agree || !signatureMatches} onPress={submit}>
