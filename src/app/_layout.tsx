@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import { Stack } from "expo-router";
 import * as NativeSplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
@@ -8,15 +7,13 @@ import { usePushRegistration } from "@/features/pushNotifications";
 import { useDeviceHealthReporting } from "@/features/deviceHealth";
 
 // Keep the native splash image up until our animated in-app splash
-// (rendered from app/index.tsx while the session restores) has mounted,
-// so there's no flash of blank content between the two.
+// (rendered from app/index.tsx while the session restores) has actually
+// painted, so there's no flash of blank content between the two. Hiding
+// it is app/index.tsx's job — it, not this root layout, knows when its
+// first frame is on screen.
 NativeSplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function RootLayout() {
-  useEffect(() => {
-    NativeSplashScreen.hideAsync().catch(() => {});
-  }, []);
-
   return (
     <SafeAreaProvider>
       <SmartCleanProvider>

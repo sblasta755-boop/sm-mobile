@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { router } from "expo-router";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { ImageBackground, Pressable, StyleSheet, Text, View } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { BrokenGlassIcon } from "@/components/BrokenGlassIcon";
 import { Screen } from "@/components/Screen";
@@ -73,7 +74,17 @@ export default function HomeScreen() {
       }
     >
       <Card padded={false} style={styles.shiftCard}>
-        <View style={styles.shiftOverlay}>
+        <ImageBackground
+          source={require("../../assets/shift-clock-in.png")}
+          style={styles.shiftOverlay}
+          imageStyle={styles.shiftImage}
+        >
+          <LinearGradient
+            colors={["rgba(0,0,0,0.85)", "rgba(0,0,0,0.55)", "rgba(0,0,0,0)"]}
+            start={{ x: 0, y: 1 }}
+            end={{ x: 0, y: 0 }}
+            style={StyleSheet.absoluteFill}
+          />
           <View style={styles.shiftTopRow}>
             <View style={styles.shiftInfo}>
               <Text style={styles.shiftEyebrow}>Today&apos;s shift</Text>
@@ -110,7 +121,7 @@ export default function HomeScreen() {
               </Button>
             </View>
           )}
-        </View>
+        </ImageBackground>
       </Card>
 
       <Card style={styles.progressCard}>
@@ -250,6 +261,9 @@ const styles = StyleSheet.create({
     minHeight: 190,
     justifyContent: "flex-end",
     gap: spacing.md,
+  },
+  shiftImage: {
+    resizeMode: "cover",
   },
   shiftTopRow: {
     flexDirection: "row",

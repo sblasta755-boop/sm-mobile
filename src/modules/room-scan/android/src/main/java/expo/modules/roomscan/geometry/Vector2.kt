@@ -5,7 +5,7 @@ package expo.modules.roomscan.geometry
  * ARCore types so this whole geometry package is unit-testable with
  * plain JVM tests (see src/test/) and doesn't need a device or an
  * ARCore session to exercise - mirrors how the shared TS conversion math
- * (mobile/src/features/roomScanPlacement.ts) is tested the same way on
+ * (mobile/src/src/features/roomScanPlacement.ts) is tested the same way on
  * the JS side.
  */
 data class Vector2(val x: Float, val z: Float)
