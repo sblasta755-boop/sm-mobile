@@ -26,6 +26,7 @@ const TAB_ROOT_PATHS = new Set([
   "/home",
   "/shifts",
   "/scan",
+  "/tables",
   "/corrective-actions",
   "/profile",
   // (manage)

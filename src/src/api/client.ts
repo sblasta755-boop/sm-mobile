@@ -15,7 +15,10 @@ import type {
   StockItem,
   SubscriptionState,
   Task,
+  TableSession,
+  TableSessionClaimResult,
   Tenant,
+  WaiterSessionEndReason,
 } from "@/types/smartclean";
 import { formatTime } from "@/services/formatDateTime";
 
@@ -476,6 +479,93 @@ export function resolveQr(
   return request<Record<string, unknown>>(
     "/codes/resolve",
     { method: "POST", body: JSON.stringify({ value, latitude, longitude, confirmClaim }) },
+    accessToken,
+  );
+}
+
+// ---- Waiter table sessions ----
+
+export function claimTableSession(
+  accessToken: string,
+  payload: {
+    value: string;
+    confirmTakeover?: boolean;
+    takeoverReason?: string;
+    takeoverNote?: string;
+  },
+) {
+  return request<TableSessionClaimResult>(
+    "/table-sessions/claim",
+    { method: "POST", body: JSON.stringify(payload) },
+    accessToken,
+  );
+}
+
+export function listTableSessions(accessToken: string, activeOnly = false) {
+  return request<TableSession[]>(
+    `/table-sessions${activeOnly ? "?activeOnly=true" : ""}`,
+    {},
+    accessToken,
+  );
+}
+
+export function getTableSession(accessToken: string, sessionId: string) {
+  return request<TableSession>(`/table-sessions/${sessionId}`, {}, accessToken);
+}
+
+export function confirmTableSessionClean(accessToken: string, sessionId: string, clean: boolean) {
+  return request<TableSession>(
+    `/table-sessions/${sessionId}/clean-confirm`,
+    { method: "POST", body: JSON.stringify({ clean }) },
+    accessToken,
+  );
+}
+
+export function refreshTableSessionToken(accessToken: string, sessionId: string) {
+  return request<TableSession>(
+    `/table-sessions/${sessionId}/refresh-token`,
+    { method: "POST" },
+    accessToken,
+  );
+}
+
+export function endTableSession(
+  accessToken: string,
+  sessionId: string,
+  payload: { reason: WaiterSessionEndReason; note?: string },
+) {
+  return request<TableSession>(
+    `/table-sessions/${sessionId}/end`,
+    { method: "POST", body: JSON.stringify(payload) },
+    accessToken,
+  );
+}
+
+export function confirmTableSessionBillPaid(accessToken: string, sessionId: string, note?: string) {
+  return request<TableSession>(
+    `/table-sessions/${sessionId}/confirm-bill-paid`,
+    { method: "POST", body: JSON.stringify({ note }) },
+    accessToken,
+  );
+}
+
+export function snoozeTableSessionBill(accessToken: string, sessionId: string, note: string) {
+  return request<TableSession>(
+    `/table-sessions/${sessionId}/snooze-bill`,
+    { method: "POST", body: JSON.stringify({ note }) },
+    accessToken,
+  );
+}
+
+export function acknowledgeTableRequest(
+  accessToken: string,
+  sessionId: string,
+  requestId: string,
+  note?: string,
+) {
+  return request<TableSession>(
+    `/table-sessions/${sessionId}/requests/${requestId}/acknowledge`,
+    { method: "POST", body: JSON.stringify({ note }) },
     accessToken,
   );
 }

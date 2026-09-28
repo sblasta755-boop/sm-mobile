@@ -28,6 +28,11 @@ const COPY: Record<Role, { icon: keyof typeof Ionicons.glyphMap; title: string; 
     title: "You're all set up",
     body: "Scan a site QR code to clock in, work through your assigned tasks, and log evidence as you go - everything syncs even if you lose signal on site.",
   },
+  waiter: {
+    icon: "restaurant",
+    title: "You're all set up",
+    body: "Scan a site QR code to clock in, then scan a table's QR to open a table session - show the customer QR, handle requests, and log your cleaning tasks as you go.",
+  },
   supervisor: {
     icon: "shield-checkmark",
     title: "You're all set up",

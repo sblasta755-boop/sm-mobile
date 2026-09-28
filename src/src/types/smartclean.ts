@@ -3,6 +3,14 @@ export type Role =
   | "site_manager"
   | "supervisor"
   | "cleaner"
+  // Identical UI/permissions to "cleaner" for every existing task/
+  // checklist/evidence flow, plus the table-session flow below (waiter
+  // table-grid, claim/takeover, clean-confirm) - see the backend's
+  // services/records.py VALID_ROLES comment. Every has_role(...,
+  // "cleaner") gate in the backend was updated alongside "waiter"
+  // rather than replaced, so nothing a cleaner could already do is
+  // restricted for a waiter.
+  | "waiter"
   | "client_auditor"
   // The top role inside a customer organisation - was "system_admin"
   // before migration 20260909_0018 renamed it (see the web app's
@@ -185,6 +193,12 @@ export interface Task {
    * (the fix is already known), tying it back to the Incident it came
    * from. See IncidentController on the backend. */
   incidentId?: string;
+  /** The TableSession this cleaning task was auto-generated from (a
+   * waiter's "paid"/"walked_out" end, or a "no" answer to the claim
+   * flow's "is this table clean?" prompt) - mirrors incidentId/
+   * Incident.sourceTaskId's own linking pattern. See the backend's
+   * Task.source_session_id and TableSessionController. */
+  sourceSessionId?: string;
   /** True only for a task created by assignInvestigation - assignTask
    * also sets incidentId above, so that alone can't tell "this task IS
    * the investigation" (photo + proposed-steps checklist) apart from
@@ -353,7 +367,10 @@ export interface Location {
   id: string;
   siteId: string;
   name: string;
-  type: "reception" | "bathroom" | "boardroom" | "kitchen" | "office" | "stockroom";
+  // "table" is a restaurant-style seating location a waiter claims via
+  // TableSession, added additively alongside the original cleaner-room
+  // types rather than replacing any of them - see TableSession.
+  type: "reception" | "bathroom" | "boardroom" | "kitchen" | "office" | "stockroom" | "table";
   qr: string;
   // Which floor this room belongs to (matches a SiteFloorProfile.name on
   // the site's layout) - undefined for a location whose site has no
@@ -446,4 +463,79 @@ export interface Asset {
   available: boolean;
   maintenanceFlag?: boolean;
   history: { at: string; text: string }[];
+}
+
+// ---- Waiter table sessions ----
+
+export type WaiterSessionStatus = "active" | "bill_requested" | "ended";
+
+export type WaiterSessionEndReason =
+  | "paid"
+  | "walked_out"
+  | "moved_table"
+  | "duplicate_or_error"
+  | "other";
+
+export interface TableSession {
+  id: string;
+  siteId: string;
+  locationId: string;
+  locationName?: string;
+  waiterId: string;
+  waiterName?: string;
+  status: WaiterSessionStatus;
+  /** The short-lived signed token currently displayed on the waiter's
+   * screen as a QR - see the backend's app.services.
+   * table_session_tokens (~2-5 min TTL, rotated on redisplay via
+   * refreshTableSessionToken, not on every customer scan). Undefined on
+   * a customer-facing response (join/create-request), which never
+   * echoes the token back to the very page it authorizes. */
+  qrToken?: string;
+  qrTokenExpiresAt?: string;
+  customerJoinedAt?: string;
+  billRequestedAt?: string;
+  lastBillReminderAt?: string;
+  billReminderCount?: number;
+  startedAt: string;
+  endedAt?: string;
+  endReason?: WaiterSessionEndReason;
+  endNote?: string;
+  previousSessionId?: string;
+  /** Set once the claim flow's "is this table clean?" prompt has been
+   * answered for this session - true means a cleaning Task was
+   * generated (see generatedTaskId), false means the waiter confirmed
+   * it was already clean. Undefined only for a session predating this
+   * question (never happens going forward). */
+  cleaningRequired?: boolean;
+  generatedTaskId?: string;
+  requests: TableRequest[];
+}
+
+export type TableRequestKind = "menu" | "bill" | "complaint" | "compliment" | "assistance";
+
+export interface TableRequest {
+  id: string;
+  sessionId: string;
+  kind: TableRequestKind;
+  note?: string;
+  createdAt: string;
+  acknowledgedAt?: string;
+  acknowledgedBy?: string;
+}
+
+/** The three-outcome response from claiming a table's QR - see the
+ * backend's TableSessionController.claim. Exactly one of `claimed` /
+ * `blocked` / `takeoverOffered` is meaningfully true at once. */
+export interface TableSessionClaimResult {
+  claimed: boolean;
+  session?: TableSession;
+  /** True right after a claim/takeover succeeds - the app must show
+   * the "is this table clean?" prompt (see confirmTableSessionClean)
+   * before treating the table as normal-serving. */
+  cleaningConfirmationRequired?: boolean;
+  blocked?: boolean;
+  blockedReason?: string;
+  servedByName?: string;
+  takeoverOffered?: boolean;
+  staleSignal?: string;
 }

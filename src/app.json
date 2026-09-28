@@ -78,12 +78,10 @@
       "typedRoutes": true
     },
     "extra": {
-      "apiBaseUrl": "",
       "router": {},
       "eas": {
-        "projectId": "960bfff5-1b2b-4d10-9b82-9f84bce45e16"
+        "projectId": "e3889b74-7acb-41ed-ba62-07dbbbf8a289"
       }
-    },
-    "owner": "sblasta11"
+    }
   }
 }

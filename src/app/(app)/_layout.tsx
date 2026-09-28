@@ -12,6 +12,12 @@ export default function AppTabsLayout() {
   // Corrective actions is the only gateable module with a tab of its
   // own. Fails open before bootstrap lands - see useHasModule.
   const hasCorrectiveActions = useHasModule("corrective_actions");
+  // The table-grid tab only makes sense for someone who actually runs
+  // table sessions - "waiter" primarily, plus "cleaner" (identical
+  // permissions throughout, see the Role union's own comment) so a
+  // cleaner covering a waiter's section can still reach it. Not module-
+  // gated: table sessions are core, same as tasks/attendance.
+  const isWaiter = currentUser?.role === "waiter" || currentUser?.role === "cleaner";
 
   if (state.sessionRestored && !currentUser) {
     return <Redirect href="/login" />;
@@ -63,6 +69,19 @@ export default function AppTabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="tables/index"
+        options={{
+          title: "Tables",
+          tabBarIcon: ({ color, size }) => <Ionicons name="restaurant" color={color} size={size} />,
+          // Same href:null pattern as corrective-actions below - hidden
+          // from a cleaner-only user's tab bar (not a permissions gate,
+          // just presentation: a cleaner CAN still reach it via
+          // router.push if they ever claim a table QR, per the Role
+          // union's "identical permissions" comment).
+          ...(isWaiter ? {} : { href: null }),
+        }}
+      />
+      <Tabs.Screen
         name="corrective-actions/index"
         options={{
           title: "Actions",
@@ -105,6 +124,7 @@ export default function AppTabsLayout() {
       <Tabs.Screen name="site-layout/photo-backdrop" options={{ href: null }} />
       <Tabs.Screen name="site-layout/sketch" options={{ href: null }} />
       <Tabs.Screen name="site-layout/scan" options={{ href: null }} />
+      <Tabs.Screen name="tables/[sessionId]" options={{ href: null }} />
     </Tabs>
   );
 }
