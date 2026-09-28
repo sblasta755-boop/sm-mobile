@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from "expo-router";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Linking, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Screen } from "@/components/Screen";
 import { Card } from "@/components/Card";
@@ -9,7 +9,7 @@ import { Checkbox } from "@/components/Checkbox";
 import { ProgressBar } from "@/components/ProgressBar";
 import { StatusBadge, VerifiedBadge } from "@/components/StatusBadge";
 import { useSmartClean } from "@/features/store";
-import { updateChecklistItem } from "@/api/client";
+import { fileUrl, updateChecklistItem } from "@/api/client";
 import { toneForTask, humanStatus, taskSubmissionBlocked, taskStage, isChecklistUnlocked } from "@/domain/status";
 import { colors, radius, spacing, typography } from "@/theme";
 
@@ -301,6 +301,39 @@ export default function TaskDetailScreen() {
         </View>
       </Card>
 
+      {/* Reference material a supervisor attached when assigning this
+      task (a manual, a reference photo) - read-only, and deliberately
+      separate from the checklist/evidence flow below: this is context
+      to consult, not proof of work to capture. See TaskAttachment on
+      the backend. */}
+      {!!task.attachments?.length && (
+        <Card style={styles.attachmentsCard}>
+          <View style={styles.attachmentsHeader}>
+            <Ionicons name="attach-outline" size={14} color={colors.mutedForeground} />
+            <Text style={styles.attachmentsHeaderText}>Attachments</Text>
+          </View>
+          {task.attachments.map((attachment) => {
+            const url = fileUrl(attachment.filePath);
+            return (
+              <Pressable
+                key={attachment.id}
+                style={styles.attachmentRow}
+                onPress={() => url && Linking.openURL(url)}
+              >
+                <Ionicons
+                  name={attachment.kind === "image" ? "image-outline" : "document-text-outline"}
+                  size={16}
+                  color={colors.mutedForeground}
+                />
+                <Text style={styles.attachmentLabel} numberOfLines={1}>
+                  {attachment.label.trim() || attachment.fileName}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </Card>
+      )}
+
       {stage === "before" && (
         <Card style={styles.beforePromptCard}>
           <View style={styles.beforePromptRow}>
@@ -496,6 +529,37 @@ const styles = StyleSheet.create({
   },
   scanChip: {
     alignSelf: "flex-start",
+  },
+  attachmentsCard: {
+    marginBottom: spacing.md,
+    gap: spacing.xs,
+  },
+  attachmentsHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginBottom: 2,
+  },
+  attachmentsHeaderText: {
+    fontSize: typography.small,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    color: colors.mutedForeground,
+  },
+  attachmentRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+  },
+  attachmentLabel: {
+    flex: 1,
+    fontSize: typography.small,
+    color: colors.foreground,
   },
   beforePromptCard: {
     marginBottom: spacing.md,

@@ -131,6 +131,21 @@ export interface Evidence {
   filePath?: string;
 }
 
+/** Reference material (a manual, a reference photo) a supervisor
+ * attached to a task when assigning it - distinct from Evidence below,
+ * which is the cleaner's own live-captured proof the work was done. See
+ * the backend's TaskAttachment model docstring. */
+export interface TaskAttachment {
+  id: string;
+  filePath: string;
+  fileName: string;
+  contentType: string;
+  kind: "image" | "document";
+  label: string;
+  uploadedBy: string;
+  createdAt: string;
+}
+
 export interface Task {
   id: string;
   siteId: string;
@@ -150,6 +165,9 @@ export interface Task {
   supervisorId: string;
   checklist: ChecklistItem[];
   evidence: Evidence[];
+  /** Not returned by every endpoint - see the backend's camel_task,
+   * defaults to [] where it wasn't fetched for that response. */
+  attachments?: TaskAttachment[];
   requiresBeforeAfter: boolean;
   requiredQr: string;
   qrVerified?: boolean;
