@@ -15,6 +15,7 @@ import type {
   StockItem,
   SubscriptionState,
   Task,
+  TableRatingSummary,
   TableSession,
   TableSessionClaimResult,
   Tenant,
@@ -28,6 +29,16 @@ export const API_BASE_URL = (
   extraUrl ||
   "http://10.0.2.2:8000/api/v1"
 ).replace(/\/$/, "");
+
+// No CUSTOMER_APP_BASE_URL here (removed - was briefly needed while the
+// customer QR was session-scoped). The customer QR is now the table's
+// own PERMANENT Location.qr - the same physical code the waiter scans to
+// claim the table (see tables/index.tsx and scan.tsx's table-claim
+// branch) - so the mobile app never needs to know where the customer
+// web page is hosted; that's baked into the QR itself once whoever
+// prints/sets it up points it at the right host. See
+// TableSessionController's "Customer-facing" section docstring on the
+// backend for the full reasoning behind this change.
 
 export function fileUrl(filePath: string | undefined): string | undefined {
   if (!filePath) return undefined;
@@ -513,6 +524,14 @@ export function getTableSession(accessToken: string, sessionId: string) {
   return request<TableSession>(`/table-sessions/${sessionId}`, {}, accessToken);
 }
 
+/** A waiter's own aggregate rating (average + count) from customer
+ * post-session ratings - see the Profile screen's "Your rating" stat.
+ * Never returns anything finer than the aggregate - see the backend's
+ * TableRatingSummaryResponse for why. */
+export function getMyRatingSummary(accessToken: string) {
+  return request<TableRatingSummary>("/table-sessions/my-rating-summary", {}, accessToken);
+}
+
 export function confirmTableSessionClean(accessToken: string, sessionId: string, clean: boolean) {
   return request<TableSession>(
     `/table-sessions/${sessionId}/clean-confirm`,
@@ -577,6 +596,21 @@ export function acknowledgeTableRequest(
  * TenantController.get_public_branding. */
 export function getPublicTenantBranding() {
   return request<Tenant>("/tenant/public-branding", {});
+}
+
+/** "Forgot password" - unauthenticated, same endpoint and same
+ * deliberately-vague response the web login screen already uses
+ * (AuthController.request_password_reset never reveals whether the
+ * email matched an account). The reset link in that email opens
+ * /set-password on the web app in the phone's browser - there is no
+ * mobile-side token screen (no deep-link handler for it), so this call
+ * is the whole of the mobile flow; finishing the reset happens outside
+ * the app, then the user comes back here to sign in. */
+export function requestPasswordReset(email: string) {
+  return request<{ success: boolean; message: string }>("/auth/password-reset/request", {
+    method: "POST",
+    body: JSON.stringify({ email }),
+  });
 }
 
 export function getTenant(accessToken: string) {

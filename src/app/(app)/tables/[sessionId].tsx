@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { router, useLocalSearchParams } from "expo-router";
 import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
-import { SvgXml } from "react-native-svg";
 import { Ionicons } from "@expo/vector-icons";
 import { Screen } from "@/components/Screen";
 import { Card } from "@/components/Card";
@@ -9,14 +8,12 @@ import { Button } from "@/components/Button";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useSmartClean } from "@/features/store";
 import {
-  API_BASE_URL,
   acknowledgeTableRequest,
   claimTableSession,
   confirmTableSessionBillPaid,
   confirmTableSessionClean,
   endTableSession,
   getTableSession,
-  refreshTableSessionToken,
   snoozeTableSessionBill,
 } from "@/api/client";
 import type { TableSession, WaiterSessionEndReason } from "@/types/smartclean";
@@ -35,7 +32,13 @@ const END_REASONS: { value: WaiterSessionEndReason; label: string; autoTask: boo
 // rotates it once the current one is within 5s of expiring (see
 // TableSessionController.refresh_token), so calling this more often
 // than the TTL is harmless, just a no-op most of the time.
-const TOKEN_POLL_MS = 30_000;
+// How often to re-fetch this session while its screen is open - the
+// only "live update" channel a waiter actually has here (see
+// SESSION_POLL_MS's own note in tables/index.tsx for why push can't be
+// relied on alone). 15s keeps a new table request/bill-request status
+// change from sitting invisible for the up-to-30s a customer might
+// otherwise wait to see the waiter respond.
+const SESSION_POLL_MS = 15_000;
 
 export default function TableSessionDetailScreen() {
   const params = useLocalSearchParams<{
@@ -82,23 +85,26 @@ export default function TableSessionDetailScreen() {
     load().finally(() => setLoading(false));
   }, [load]);
 
-  // Rotate-on-display polling for the customer QR - see
-  // TableSessionController.refresh_token's own docstring on why this is
-  // safe to call frequently (it only actually rotates near expiry).
+  // Live-update polling while this session's screen is open. Table
+  // requests/bill status arrive via notify() server-side, which SHOULD
+  // reach this device by push - but push delivery isn't guaranteed
+  // (device/FCM/APNs setup, connectivity, backgrounding) and this app
+  // has no other live channel (no websocket - see the mobile env's
+  // unused EXPO_PUBLIC_WS_API_URL), so a waiter looking at an open table
+  // must not depend on a push arriving to see a new request. Short
+  // enough that a customer's "call waiter" tap shows up promptly; only
+  // runs while this specific screen is mounted, not app-wide.
   useEffect(() => {
     if (!session || session.status === "ended" || isTakeoverFlow) return;
-    const interval = setInterval(async () => {
+    const interval = setInterval(() => {
       if (!state.accessToken) return;
-      try {
-        const row = await refreshTableSessionToken(state.accessToken, session.id);
-        setSession(row);
-      } catch {
-        // Best-effort - the currently-displayed QR just keeps showing
-        // until the next successful tick.
-      }
-    }, TOKEN_POLL_MS);
+      load().catch(() => {
+        // Best-effort - the screen just keeps showing its last known
+        // state until the next successful tick.
+      });
+    }, SESSION_POLL_MS);
     return () => clearInterval(interval);
-  }, [session?.id, session?.status, state.accessToken, isTakeoverFlow]);
+  }, [session?.id, session?.status, state.accessToken, isTakeoverFlow, load]);
 
   const confirmClean = useCallback(
     async (clean: boolean) => {
@@ -242,7 +248,6 @@ export default function TableSessionDetailScreen() {
   }
 
   const pendingRequests = session.requests.filter((r) => !r.acknowledgedAt);
-  const qrValue = session.qrToken ? `${API_BASE_URL}/table-sessions/table/${encodeURIComponent(session.qrToken)}` : null;
 
   return (
     <Screen title={session.locationName ?? "Table"} backTo="/tables">
@@ -260,15 +265,13 @@ export default function TableSessionDetailScreen() {
         </Text>
       </Card>
 
-      {session.status !== "ended" && session.qrToken && (
+      {session.status !== "ended" && (
         <Card style={styles.qrCard}>
-          <Text style={styles.label}>Customer QR</Text>
+          <Text style={styles.label}>Customer requests</Text>
           <Text style={styles.hint}>
-            Let the customer scan this to request the menu, bill, or send feedback. It refreshes automatically.
+            The table's own QR code (the one you scanned to claim it) is what the customer scans too - it works for
+            them any time, whether you're at the table or not. No separate code to show them here.
           </Text>
-          <View style={styles.qrWrap}>
-            <QrImage value={qrValue!} />
-          </View>
         </Card>
       )}
 
@@ -413,26 +416,6 @@ export default function TableSessionDetailScreen() {
       </Modal>
     </Screen>
   );
-}
-
-function QrImage({ value }: { value: string }) {
-  const [svg, setSvg] = useState<string | null>(null);
-  useEffect(() => {
-    let cancelled = false;
-    fetch(`${API_BASE_URL}/codes/render/qr.svg?value=${encodeURIComponent(value)}&branded=false`)
-      .then((r) => r.text())
-      .then((text) => {
-        if (!cancelled) setSvg(text);
-      })
-      .catch(() => {
-        if (!cancelled) setSvg(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [value]);
-  if (!svg) return <ActivityIndicator color={colors.primary} />;
-  return <SvgXml xml={svg} width={220} height={220} />;
 }
 
 const styles = StyleSheet.create({

@@ -339,6 +339,14 @@ export interface Tenant {
   name: string;
   slug: string;
   branding: TenantBranding;
+  // Whether the waiter/table-session feature is switched on for this
+  // organisation - a business-type toggle ("is this org a restaurant"),
+  // set by a Šoma360 platform operator, not something any subscription
+  // tier unlocks. Gates the Tables tab/screens client-side; the backend
+  // enforces it independently on every table-session request (see
+  // require_table_service in app/api/deps.py) so this is a UX nicety,
+  // not the actual security boundary.
+  tableServiceEnabled: boolean;
 }
 
 export interface LocationLayoutPoint {
@@ -538,4 +546,15 @@ export interface TableSessionClaimResult {
   servedByName?: string;
   takeoverOffered?: boolean;
   staleSignal?: string;
+}
+
+/** A waiter's own aggregate customer rating - see GET /table-sessions/
+ * my-rating-summary and the Profile screen's "Your rating" stat. Never
+ * carries anything finer than the aggregate (no per-rating list) - a
+ * waiter can see THAT they're rated, not by whom or which visit. */
+export interface TableRatingSummary {
+  /** null when ratingCount is 0 - render "No ratings yet", not a
+   * misleading zero-star average. */
+  averageRating: number | null;
+  ratingCount: number;
 }

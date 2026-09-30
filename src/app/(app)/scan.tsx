@@ -10,7 +10,13 @@ import { StatusBadge, VerifiedBadge } from "@/components/StatusBadge";
 import { GeofenceDistanceMap } from "@/components/GeofenceDistanceMap";
 import { BrokenGlassIcon } from "@/components/BrokenGlassIcon";
 import { useSmartClean } from "@/features/store";
-import { ApiError, clockIn as clockInRequest, clockOut as clockOutRequest, resolveQr } from "@/api/client";
+import {
+  ApiError,
+  claimTableSession,
+  clockIn as clockInRequest,
+  clockOut as clockOutRequest,
+  resolveQr,
+} from "@/api/client";
 import { reportBatteryOnce } from "@/features/deviceHealth";
 import { getCurrentCoords } from "@/services/geolocation";
 import { useTenantBranding } from "@/services/branding";
@@ -72,7 +78,18 @@ interface ScanResult {
 const SUGGESTIONS = ["SITE-SBP-001", "ROOM-SBP-BTH-02", "ZONE-SBP-REC-01", "STOCK-SBP-001"];
 
 function extractCode(raw: string): string {
-  const match = raw.match(/\/scan\/([^/?#]+)/i);
+  // /scan/<code> is the web app's own deep-link poster pattern; /table/
+  // <code> is the same idea for a table's printed QR (see the "no-login
+  // customer table page" route in smart-property-operations) - the
+  // physical code must be scannable by an ordinary phone camera (which
+  // needs a URL to open something) AND by this in-app scanner (which
+  // just needs the bare code), so the printed QR encodes a full
+  // https://<customer-app>/table/<code> URL and both scanners extract
+  // the same <code> back out of it. See TableSessionController's
+  // "Customer-facing" section docstring on the backend for why the
+  // customer QR moved from a session token to the table's own permanent
+  // code.
+  const match = raw.match(/\/(?:scan|table)\/([^/?#]+)/i);
   if (match) return decodeURIComponent(match[1]).toUpperCase();
   return raw.trim().toUpperCase();
 }
@@ -222,8 +239,66 @@ export default function ScanScreen() {
       }
 
       if (resolved.kind === "room" || resolved.kind === "zone") {
-        const location = resolved.location as { id: string; name: string } | null;
+        const location = resolved.location as { id: string; name: string; type?: string } | null;
         const task = resolved.task as { id: string } | null;
+
+        // A table QR resolves here too (QrCodesController.resolve knows
+        // nothing about TableSession - it only ever reports a Location's
+        // ordinary Task, and a table's whole point is that it usually
+        // has none). Without this branch every table scan fell straight
+        // into the "no assigned task" case below, which is wrong: the
+        // scan is a waiter claiming the table, not a cleaner looking for
+        // task work. See TablesScreen.claim in app/(app)/tables/index.tsx
+        // for the same call - this is the other entry point into it, the
+        // one the "Scan or type table code" hint on that screen actually
+        // promised ("Scan a table's QR from the main Scan tab").
+        if (location?.type === "table") {
+          try {
+            const claimResult = await claimTableSession(state.accessToken, { value: code });
+            if (claimResult.blocked) {
+              setResult({
+                code,
+                ok: false,
+                reason: claimResult.blockedReason ?? "This table is occupied.",
+                locationId: location.id,
+                linkedName: location.name,
+              });
+              return;
+            }
+            if (claimResult.takeoverOffered) {
+              router.push({
+                pathname: "/tables/[sessionId]",
+                params: {
+                  sessionId: "takeover",
+                  qrValue: code,
+                  servedByName: claimResult.servedByName ?? "",
+                  staleSignal: claimResult.staleSignal ?? "",
+                },
+              });
+              return;
+            }
+            if (claimResult.claimed && claimResult.session) {
+              await refreshBackendData();
+              router.push({
+                pathname: "/tables/[sessionId]",
+                params: {
+                  sessionId: claimResult.session.id,
+                  needsCleanConfirm: claimResult.cleaningConfirmationRequired ? "1" : "0",
+                },
+              });
+              return;
+            }
+          } catch (error) {
+            setResult({
+              code,
+              ok: false,
+              reason: error instanceof Error ? error.message : "Could not claim this table.",
+              locationId: location.id,
+              linkedName: location.name,
+            });
+          }
+          return;
+        }
         // A claimable hourly-compliance round was found but not claimed
         // yet (see QrCodesController.resolve's confirmClaim handling) -
         // show the cleaner exactly which round this is and let them

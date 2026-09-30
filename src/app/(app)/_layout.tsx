@@ -12,12 +12,19 @@ export default function AppTabsLayout() {
   // Corrective actions is the only gateable module with a tab of its
   // own. Fails open before bootstrap lands - see useHasModule.
   const hasCorrectiveActions = useHasModule("corrective_actions");
-  // The table-grid tab only makes sense for someone who actually runs
-  // table sessions - "waiter" primarily, plus "cleaner" (identical
-  // permissions throughout, see the Role union's own comment) so a
-  // cleaner covering a waiter's section can still reach it. Not module-
-  // gated: table sessions are core, same as tasks/attendance.
-  const isWaiter = currentUser?.role === "waiter" || currentUser?.role === "cleaner";
+  // The table-grid tab is for the "waiter" role only. A cleaner CAN
+  // still operate a table session (the backend's _WAITER_ROLES allows
+  // both, so a cleaner covering a waiter's section is never blocked) -
+  // but they don't get a dedicated tab for it, to keep their bar the
+  // same 5 tabs it's always been; they'd reach a table session via
+  // router.push if they ever scan a table QR, same as any href:null
+  // route below. Also requires table service to actually be switched on
+  // for this organisation (Tenant.tableServiceEnabled - a business-type
+  // toggle a platform operator sets, independent of subscription tier).
+  // Hiding the tab is presentation only; the backend enforces the real
+  // gate on every table-session request regardless (require_table_service
+  // in app/api/deps.py).
+  const isWaiter = currentUser?.role === "waiter" && !!state.tenant?.tableServiceEnabled;
 
   if (state.sessionRestored && !currentUser) {
     return <Redirect href="/login" />;
@@ -73,11 +80,11 @@ export default function AppTabsLayout() {
         options={{
           title: "Tables",
           tabBarIcon: ({ color, size }) => <Ionicons name="restaurant" color={color} size={size} />,
-          // Same href:null pattern as corrective-actions below - hidden
-          // from a cleaner-only user's tab bar (not a permissions gate,
-          // just presentation: a cleaner CAN still reach it via
-          // router.push if they ever claim a table QR, per the Role
-          // union's "identical permissions" comment).
+          // Same href:null pattern as corrective-actions below - not a
+          // permissions gate, just presentation: everyone but "waiter"
+          // (including a cleaner covering a waiter's section) can still
+          // reach a table session via router.push if they ever scan a
+          // table QR, per _WAITER_ROLES on the backend allowing both.
           ...(isWaiter ? {} : { href: null }),
         }}
       />
@@ -90,9 +97,17 @@ export default function AppTabsLayout() {
           // unreachable by router.push - the same mechanism the non-tab
           // routes below already use. An organisation whose plan omits
           // corrective actions gets a 4-tab bar rather than a tab that
-          // 402s on tap. Spread rather than `href: undefined`, which is
-          // not reliably equivalent to omitting the prop.
-          ...(hasCorrectiveActions ? {} : { href: null }),
+          // 402s on tap. Also dropped for "waiter": Home already surfaces
+          // their open corrective actions (see home.tsx's "Open
+          // corrective actions" section, which every role gets), so a
+          // dedicated tab would just be a second way to reach the same
+          // list - and a waiter's bar is already busier than a plain
+          // cleaner's (it also carries Tables), so this keeps it from
+          // growing to 6. Still reachable via router.push if a waiter
+          // taps into one from Home - only the tab itself disappears.
+          // Spread rather than `href: undefined`, which is not reliably
+          // equivalent to omitting the prop.
+          ...(hasCorrectiveActions && currentUser?.role !== "waiter" ? {} : { href: null }),
         }}
       />
       <Tabs.Screen

@@ -156,6 +156,14 @@ export default function Login() {
             Sign in
           </Button>
 
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push("/forgot-password")}
+            style={styles.forgotButton}
+          >
+            <Text style={styles.forgotText}>Forgot your password?</Text>
+          </Pressable>
+
           {/* Kept inside the card, attached to the form it's about -
               as a floating line between the card and the onboarding
               block it read as a third, unrelated orphan. */}
@@ -344,6 +352,15 @@ const styles = StyleSheet.create({
   },
   submitButton: {
     marginTop: spacing.xs,
+  },
+  forgotButton: {
+    alignSelf: "center",
+    paddingVertical: spacing.xs,
+  },
+  forgotText: {
+    fontSize: typography.small,
+    fontWeight: "600",
+    color: colors.primary,
   },
   footer: {
     textAlign: "center",

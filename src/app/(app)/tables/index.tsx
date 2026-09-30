@@ -10,6 +10,19 @@ import { claimTableSession, listTableSessions } from "@/api/client";
 import type { TableSession } from "@/types/smartclean";
 import { colors, radius, spacing, typography } from "@/theme";
 
+// How often to re-fetch the table grid while this screen is open. Push
+// SHOULD tell the waiter about a new request the moment it lands
+// (notify() fires one server-side, see TableSessionController.
+// create_request), but delivery isn't guaranteed (device/FCM/APNs setup,
+// connectivity, backgrounding), and this app's only other "live update"
+// trigger is a push actually arriving (see pushNotifications.ts's
+// addNotificationReceivedListener - there is no websocket and no other
+// polling anywhere else in the app). Without this, a pending request sat
+// invisible on this screen until the waiter force-closed and reopened
+// the app. 20s keeps the grid reasonably current without hammering the
+// API from every waiter's device at once.
+const TABLES_POLL_MS = 20_000;
+
 // A waiter's table-grid: every table they're operating right now, plus
 // today's already-ended ones for quick reference. Mirrors the shape of
 // the (supervise) group's own list screens (a Card per row, pull to
@@ -36,6 +49,16 @@ export default function TablesScreen() {
   useEffect(() => {
     setLoading(true);
     load().finally(() => setLoading(false));
+  }, [load]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      load().catch(() => {
+        // Best-effort - the grid just keeps showing its last known state
+        // until the next successful tick.
+      });
+    }, TABLES_POLL_MS);
+    return () => clearInterval(interval);
   }, [load]);
 
   const onRefresh = useCallback(async () => {

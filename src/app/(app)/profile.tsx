@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { router } from "expo-router";
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from "react-native";
@@ -12,7 +12,8 @@ import { BrokenGlassIcon } from "@/components/BrokenGlassIcon";
 import { BiometricLockRow } from "@/components/BiometricLockRow";
 import { useSmartClean } from "@/features/store";
 import { useCanManageSiteLayout } from "@/features/roles";
-import { fileUrl, toUserRecord, updateUser, uploadImage } from "@/api/client";
+import { fileUrl, getMyRatingSummary, toUserRecord, updateUser, uploadImage } from "@/api/client";
+import type { TableRatingSummary } from "@/types/smartclean";
 import { colors, radius, spacing, typography } from "@/theme";
 import { APP_VERSION } from "@/constants/version";
 
@@ -27,6 +28,29 @@ export default function ProfileScreen() {
   const clocked = currentUser ? state.attendance[currentUser.id]?.clockedInAt : undefined;
   const myTasks = state.tasks.filter((t) => t.assigneeId === currentUser?.id);
   const done = myTasks.filter((t) => ["approved", "closed"].includes(t.status)).length;
+
+  // "Your rating" only means anything for someone who actually runs
+  // table sessions - see the Role union's own comment on why cleaner
+  // shares every waiter permission (a cleaner covering a waiter's
+  // section can be rated too). Fetched once on mount rather than pulled
+  // from the global store, since nothing else in the app needs it and
+  // it's specific to this one screen.
+  const showsRating = currentUser?.role === "waiter" || currentUser?.role === "cleaner";
+  const [ratingSummary, setRatingSummary] = useState<TableRatingSummary | null>(null);
+  useEffect(() => {
+    if (!showsRating || !state.accessToken) return;
+    let cancelled = false;
+    getMyRatingSummary(state.accessToken)
+      .then((summary) => {
+        if (!cancelled) setRatingSummary(summary);
+      })
+      .catch(() => {
+        // Best-effort - the stat just doesn't render if this fails.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [showsRating, state.accessToken]);
 
   async function pickPhoto() {
     if (!currentUser || !state.accessToken || uploadingPhoto) return;
@@ -109,6 +133,24 @@ export default function ProfileScreen() {
           />
         </View>
       </Card>
+
+      {/* All-time, not "today" like the card above - a separate card
+          rather than a third Stat crammed into that row, since it
+          answers a different question ("how am I doing overall") on a
+          different timescale. Customers rate anonymously (see the
+          backend's TableSessionRating) - this is only ever the
+          aggregate, never a list of individual ratings/notes. */}
+      {showsRating && (
+        <Card style={styles.statsCard}>
+          <Text style={styles.statsLabel}>Your rating</Text>
+          <View style={styles.statsRow}>
+            <Stat
+              label={ratingSummary?.ratingCount ? `From ${ratingSummary.ratingCount} rating${ratingSummary.ratingCount === 1 ? "" : "s"}` : "No ratings yet"}
+              value={ratingSummary?.averageRating != null ? `${ratingSummary.averageRating.toFixed(1)} ★` : "—"}
+            />
+          </View>
+        </Card>
+      )}
 
       <View style={styles.rows}>
         <Row icon={<Ionicons name="person-outline" size={16} color={colors.primary} />} label="Edit profile" onPress={() => router.push("/profile-edit")} />

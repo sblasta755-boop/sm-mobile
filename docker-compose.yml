@@ -63,13 +63,22 @@ services:
     environment:
       EXPO_TOKEN: ${EXPO_TOKEN:?set EXPO_TOKEN to an EAS access token}
       EAS_BUILD_PROFILE: ${EAS_BUILD_PROFILE:-preview}
-      SMTP_HOST: ${SMTP_HOST:?set SMTP_HOST}
+      # "smtp" (default) or "brevo" - same switch as the backend's own
+      # EMAIL_PROVIDER (app/services/email.py). Only the vars for the
+      # chosen provider actually need real values; scripts/build-and-
+      # notify.mjs only requires the other provider's set, not both, so
+      # neither set uses Compose's ":?" hard-require here.
+      EMAIL_PROVIDER: ${EMAIL_PROVIDER:-smtp}
+      SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_SECURE: ${SMTP_SECURE:-false}
-      SMTP_USER: ${SMTP_USER:?set SMTP_USER}
-      SMTP_PASS: ${SMTP_PASS:?set SMTP_PASS}
-      MAIL_FROM: ${MAIL_FROM:?set MAIL_FROM}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      MAIL_FROM: ${MAIL_FROM:-}
       MAIL_TO: ${MAIL_TO:?set MAIL_TO}
+      BREVO_API_KEY: ${BREVO_API_KEY:-}
+      BREVO_FROM_EMAIL: ${BREVO_FROM_EMAIL:-}
+      BREVO_FROM_NAME: ${BREVO_FROM_NAME:-Šoma360}
     profiles:
       - build-notify
 
