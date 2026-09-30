@@ -12,21 +12,36 @@ on:
     branches:
       - subscription
 
+# A build already running for this branch is superseded by a newer push
+# rather than left to race it - two builds for the same branch/profile
+# racing each other just burns EAS build minutes for a result the
+# newer commit will make stale anyway. cancel-in-progress: true is safe
+# here specifically because build-and-notify.mjs's eas build call is the
+# only externally-visible side effect this job has (no deploy step, no
+# artifact other than the emailed link) - cancelling it mid-flight
+# leaves nothing half-applied.
+concurrency:
+  group: build-apk-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-and-notify:
     name: EAS build + email notification
     runs-on: ubuntu-latest
-    # EAS builds can comfortably run past the default 6h in rare cases,
-    # but a stuck build should fail loud, not silently eat the whole
-    # runner minute budget - generous enough for a normal Android build
-    # plus queue time.
-    timeout-minutes: 60
+    # 60 minutes was not actually enough in practice - a real run hit
+    # exactly this ceiling ("The job has exceeded the maximum execution
+    # time of 1h0m0s") and was killed mid-build. EAS's free/default build
+    # queue alone can run past an hour at busy times, before the actual
+    # Android build even starts, so the old estimate badly underweighted
+    # queue time. 6h leaves real headroom for that without ever
+    # approaching GitHub's own hard per-job cap.
+    timeout-minutes: 360
     defaults:
       run:
         working-directory: src
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           # build-and-notify.mjs's eas build call fingerprints/versions
           # off real git history (see src/Dockerfile's own comment on
@@ -35,7 +50,7 @@ jobs:
           fetch-depth: 0
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
