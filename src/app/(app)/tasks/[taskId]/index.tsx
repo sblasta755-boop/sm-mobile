@@ -195,6 +195,27 @@ export default function TaskDetailScreen() {
   // app's mobile.tasks.$taskId.tsx, and README.md's stated order: clock
   // in (Attendance) is step 1, task work is step 2.
   const taskIsWorkable = ["assigned", "not_started", "in_progress", "rework_required"].includes(task.status);
+  // Each day is its own: a task scheduled for another day is view-only
+  // (the backend rejects every write against it - _assert_task_day_open).
+  const isToday = (iso: string) => new Date(iso).toDateString() === new Date().toDateString();
+  if (taskIsWorkable && !isToday(task.scheduledAt)) {
+    return (
+      <Screen title={task.title} backTo="/home">
+        <Card style={styles.clockInPromptCard}>
+          <Ionicons name="lock-closed-outline" size={28} color={colors.destructive} style={styles.clockInPromptIcon} />
+          <Text style={styles.clockInPromptTitle}>This task is locked</Text>
+          <Text style={[styles.mutedSmall, styles.clockInPromptText]}>
+            It was scheduled for{" "}
+            {new Date(task.scheduledAt).toLocaleDateString("en-ZA", { weekday: "long", day: "numeric", month: "long" })}
+            . Tasks can only be worked on their own day - this one is view-only.
+          </Text>
+          <Button variant="outline" style={styles.clockInPromptButton} onPress={() => router.push("/home")}>
+            Back home
+          </Button>
+        </Card>
+      </Screen>
+    );
+  }
   if (taskIsWorkable && task.clockedIn === false) {
     return (
       <Screen title={task.title}>
@@ -223,7 +244,15 @@ export default function TaskDetailScreen() {
   // letting them tick a box and only finding out from an API error.
   const otherTaskInProgress =
     task.status !== "in_progress" &&
-    state.tasks.find((t) => t.id !== task.id && t.assigneeId === currentUser?.id && t.status === "in_progress");
+    !task.qrVerified &&
+    state.tasks.find(
+      (t) =>
+        t.id !== task.id &&
+        t.assigneeId === currentUser?.id &&
+        isToday(t.scheduledAt) &&
+        (t.status === "in_progress" ||
+          (t.qrVerified && ["assigned", "not_started"].includes(t.status) && !t.hourlyComplianceLocked)),
+    );
   if (taskIsWorkable && otherTaskInProgress) {
     return (
       <Screen title={task.title}>

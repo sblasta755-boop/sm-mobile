@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { router, useLocalSearchParams } from "expo-router";
-import { StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, StyleSheet, Text, TextInput, View } from "react-native";
 import { Screen } from "@/components/Screen";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
@@ -51,6 +51,8 @@ export default function DeclarationScreen() {
       dispatch({ type: "UPDATE_TASK", taskId: task.id, patch: updatedTask });
       await refreshBackendData();
       router.push("/home");
+    } catch (error) {
+      Alert.alert("Could not submit task", error instanceof Error ? error.message : "Please try again.");
     } finally {
       setBusy(false);
     }
