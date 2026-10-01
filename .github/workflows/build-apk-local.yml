@@ -77,8 +77,12 @@ jobs:
             || { echo "::error::ANDROID_KEYSTORE_BASE64 is not valid base64. Re-create it with: base64 -w0 soma360-release.jks (see src/docs/ANDROID_APK_BUILD.md)"; exit 1; }
           # Fails here, with a clear message, on a wrong file or wrong password
           # instead of deep inside Gradle.
-          keytool -list -keystore "$RUNNER_TEMP/release.jks" -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias "$ANDROID_KEY_ALIAS" > /dev/null \
-            || { echo "::error::Keystore could not be opened - check ANDROID_KEYSTORE_PASSWORD and ANDROID_KEY_ALIAS match the keystore."; exit 1; }
+          echo "decoded keystore size: $(stat -c %s "$RUNNER_TEMP/release.jks") bytes"
+          echo "--- aliases in the keystore (opened with the storepass) ---"
+          keytool -list -keystore "$RUNNER_TEMP/release.jks" -storepass "$ANDROID_KEYSTORE_PASSWORD" 2>&1 | grep -viE "^$|warning|keystore (type|provider)" \
+            || true
+          keytool -list -keystore "$RUNNER_TEMP/release.jks" -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias "$ANDROID_KEY_ALIAS" > /dev/null 2>&1 \
+            || { echo "::error::Keystore could not be opened - see the keytool output above. Wrong ANDROID_KEYSTORE_PASSWORD, an ANDROID_KEY_ALIAS that is not in the list above, or a truncated ANDROID_KEYSTORE_BASE64."; exit 1; }
           echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
