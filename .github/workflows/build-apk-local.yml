@@ -67,7 +67,7 @@ jobs:
       - name: Generate native Android project
         run: npx expo prebuild --platform android --no-install
 
-      - name: Decode release keystore
+      - name: Decode release keystore 
         run: |
           # Strip whitespace/newlines a copy-paste may have added, and restore
           # trailing "=" padding, which copy-paste often drops.
