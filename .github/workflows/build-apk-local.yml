@@ -1,0 +1,104 @@
+name: Build signed Android APK
+
+# Builds the native Android app entirely on GitHub's runner - no Expo
+# account, no EAS cloud, no local Docker image. `expo prebuild` generates
+# the android/ project from app.json (the Expo SDK libraries stay as
+# normal npm dependencies), then Gradle builds and signs a release APK.
+#
+# One-time setup (keystore + secrets): src/docs/ANDROID_APK_BUILD.md
+on:
+  push:
+    branches: [main, subscription]
+  workflow_dispatch:
+
+# A newer push supersedes a build still running for the same branch.
+concurrency:
+  group: build-apk-local-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-apk:
+    name: Gradle release build
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: src
+    env:
+      # Baked into the app at bundle time (read via process.env in
+      # src/api/client.ts). Set it as a repository *variable*.
+      EXPO_PUBLIC_API_BASE_URL: ${{ vars.EXPO_PUBLIC_API_BASE_URL }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Check signing secrets are configured
+        run: |
+          missing=0
+          for name in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            if [ -z "${!name}" ]; then echo "::error::Missing repository secret $name (see src/docs/ANDROID_APK_BUILD.md)"; missing=1; fi
+          done
+          exit $missing
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: src/package-lock.json
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate native Android project
+        run: npx expo prebuild --platform android --no-install
+
+      - name: Decode release keystore
+        run: |
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.jks"
+          echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+
+      - name: Build release APK
+        working-directory: src/android
+        run: |
+          ./gradlew assembleRelease \
+            --init-script "$GITHUB_WORKSPACE/src/scripts/android-signing.init.gradle" \
+            -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=1g" \
+            -PreactNativeArchitectures=arm64-v8a,armeabi-v7a \
+            --no-daemon
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          # Play/Android refuse to install an APK over one with a higher
+          # versionCode, so it must only ever go up.
+          ANDROID_VERSION_CODE: ${{ github.run_number }}
+
+      - name: Verify APK signature
+        run: |
+          apksigner="$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)"
+          "$apksigner" verify --print-certs android/app/build/outputs/apk/release/app-release.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: soma360-release-${{ github.run_number }}
+          path: src/android/app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+          retention-days: 30

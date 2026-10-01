@@ -1,0 +1,29 @@
+// Gradle init script used by .github/workflows/build-apk-local.yml.
+//
+// `expo prebuild` regenerates android/ on every CI run and signs the
+// release build with the debug key. This injects the real release signing
+// config (and a monotonically increasing versionCode) from environment
+// variables, so nothing about signing has to be committed or patched into
+// the generated project. Passed with: ./gradlew --init-script <this file>
+allprojects { project ->
+  project.afterEvaluate {
+    if (!project.plugins.hasPlugin('com.android.application')) return
+
+    def android = project.extensions.getByName('android')
+
+    def storePath = System.getenv('ANDROID_KEYSTORE_PATH')
+    if (storePath) {
+      def release = android.signingConfigs.maybeCreate('release')
+      release.storeFile = new File(storePath)
+      release.storePassword = System.getenv('ANDROID_KEYSTORE_PASSWORD')
+      release.keyAlias = System.getenv('ANDROID_KEY_ALIAS')
+      release.keyPassword = System.getenv('ANDROID_KEY_PASSWORD')
+      android.buildTypes.getByName('release').signingConfig = release
+    }
+
+    def versionCode = System.getenv('ANDROID_VERSION_CODE')
+    if (versionCode) {
+      android.defaultConfig.versionCode = versionCode.toInteger()
+    }
+  }
+}
