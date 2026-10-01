@@ -69,13 +69,11 @@ jobs:
 
       - name: Decode release keystore
         run: |
-          # Diagnostics only (never prints the secret itself).
+          # Strip whitespace/newlines a copy-paste may have added, and restore
+          # trailing "=" padding, which copy-paste often drops.
           clean="$(printf '%s' "$ANDROID_KEYSTORE_BASE64" | tr -d '[:space:]')"
-          echo "secret length: ${#clean} chars (a real keystore is usually 2000-4000)"
-          echo "starts with expected '/u3+7Q': $([ "${clean:0:6}" = '/u3+7Q' ] && echo yes || echo NO)"
-          echo "characters outside the base64 alphabet: $(printf '%s' "$clean" | tr -d 'A-Za-z0-9+/=' | wc -c)"
-          # Strip any whitespace/newlines a copy-paste may have added.
-          printf '%s' "$ANDROID_KEYSTORE_BASE64" | tr -d '[:space:]' | base64 --decode > "$RUNNER_TEMP/release.jks" \
+          while [ $(( ${#clean} % 4 )) -ne 0 ]; do clean="${clean}="; done
+          printf '%s' "$clean" | base64 --decode > "$RUNNER_TEMP/release.jks" \
             || { echo "::error::ANDROID_KEYSTORE_BASE64 is not valid base64. Re-create it with: base64 -w0 soma360-release.jks (see src/docs/ANDROID_APK_BUILD.md)"; exit 1; }
           # Fails here, with a clear message, on a wrong file or wrong password
           # instead of deep inside Gradle.
