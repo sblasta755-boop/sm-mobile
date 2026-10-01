@@ -598,18 +598,30 @@ export function getPublicTenantBranding() {
   return request<Tenant>("/tenant/public-branding", {});
 }
 
-/** "Forgot password" - unauthenticated, same endpoint and same
- * deliberately-vague response the web login screen already uses
- * (AuthController.request_password_reset never reveals whether the
- * email matched an account). The reset link in that email opens
- * /set-password on the web app in the phone's browser - there is no
- * mobile-side token screen (no deep-link handler for it), so this call
- * is the whole of the mobile flow; finishing the reset happens outside
- * the app, then the user comes back here to sign in. */
-export function requestPasswordReset(email: string) {
-  return request<{ success: boolean; message: string }>("/auth/password-reset/request", {
+/** "Forgot password", step 1 - emails a 6-digit code the user types
+ * back into the app (see confirmPasswordResetOtp), rather than the web
+ * login screen's emailed link: a mobile app has no clean way to open a
+ * deep link back into itself mid-flow the way a browser tab can. Same
+ * deliberately-vague response either way - see AuthController.
+ * request_password_reset_otp, which never reveals whether the email
+ * matched an account. */
+export function requestPasswordResetOtp(email: string) {
+  return request<{ success: boolean; message: string }>("/auth/password-reset/otp/request", {
     method: "POST",
     body: JSON.stringify({ email }),
+  });
+}
+
+/** "Forgot password", step 2 - verifies the emailed code and sets the
+ * new password in one call. The code is short-lived (10 min), single-use
+ * and locks out after 5 wrong guesses - see AuthController.
+ * confirm_password_reset_otp. A wrong email and a wrong/expired code
+ * come back as the same error, so the UI shouldn't try to tell them
+ * apart either. */
+export function confirmPasswordResetOtp(email: string, code: string, password: string) {
+  return request<{ success: boolean }>("/auth/password-reset/otp/verify", {
+    method: "POST",
+    body: JSON.stringify({ email, code, password }),
   });
 }
 

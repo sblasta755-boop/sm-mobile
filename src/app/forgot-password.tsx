@@ -12,36 +12,65 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { requestPasswordReset } from "@/api/client";
+import { confirmPasswordResetOtp, requestPasswordResetOtp } from "@/api/client";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
 import { colors, radius, spacing, typography } from "@/theme";
 
-// Just the "request the email" step - unlike the web app, there is no
-// paste-your-token screen here at all (see login.tsx's own
-// PasswordResetDialog fix for why that used to exist and why it's gone
-// there too). The emailed link opens /set-password on the web app in
-// whatever browser the phone has, which already works standalone with
-// no mobile-app involvement, so finishing the reset happens outside
-// this app - this screen's only job is sending that email and saying so.
+// Two steps, both inside the app: request a 6-digit code by email, then
+// enter it alongside a new password. Unlike the web app's forgot-
+// password dialog (an emailed link into /set-password), mobile has no
+// clean way to open a deep link back into itself mid-flow - see
+// requestPasswordResetOtp/confirmPasswordResetOtp's own comments on the
+// backend endpoints this drives (AuthController.request_password_reset_
+// otp/confirm_password_reset_otp), which enforce the actual security
+// properties (10-minute expiry, 5 wrong-guess lockout, single active
+// code, per-account rate limit) - this screen just has to present them
+// honestly, not re-implement them.
 export default function ForgotPassword() {
   const insets = useSafeAreaInsets();
+  const [step, setStep] = useState<"request" | "verify">("request");
   const [email, setEmail] = useState("");
+  const [code, setCode] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [sent, setSent] = useState(false);
+  const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const canSubmit = email.trim().length > 0 && !busy;
+  const canRequest = email.trim().length > 0 && !busy;
+  const tooShort = password.length > 0 && password.length < 8;
+  const mismatch = confirm.length > 0 && password !== confirm;
+  const canVerify = code.trim().length === 6 && password.length >= 8 && password === confirm && !busy;
 
-  async function submit() {
-    if (!canSubmit) return;
+  async function requestCode() {
+    if (!canRequest) return;
     setBusy(true);
     setError(null);
     try {
-      await requestPasswordReset(email.trim());
-      setSent(true);
+      await requestPasswordResetOtp(email.trim());
+      setStep("verify");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not send the reset email");
+      setError(err instanceof Error ? err.message : "Could not send the reset code");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function verifyAndReset() {
+    if (!canVerify) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await confirmPasswordResetOtp(email.trim(), code.trim(), password);
+      setDone(true);
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "That code didn't work - it may have expired or been mistyped",
+      );
     } finally {
       setBusy(false);
     }
@@ -60,28 +89,26 @@ export default function ForgotPassword() {
         ]}
         keyboardShouldPersistTaps="handled"
       >
-        {sent ? (
+        {done ? (
           <Card style={styles.card}>
             <View style={styles.doneIcon}>
-              <Ionicons name="mail-outline" size={28} color={colors.primary} />
+              <Ionicons name="checkmark-circle-outline" size={28} color={colors.primary} />
             </View>
-            <Text style={styles.title}>Check your email</Text>
+            <Text style={styles.title}>Password reset</Text>
             <Text style={styles.doneText}>
-              If {email.trim()} matches an account, a reset link is on its way - it expires in 30
-              minutes. Open it on this phone or any device to choose a new password, then come
-              back here to sign in.
+              Your password has been updated. You can now sign in with it.
             </Text>
-            <Button onPress={() => router.back()} style={styles.submitButton}>
+            <Button onPress={() => router.replace("/login")} style={styles.submitButton}>
               Back to sign in
             </Button>
           </Card>
-        ) : (
+        ) : step === "request" ? (
           <>
             <View style={styles.brandBlock}>
               <Text style={styles.title}>Reset your password</Text>
               <Text style={styles.tagline}>
-                Enter your account email - if it matches an account, we&apos;ll send you a link to
-                reset it.
+                Enter your account email - if it matches an account, we&apos;ll send you a 6-digit
+                code.
               </Text>
             </View>
 
@@ -103,7 +130,7 @@ export default function ForgotPassword() {
                     setEmail(text);
                     if (error) setError(null);
                   }}
-                  onSubmitEditing={submit}
+                  onSubmitEditing={requestCode}
                 />
               </View>
 
@@ -114,12 +141,12 @@ export default function ForgotPassword() {
               )}
 
               <Button
-                onPress={submit}
-                disabled={!canSubmit}
+                onPress={requestCode}
+                disabled={!canRequest}
                 loading={busy}
                 style={styles.submitButton}
               >
-                Send reset email
+                Send code
               </Button>
             </Card>
 
@@ -129,6 +156,119 @@ export default function ForgotPassword() {
               style={styles.backButton}
             >
               <Text style={styles.backText}>Back to sign in</Text>
+            </Pressable>
+          </>
+        ) : (
+          <>
+            <View style={styles.brandBlock}>
+              <Text style={styles.title}>Enter your code</Text>
+              <Text style={styles.tagline}>
+                We sent a 6-digit code to {email.trim()} - it expires in 10 minutes. Enter it
+                below with your new password.
+              </Text>
+            </View>
+
+            <Card style={styles.card}>
+              <View style={styles.field}>
+                <Text style={styles.label}>Reset code</Text>
+                <TextInput
+                  style={[styles.input, styles.codeInput]}
+                  placeholder="000000"
+                  placeholderTextColor={colors.mutedForeground}
+                  keyboardType="number-pad"
+                  autoComplete="one-time-code"
+                  textContentType="oneTimeCode"
+                  maxLength={6}
+                  value={code}
+                  onChangeText={(text) => {
+                    setCode(text.replace(/[^0-9]/g, ""));
+                    if (error) setError(null);
+                  }}
+                />
+              </View>
+
+              <View style={styles.field}>
+                <Text style={styles.label}>New password</Text>
+                <View style={styles.passwordRow}>
+                  <TextInput
+                    style={styles.passwordInput}
+                    placeholder="At least 8 characters"
+                    placeholderTextColor={colors.mutedForeground}
+                    secureTextEntry={!showPassword}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    autoComplete="new-password"
+                    textContentType="newPassword"
+                    value={password}
+                    onChangeText={(text) => {
+                      setPassword(text);
+                      if (error) setError(null);
+                    }}
+                  />
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={showPassword ? "Hide password" : "Show password"}
+                    hitSlop={8}
+                    onPress={() => setShowPassword((v) => !v)}
+                    style={styles.toggleButton}
+                  >
+                    <Text style={styles.toggleText}>{showPassword ? "Hide" : "Show"}</Text>
+                  </Pressable>
+                </View>
+                {tooShort && <Text style={styles.hint}>Use at least 8 characters.</Text>}
+              </View>
+
+              <View style={styles.field}>
+                <Text style={styles.label}>Confirm password</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Type it again"
+                  placeholderTextColor={colors.mutedForeground}
+                  secureTextEntry={!showPassword}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  returnKeyType="go"
+                  value={confirm}
+                  onChangeText={(text) => {
+                    setConfirm(text);
+                    if (error) setError(null);
+                  }}
+                  onSubmitEditing={verifyAndReset}
+                />
+                {mismatch && <Text style={styles.hint}>Both passwords need to match.</Text>}
+              </View>
+
+              {error && (
+                <View style={styles.errorBox}>
+                  <Text style={styles.errorText}>{error}</Text>
+                </View>
+              )}
+
+              <Button
+                onPress={verifyAndReset}
+                disabled={!canVerify}
+                loading={busy}
+                style={styles.submitButton}
+              >
+                Reset password
+              </Button>
+
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => void requestCode()}
+                disabled={busy}
+                style={styles.resendButton}
+              >
+                <Text style={styles.backText}>Send a new code</Text>
+              </Pressable>
+            </Card>
+
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => setStep("request")}
+              style={styles.backButton}
+            >
+              <Text style={styles.backText}>Use a different email</Text>
             </Pressable>
           </>
         )}
@@ -186,6 +326,40 @@ const styles = StyleSheet.create({
     fontSize: typography.body,
     color: colors.foreground,
   },
+  codeInput: {
+    fontSize: typography.title,
+    fontWeight: "800",
+    letterSpacing: 8,
+    textAlign: "center",
+  },
+  passwordRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: colors.input,
+    borderRadius: radius.md,
+    backgroundColor: colors.background,
+  },
+  passwordInput: {
+    flex: 1,
+    minHeight: 48,
+    paddingHorizontal: spacing.md,
+    fontSize: typography.body,
+    color: colors.foreground,
+  },
+  toggleButton: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  toggleText: {
+    fontSize: typography.small,
+    fontWeight: "700",
+    color: colors.primary,
+  },
+  hint: {
+    fontSize: typography.small,
+    color: colors.mutedForeground,
+  },
   errorBox: {
     borderRadius: radius.md,
     backgroundColor: colors.destructiveSoft,
@@ -199,6 +373,10 @@ const styles = StyleSheet.create({
   },
   submitButton: {
     marginTop: spacing.xs,
+  },
+  resendButton: {
+    alignSelf: "center",
+    paddingVertical: spacing.sm,
   },
   backButton: {
     alignSelf: "center",
