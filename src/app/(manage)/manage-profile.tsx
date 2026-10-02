@@ -97,7 +97,7 @@ export default function ManageProfile() {
         </Pressable>
       </Card>
 
-      <Button variant="outline" onPress={() => void signOut()}>
+      <Button variant="outline" onPress={() => signOut()}>
         Sign out
       </Button>
 

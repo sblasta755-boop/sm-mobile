@@ -1,5 +1,5 @@
-import type { ReactNode } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
 import { colors, radius, spacing, typography } from "@/theme";
 
 type Variant = "primary" | "outline" | "destructive" | "ghost";
@@ -15,7 +15,9 @@ export function Button({
   fullWidth = true,
 }: {
   children: ReactNode;
-  onPress?: () => void;
+  /** A handler that returns a promise keeps the button busy (disabled, with a
+   * spinner) until it settles, so a second tap can't repeat the action. */
+  onPress?: () => unknown;
   variant?: Variant;
   disabled?: boolean;
   loading?: boolean;
@@ -23,13 +25,42 @@ export function Button({
   style?: StyleProp<ViewStyle>;
   fullWidth?: boolean;
 }) {
-  const isDisabled = disabled || loading;
+  const [pending, setPending] = useState(false);
+  const locked = useRef(false);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+  const handlePress = onPress
+    ? () => {
+        if (locked.current) return;
+        const result = onPress() as unknown;
+        if (result && typeof (result as Promise<unknown>).then === "function") {
+          locked.current = true;
+          setPending(true);
+          (result as Promise<unknown>)
+            .catch((error: unknown) => {
+              // A failure nothing else reported - never let it vanish silently.
+              Alert.alert("Something went wrong", error instanceof Error ? error.message : "Please try again.");
+            })
+            .finally(() => {
+              locked.current = false;
+              if (mounted.current) setPending(false);
+            });
+        }
+      }
+    : undefined;
+  const busy = loading || pending;
+  const isDisabled = disabled || busy;
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityState={{ disabled: isDisabled }}
       disabled={isDisabled}
-      onPress={onPress}
+      onPress={handlePress}
       style={({ pressed }) => [
         styles.base,
         variantStyles[variant],
@@ -39,7 +70,7 @@ export function Button({
         style,
       ]}
     >
-      {loading ? (
+      {busy ? (
         <ActivityIndicator color={variant === "primary" || variant === "destructive" ? colors.primaryForeground : colors.primary} />
       ) : (
         <View style={styles.content}>

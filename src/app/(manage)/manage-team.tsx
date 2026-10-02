@@ -165,12 +165,12 @@ export default function ManageTeam() {
                 )}
 
                 {grant.status === "pending" && (
-                  <Button loading={busy} onPress={() => void showCode()}>
+                  <Button loading={busy} onPress={() => showCode()}>
                     {grant.isLive ? "Show again" : "Show the code"}
                   </Button>
                 )}
                 {grant.status !== "approved" && (
-                  <Button variant="outline" loading={busy} onPress={() => void reissue()}>
+                  <Button variant="outline" loading={busy} onPress={() => reissue()}>
                     Issue a new code
                   </Button>
                 )}

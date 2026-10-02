@@ -80,7 +80,7 @@ export default function StaffOnboardScan() {
           <Text style={styles.muted}>
             Šoma360 uses the camera only to read the code your manager is showing you.
           </Text>
-          <Button onPress={() => void requestPermission()}>Allow camera</Button>
+          <Button onPress={() => requestPermission()}>Allow camera</Button>
           <Button variant="ghost" onPress={() => router.replace("/login")}>
             Back to sign in
           </Button>

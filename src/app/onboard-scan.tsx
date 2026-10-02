@@ -81,7 +81,7 @@ export default function OnboardScan() {
             Šoma360 uses the camera only to read the onboarding code your contact is
             showing you.
           </Text>
-          <Button onPress={() => void requestPermission()}>Allow camera</Button>
+          <Button onPress={() => requestPermission()}>Allow camera</Button>
           <Button variant="ghost" onPress={() => router.replace("/login")}>
             Back to sign in
           </Button>

@@ -151,7 +151,7 @@ export default function PlatformApprovals() {
                 <Button
                   variant="destructive"
                   loading={busyId === grant.id}
-                  onPress={() => void reject(grant)}
+                  onPress={() => reject(grant)}
                 >
                   Confirm rejection
                 </Button>
@@ -169,7 +169,7 @@ export default function PlatformApprovals() {
               <View style={styles.actions}>
                 <Button
                   loading={busyId === grant.id}
-                  onPress={() => void approve(grant)}
+                  onPress={() => approve(grant)}
                   style={styles.action}
                 >
                   Approve

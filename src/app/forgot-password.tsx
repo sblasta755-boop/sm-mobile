@@ -255,7 +255,7 @@ export default function ForgotPassword() {
 
               <Pressable
                 accessibilityRole="button"
-                onPress={() => void requestCode()}
+                onPress={() => requestCode()}
                 disabled={busy}
                 style={styles.resendButton}
               >

@@ -119,11 +119,11 @@ export default function LockScreen() {
           </View>
         )}
 
-        <Button onPress={() => void attempt()} loading={busy} style={styles.unlockButton}>
+        <Button onPress={() => attempt()} loading={busy} style={styles.unlockButton}>
           Unlock with {labelFor(kind)}
         </Button>
 
-        <Button variant="ghost" onPress={() => void handleSignOut()}>
+        <Button variant="ghost" onPress={() => handleSignOut()}>
           Sign in with password instead
         </Button>
       </View>

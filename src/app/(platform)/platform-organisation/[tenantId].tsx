@@ -239,7 +239,7 @@ export default function PlatformOrganisationDetail() {
 
           <View style={styles.actions}>
             {grant.status === "pending" && (
-              <Button loading={busy} onPress={() => void showCode()} style={styles.action}>
+              <Button loading={busy} onPress={() => showCode()} style={styles.action}>
                 {grant.isLive ? "Show again" : "Show the code"}
               </Button>
             )}
@@ -302,7 +302,7 @@ export default function PlatformOrganisationDetail() {
                 <View style={styles.siteActions}>
                   <Pressable
                     style={styles.siteIconButton}
-                    onPress={() => void openDirections(site)}
+                    onPress={() => openDirections(site)}
                     disabled={openingDirections === site.id}
                     accessibilityLabel={`Get directions to ${site.name}`}
                   >

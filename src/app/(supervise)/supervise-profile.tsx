@@ -74,7 +74,7 @@ export default function SuperviseProfile() {
         <BiometricLockRow />
       </Card>
 
-      <Button variant="outline" onPress={() => void signOut()}>
+      <Button variant="outline" onPress={() => signOut()}>
         Sign out
       </Button>
 

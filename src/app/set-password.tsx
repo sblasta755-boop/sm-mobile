@@ -165,7 +165,7 @@ export default function SetPassword() {
 
         <Pressable
           accessibilityRole="button"
-          onPress={() => void signOut()}
+          onPress={() => signOut()}
           style={styles.signOutButton}
         >
           <Text style={styles.signOutText}>Sign out instead</Text>
