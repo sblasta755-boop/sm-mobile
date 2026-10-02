@@ -504,6 +504,12 @@ export interface TableSession {
   billRequestedAt?: string;
   lastBillReminderAt?: string;
   billReminderCount?: number;
+  /** When anyone last attended this table (see attendTableSession). */
+  lastAttendedAt?: string;
+  /** Walk-out risk marker - a prompt for the waiter, never a verdict.
+   * See the backend's app.services.table_risk. */
+  riskLevel?: "ok" | "watch" | "at_risk";
+  riskReasons?: string[];
   startedAt: string;
   endedAt?: string;
   endReason?: WaiterSessionEndReason;

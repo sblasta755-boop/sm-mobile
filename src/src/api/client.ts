@@ -560,6 +560,17 @@ export function endTableSession(
   );
 }
 
+/** "I have been to this table" - clears the not-attended marker. */
+export function attendTableSession(accessToken: string, sessionId: string) {
+  return request<TableSession>(`/table-sessions/${sessionId}/attend`, { method: "POST" }, accessToken);
+}
+
+/** The waiter brings the bill without the customer asking - starts the
+ * same bill-reminder cycle a customer's bill request does. */
+export function presentTableSessionBill(accessToken: string, sessionId: string) {
+  return request<TableSession>(`/table-sessions/${sessionId}/present-bill`, { method: "POST" }, accessToken);
+}
+
 export function confirmTableSessionBillPaid(accessToken: string, sessionId: string, note?: string) {
   return request<TableSession>(
     `/table-sessions/${sessionId}/confirm-bill-paid`,

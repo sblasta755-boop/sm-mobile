@@ -6,7 +6,9 @@ import { Screen } from "@/components/Screen";
 import { Card } from "@/components/Card";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useSmartClean } from "@/features/store";
-import { claimTableSession, listTableSessions } from "@/api/client";
+import { attendTableSession, claimTableSession, listTableSessions } from "@/api/client";
+import { riskLabel, sortByRisk } from "@/features/tableRisk";
+import { Button } from "@/components/Button";
 import type { TableSession } from "@/types/smartclean";
 import { colors, radius, spacing, typography } from "@/theme";
 
@@ -108,7 +110,17 @@ export default function TablesScreen() {
     [state.accessToken, load],
   );
 
-  const active = sessions.filter((s) => s.status !== "ended");
+  // "I've been to this table" - one tap clears the not-attended marker.
+  const attend = useCallback(
+    async (sessionId: string) => {
+      if (!state.accessToken) return;
+      const row = await attendTableSession(state.accessToken, sessionId);
+      setSessions((current) => current.map((s) => (s.id === row.id ? row : s)));
+    },
+    [state.accessToken],
+  );
+
+  const active = sortByRisk(sessions.filter((s) => s.status !== "ended"));
   const ended = sessions.filter((s) => s.status === "ended").slice(0, 10);
 
   return (
@@ -135,7 +147,7 @@ export default function TablesScreen() {
           <Text style={styles.sectionTitle}>Active ({active.length})</Text>
           {active.length === 0 && <Text style={styles.emptyText}>No tables claimed yet.</Text>}
           {active.map((session) => (
-            <SessionRow key={session.id} session={session} />
+            <SessionRow key={session.id} session={session} onAttend={attend} />
           ))}
 
           {ended.length > 0 && (
@@ -152,7 +164,8 @@ export default function TablesScreen() {
   );
 }
 
-function SessionRow({ session }: { session: TableSession }) {
+function SessionRow({ session, onAttend }: { session: TableSession; onAttend?: (sessionId: string) => Promise<void> }) {
+  const risk = riskLabel(session.riskLevel);
   const tone =
     session.status === "bill_requested" ? "warning" : session.status === "ended" ? "muted" : "success";
   const label =
@@ -165,6 +178,15 @@ function SessionRow({ session }: { session: TableSession }) {
           <Text style={styles.rowTitle}>{session.locationName ?? "Table"}</Text>
           <StatusBadge tone={tone} label={label} />
         </View>
+        {risk && (
+          <View style={styles.riskRow}>
+            <Ionicons name="alert-circle" size={14} color={session.riskLevel === "at_risk" ? colors.destructive : colors.warning} />
+            <Text style={[styles.riskText, { color: session.riskLevel === "at_risk" ? colors.destructive : colors.warning }]}>
+              {risk}
+              {session.riskReasons?.[0] ? ` - ${session.riskReasons[0]}` : ""}
+            </Text>
+          </View>
+        )}
         <Text style={styles.rowSub}>
           Started {new Date(session.startedAt).toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit" })}
           {session.customerJoinedAt ? " · Customer joined" : ""}
@@ -176,6 +198,11 @@ function SessionRow({ session }: { session: TableSession }) {
               {pendingRequests.length} pending request{pendingRequests.length === 1 ? "" : "s"}
             </Text>
           </View>
+        )}
+        {risk && onAttend && (
+          <Button variant="outline" fullWidth={false} onPress={() => onAttend(session.id)}>
+            I&apos;ve been to this table
+          </Button>
         )}
       </Card>
     </Pressable>
@@ -251,6 +278,16 @@ const styles = StyleSheet.create({
   rowSub: {
     fontSize: typography.tiny,
     color: colors.mutedForeground,
+  },
+  riskRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  riskText: {
+    flex: 1,
+    fontSize: typography.tiny,
+    fontWeight: "600",
   },
   pendingRow: {
     flexDirection: "row",

@@ -9,6 +9,8 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { useSmartClean } from "@/features/store";
 import {
   acknowledgeTableRequest,
+  attendTableSession,
+  presentTableSessionBill,
   claimTableSession,
   confirmTableSessionBillPaid,
   confirmTableSessionClean,
@@ -272,6 +274,45 @@ export default function TableSessionDetailScreen() {
             The table's own QR code (the one you scanned to claim it) is what the customer scans too - it works for
             them any time, whether you're at the table or not. No separate code to show them here.
           </Text>
+        </Card>
+      )}
+
+      {session.status !== "ended" && session.riskLevel && session.riskLevel !== "ok" && (
+        <Card style={styles.section}>
+          <Text style={styles.label}>{session.riskLevel === "at_risk" ? "This table may be leaving" : "Check on this table"}</Text>
+          {(session.riskReasons ?? []).map((reason) => (
+            <Text key={reason} style={styles.hint}>
+              {reason}
+            </Text>
+          ))}
+          <Button
+            variant="outline"
+            onPress={async () => {
+              if (!state.accessToken) return;
+              setSession(await attendTableSession(state.accessToken, session.id));
+            }}
+          >
+            I&apos;ve been to this table
+          </Button>
+        </Card>
+      )}
+
+      {session.status === "active" && (
+        <Card style={styles.section}>
+          <Text style={styles.label}>Bring the bill</Text>
+          <Text style={styles.hint}>
+            Tap when you take the bill to the table without being asked. It starts the same bill reminders, so it is
+            tracked until it&apos;s paid.
+          </Text>
+          <Button
+            variant="outline"
+            onPress={async () => {
+              if (!state.accessToken) return;
+              setSession(await presentTableSessionBill(state.accessToken, session.id));
+            }}
+          >
+            Bill presented
+          </Button>
         </Card>
       )}
 
