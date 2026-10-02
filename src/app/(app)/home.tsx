@@ -75,7 +75,11 @@ export default function HomeScreen() {
     >
       <Card padded={false} style={styles.shiftCard}>
         <ImageBackground
-          source={require("../../assets/shift-clock-in.png")}
+          source={
+            currentUser?.role === "waiter"
+              ? require("../../assets/shift-clock-in-waiter.png")
+              : require("../../assets/shift-clock-in.png")
+          }
           style={styles.shiftOverlay}
           imageStyle={styles.shiftImage}
         >
