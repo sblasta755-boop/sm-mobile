@@ -1,5 +1,5 @@
 # Building the Android APK on GitHub (no Expo account)
-
+ 
 `.github/workflows/build-apk-local.yml` builds a signed release APK on every push to
 `main` or `subscription` (or manually: Actions → *Build signed Android APK* → Run workflow).
 Download it from the run's **Artifacts** section (kept 30 days).
