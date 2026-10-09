@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { router, useLocalSearchParams } from "expo-router";
 import { Alert, Linking, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -11,6 +12,7 @@ import { StatusBadge, VerifiedBadge } from "@/components/StatusBadge";
 import { useSmartClean } from "@/features/store";
 import { fileUrl, startTask, updateChecklistItem } from "@/api/client";
 import { useHasCapability, useHasModule, useWorkflowPolicy } from "@/features/modules";
+import { firstIncompleteKey, groupChecklist, isSectioned } from "@/domain/checklistSections";
 import { toneForTask, humanStatus, taskSubmissionBlocked, taskStage, isChecklistUnlocked } from "@/domain/status";
 import { colors, radius, spacing, typography } from "@/theme";
 
@@ -75,6 +77,8 @@ function StepsField({
 export default function TaskDetailScreen() {
   const { taskId } = useLocalSearchParams<{ taskId: string }>();
   const { state, currentUser, dispatch } = useSmartClean();
+  // Sections opened/closed by hand; otherwise only the first incomplete one is open.
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
   const task = state.tasks.find((t) => t.id === taskId);
   // Organisation workflow (see useHasCapability: QR fails open, manual
   // fails closed). Presentation only - the server authorises every start.
@@ -305,6 +309,68 @@ export default function TaskDetailScreen() {
   const stage = taskStage(task);
   const checklistUnlocked = isChecklistUnlocked(stage);
 
+  const renderItem = (item: (typeof task.checklist)[number]) => (
+      <Card key={item.id} style={item.done ? styles.checklistItemDone : styles.checklistItem}>
+        <View style={styles.checklistRow}>
+          {item.type !== "note" && item.type !== "steps_required" && (
+            <Checkbox
+              checked={Boolean(item.done)}
+              // photo_required auto-ticks itself once both before/after
+              // photos exist (see the backend's add_evidence) — it's
+              // evidence-driven, not something to check by hand.
+              disabled={item.type === "photo_required" || !checklistUnlocked}
+              onChange={(value) => toggleCheck(item.id, value)}
+            />
+          )}
+          <View style={styles.checklistBody}>
+            <Text style={styles.checklistLabel}>{item.label}</Text>
+            <View style={styles.checklistBadges}>
+              {item.risk === "high" && <StatusBadge tone="destructive" label="High risk" />}
+              {item.risk === "medium" && <StatusBadge tone="warning" label="Attention" />}
+              {item.type === "photo_required" && (
+                <StatusBadge
+                  tone={item.done ? "success" : "info"}
+                  label={
+                    item.done
+                      ? "Photo captured"
+                      : task.requiresBeforeAfter
+                        ? "Auto-completes with before & after photos"
+                        : "Auto-completes once you take a photo"
+                  }
+                  icon="camera-outline"
+                />
+              )}
+              {item.type === "declaration" && <StatusBadge tone="muted" label="Declaration" />}
+              {item.type === "steps_required" && (
+                <StatusBadge
+                  tone={item.done ? "success" : "warning"}
+                  label={item.done ? "Steps written" : "Required to submit"}
+                />
+              )}
+            </View>
+            {item.type === "note" && (
+              <TextInput
+                style={styles.noteInput}
+                placeholder="Notes for supervisor"
+                placeholderTextColor={colors.mutedForeground}
+                multiline
+                editable={checklistUnlocked}
+                value={item.value ?? ""}
+                onChangeText={(text) => toggleCheck(item.id, text)}
+              />
+            )}
+            {item.type === "steps_required" && (
+              <StepsField
+                value={item.value ?? ""}
+                disabled={!checklistUnlocked}
+                onChange={(text) => toggleCheck(item.id, text)}
+              />
+            )}
+          </View>
+        </View>
+      </Card>
+  );
+
   return (
     <Screen title={task.title}>
       {task.incidentId && (
@@ -446,69 +512,44 @@ export default function TaskDetailScreen() {
           </Card>
         )}
 
-      <View style={styles.checklist}>
-        {task.checklist.map((item) => (
-          <Card key={item.id} style={item.done ? styles.checklistItemDone : styles.checklistItem}>
-            <View style={styles.checklistRow}>
-              {item.type !== "note" && item.type !== "steps_required" && (
-                <Checkbox
-                  checked={Boolean(item.done)}
-                  // photo_required auto-ticks itself once both before/after
-                  // photos exist (see the backend's add_evidence) — it's
-                  // evidence-driven, not something to check by hand.
-                  disabled={item.type === "photo_required" || !checklistUnlocked}
-                  onChange={(value) => toggleCheck(item.id, value)}
-                />
-              )}
-              <View style={styles.checklistBody}>
-                <Text style={styles.checklistLabel}>{item.label}</Text>
-                <View style={styles.checklistBadges}>
-                  {item.risk === "high" && <StatusBadge tone="destructive" label="High risk" />}
-                  {item.risk === "medium" && <StatusBadge tone="warning" label="Attention" />}
-                  {item.type === "photo_required" && (
-                    <StatusBadge
-                      tone={item.done ? "success" : "info"}
-                      label={
-                        item.done
-                          ? "Photo captured"
-                          : task.requiresBeforeAfter
-                            ? "Auto-completes with before & after photos"
-                            : "Auto-completes once you take a photo"
-                      }
-                      icon="camera-outline"
-                    />
-                  )}
-                  {item.type === "declaration" && <StatusBadge tone="muted" label="Declaration" />}
-                  {item.type === "steps_required" && (
-                    <StatusBadge
-                      tone={item.done ? "success" : "warning"}
-                      label={item.done ? "Steps written" : "Required to submit"}
-                    />
-                  )}
+      {(() => {
+        const groups = groupChecklist(task.checklist);
+        // An old or simple checklist has no sections: render it flat, as before.
+        if (!isSectioned(task.checklist)) {
+          return <View style={styles.checklist}>{task.checklist.map(renderItem)}</View>;
+        }
+        const firstOpen = firstIncompleteKey(groups);
+        return (
+          <View style={styles.checklist}>
+            {groups.map((group) => {
+              const open = openSections[group.key] ?? group.key === firstOpen;
+              return (
+                <View key={group.key || "general"}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityState={{ expanded: open }}
+                    style={styles.sectionHeader}
+                    onPress={() => setOpenSections((current) => ({ ...current, [group.key]: !open }))}
+                  >
+                    <View style={styles.sectionTitleRow}>
+                      <Ionicons
+                        name={open ? "chevron-down" : "chevron-forward"}
+                        size={16}
+                        color={colors.foreground}
+                      />
+                      <Text style={styles.sectionTitle}>{group.name ?? "General"}</Text>
+                    </View>
+                    <Text style={group.complete ? styles.sectionDone : styles.mutedSmall}>
+                      {group.complete ? "Complete" : `${group.done}/${group.total} complete`}
+                    </Text>
+                  </Pressable>
+                  {open && <View style={styles.checklist}>{group.items.map(renderItem)}</View>}
                 </View>
-                {item.type === "note" && (
-                  <TextInput
-                    style={styles.noteInput}
-                    placeholder="Notes for supervisor"
-                    placeholderTextColor={colors.mutedForeground}
-                    multiline
-                    editable={checklistUnlocked}
-                    value={item.value ?? ""}
-                    onChangeText={(text) => toggleCheck(item.id, text)}
-                  />
-                )}
-                {item.type === "steps_required" && (
-                  <StepsField
-                    value={item.value ?? ""}
-                    disabled={!checklistUnlocked}
-                    onChange={(text) => toggleCheck(item.id, text)}
-                  />
-                )}
-              </View>
-            </View>
-          </Card>
-        ))}
-      </View>
+              );
+            })}
+          </View>
+        );
+      })()}
 
       <View style={styles.actionsRow}>
         <Button
@@ -561,6 +602,19 @@ export default function TaskDetailScreen() {
 }
 
 const styles = StyleSheet.create({
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: colors.muted,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  sectionTitleRow: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
+  sectionTitle: { fontSize: 14, fontWeight: "600", color: colors.foreground },
+  sectionDone: { fontSize: 12, fontWeight: "600", color: colors.success },
   mutedSmall: {
     fontSize: typography.small,
     color: colors.mutedForeground,

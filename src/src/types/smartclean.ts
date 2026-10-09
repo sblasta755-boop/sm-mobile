@@ -148,6 +148,11 @@ export interface ChecklistItem {
   requiredEvidence?: boolean;
   done?: boolean;
   value?: string;
+  /** Section grouping - a snapshot taken when the task was assigned.
+   * Absent for an ungrouped item (every task that predates sections). */
+  sectionId?: string;
+  sectionName?: string;
+  sectionOrder?: number;
 }
 
 export interface Evidence {
