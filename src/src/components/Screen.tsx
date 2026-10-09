@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { router, usePathname } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -76,7 +76,16 @@ export function Screen({
   const pathname = usePathname();
   const showBack = !TAB_ROOT_PATHS.has(pathname);
 
+  const unreadCount = state.notifications.filter((n) => !n.read).length;
   const Content = scroll ? ScrollView : View;
+  // Same two header buttons as the web app: notifications (with an unread
+  // badge) and the profile menu.
+  const HeaderActions = (
+    <View style={styles.headerActions}>
+      <NotificationsBell unreadCount={unreadCount} />
+      <ProfileTrigger currentUser={currentUser} onPress={() => setMenuOpen(true)} />
+    </View>
+  );
 
   const goBack = () => {
     if (backTo) {
@@ -105,7 +114,7 @@ export function Screen({
           <View style={styles.headerRow}>
             {BackButton ?? <View style={styles.headerSpacer} />}
             <View style={styles.headerCenter}>{headerContent}</View>
-            <ProfileTrigger currentUser={currentUser} onPress={() => setMenuOpen(true)} />
+            {HeaderActions}
           </View>
         ) : (
           <>
@@ -119,7 +128,7 @@ export function Screen({
                   </Text>
                 </View>
               </View>
-              <ProfileTrigger currentUser={currentUser} onPress={() => setMenuOpen(true)} />
+              {HeaderActions}
             </View>
             {title && <Text style={styles.title}>{title}</Text>}
             {site && <Text style={styles.siteName}>{site.name}</Text>}
@@ -145,6 +154,24 @@ export function Screen({
   );
 }
 
+function NotificationsBell({ unreadCount }: { unreadCount: number }) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : "Notifications"}
+      onPress={() => router.push("/notifications")}
+      style={styles.iconButton}
+    >
+      <Ionicons name="notifications-outline" size={18} color={colors.foreground} />
+      {unreadCount > 0 && (
+        <View style={styles.badge} pointerEvents="none">
+          <Text style={styles.badgeText}>{unreadCount > 9 ? "9+" : unreadCount}</Text>
+        </View>
+      )}
+    </Pressable>
+  );
+}
+
 function ProfileTrigger({
   currentUser,
   onPress,
@@ -153,8 +180,17 @@ function ProfileTrigger({
   onPress: () => void;
 }) {
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel="Open profile menu" onPress={onPress} style={styles.avatarButton}>
-      <Text style={styles.avatarButtonText}>{currentUser?.initials ?? "SC"}</Text>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Open profile menu"
+      onPress={onPress}
+      style={[styles.iconButton, styles.profileButton]}
+    >
+      {currentUser?.profilePhotoDataUrl ? (
+        <Image source={{ uri: currentUser.profilePhotoDataUrl }} style={styles.profilePhoto} />
+      ) : (
+        <Ionicons name="person-outline" size={18} color={colors.foreground} />
+      )}
     </Pressable>
   );
 }
@@ -227,7 +263,12 @@ const styles = StyleSheet.create({
     fontSize: typography.small,
     color: colors.mutedForeground,
   },
-  avatarButton: {
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  iconButton: {
     width: 32,
     height: 32,
     borderRadius: 8,
@@ -237,10 +278,31 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  avatarButtonText: {
-    fontSize: typography.tiny,
-    fontWeight: "800",
-    color: colors.foreground,
+  // The photo fills the button, so it clips to the same rounded corners.
+  profileButton: {
+    overflow: "hidden",
+  },
+  profilePhoto: {
+    width: "100%",
+    height: "100%",
+  },
+  badge: {
+    position: "absolute",
+    top: -6,
+    right: -6,
+    minWidth: 16,
+    height: 16,
+    paddingHorizontal: 4,
+    borderRadius: 8,
+    backgroundColor: colors.destructive,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  badgeText: {
+    fontSize: 9,
+    fontWeight: "700",
+    lineHeight: 11,
+    color: colors.white,
   },
   offlineBanner: {
     borderBottomWidth: 1,

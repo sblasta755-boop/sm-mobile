@@ -211,9 +211,14 @@ export default function HomeScreen() {
             ? ` - ${selectedDate.toLocaleDateString("en-ZA", { weekday: "short", day: "numeric", month: "short" })}`
             : ""}
         </Text>
-        <Pressable onPress={() => router.push("/shifts")}>
-          <Text style={styles.link}>View all</Text>
-        </Pressable>
+        <View style={styles.boardLinks}>
+          <Pressable accessibilityRole="button" onPress={() => router.push("/kanban")}>
+            <Text style={styles.link}>Board</Text>
+          </Pressable>
+          <Pressable onPress={() => router.push("/shifts")}>
+            <Text style={styles.link}>View all</Text>
+          </Pressable>
+        </View>
       </View>
       {myTasks.length === 0 && (
         <Text style={styles.emptyTasks}>No tasks assigned for this day.</Text>
@@ -322,6 +327,7 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
+  boardLinks: { flexDirection: "row", alignItems: "center", gap: spacing.md },
   shiftCard: {
     marginBottom: spacing.lg,
   },

@@ -40,6 +40,18 @@ export default function SuperviseHome() {
     [state.tasks],
   );
 
+  // Tasks a manager gave THIS person to do (a "supervisor task"), as opposed
+  // to work submitted by others waiting on their review.
+  const myTasks = useMemo(
+    () =>
+      state.tasks.filter(
+        (task) =>
+          task.assigneeId === currentUser?.id &&
+          ["assigned", "not_started", "in_progress", "rework_required"].includes(task.status),
+      ),
+    [state.tasks, currentUser],
+  );
+
   const reworkOut = useMemo(
     () => state.tasks.filter((task) => task.status === "rework_required"),
     [state.tasks],
@@ -125,6 +137,38 @@ export default function SuperviseHome() {
           <Text style={styles.tileValue}>{reworkOut.length}</Text>
         </Card>
       </View>
+
+      <Button
+        variant="outline"
+        icon={<Ionicons name="albums-outline" size={16} color={colors.foreground} />}
+        onPress={() => router.push("/kanban")}
+      >
+        Task board
+      </Button>
+
+      {myTasks.length > 0 && (
+        <>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>My tasks</Text>
+          </View>
+          {myTasks.map((task) => (
+            <Pressable key={task.id} onPress={() => router.push(`/tasks/${task.id}`)}>
+              <Card style={styles.emptyCard}>
+                <Ionicons name="clipboard-outline" size={20} color={colors.primary} />
+                <View style={styles.flex}>
+                  <Text style={styles.warningTitle} numberOfLines={1}>
+                    {task.title}
+                  </Text>
+                  <Text style={styles.warningText} numberOfLines={1}>
+                    {task.locationName ?? "Whole site"}
+                  </Text>
+                </View>
+                <StatusBadge tone={toneForTask(task.status)} label={humanStatus(task.status)} />
+              </Card>
+            </Pressable>
+          ))}
+        </>
+      )}
 
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>Waiting on you</Text>

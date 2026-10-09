@@ -301,7 +301,15 @@ export function updateChecklistItem(
 export function addTaskEvidence(
   accessToken: string,
   taskId: string,
-  evidence: { kind: string; label?: string; filePath?: string; liveCapture?: boolean; offlineOriginated?: boolean },
+  evidence: {
+    kind: string;
+    label?: string;
+    /** The photo_required checklist item this photo is the proof for. */
+    checklistItemId?: string;
+    filePath?: string;
+    liveCapture?: boolean;
+    offlineOriginated?: boolean;
+  },
 ) {
   return request<Task>(
     `/tasks/${taskId}/evidence`,
@@ -312,8 +320,18 @@ export function addTaskEvidence(
 
 /** Start a task without scanning its area - only accepted where the
  * organisation's policy allows manual starts. */
-export function startTask(accessToken: string, taskId: string) {
-  return request<Task>(`/tasks/${taskId}/start`, { method: "POST" }, accessToken);
+export function startTask(
+  accessToken: string,
+  taskId: string,
+  scan?: { qrValue: string; latitude?: number; longitude?: number },
+) {
+  return request<Task>(
+    `/tasks/${taskId}/start`,
+    // With a scan: the site QR for a site-wide task, verified server-side
+    // (code match + geofence). Without one: the manual, no-scan start.
+    scan ? { method: "POST", body: JSON.stringify({ method: "qr", ...scan }) } : { method: "POST" },
+    accessToken,
+  );
 }
 
 export function submitTask(accessToken: string, taskId: string) {

@@ -10,12 +10,15 @@ import { StatusBadge, VerifiedBadge } from "@/components/StatusBadge";
 import { GeofenceDistanceMap } from "@/components/GeofenceDistanceMap";
 import { BrokenGlassIcon } from "@/components/BrokenGlassIcon";
 import { useSmartClean } from "@/features/store";
+import { useHasModule } from "@/features/modules";
+import type { Task } from "@/types/smartclean";
 import {
   ApiError,
   claimTableSession,
   clockIn as clockInRequest,
   clockOut as clockOutRequest,
   resolveQr,
+  startTask as startTaskRequest,
 } from "@/api/client";
 import { reportBatteryOnce } from "@/features/deviceHealth";
 import { getCurrentCoords } from "@/services/geolocation";
@@ -95,7 +98,7 @@ function extractCode(raw: string): string {
 }
 
 export default function ScanScreen() {
-  const { state, currentUser, refreshBackendData } = useSmartClean();
+  const { state, currentUser, dispatch, refreshBackendData } = useSmartClean();
   const branding = useTenantBranding();
   const [permission, requestPermission] = useCameraPermissions();
   const [cameraOn, setCameraOn] = useState(false);
@@ -115,6 +118,20 @@ export default function ScanScreen() {
     longitude: number | undefined;
   } | null>(null);
   const [confirmingClaim, setConfirmingClaim] = useState(false);
+  // Site-wide tasks the site QR can start - see QrCodesController.resolve's
+  // siteTasks. Offered instead of clocking out when this person is already
+  // clocked in (or the organisation has no attendance), so one scan of the
+  // site code can either start work or end the shift, and they choose.
+  const attendanceOn = useHasModule("attendance");
+  const [sitePicker, setSitePicker] = useState<{
+    code: string;
+    tasks: Task[];
+    clockedIn: boolean;
+    latitude: number | undefined;
+    longitude: number | undefined;
+  } | null>(null);
+  const [startingSiteTask, setStartingSiteTask] = useState(false);
+  const skipSitePickerRef = useRef(false);
   // Covers the whole scan round-trip (geolocation -> resolveQr ->
   // clock in/out -> refreshBackendData), which can run for seconds on a
   // slow connection. Without it the camera closed and the screen sat
@@ -187,6 +204,18 @@ export default function ScanScreen() {
         const alreadyClockedIn = Boolean(
           currentUser && state.attendance[currentUser.id]?.clockedInAt,
         );
+        const siteTasks = (resolved.siteTasks ?? []) as Task[];
+        if (siteTasks.length > 0 && !skipSitePickerRef.current && (alreadyClockedIn || !attendanceOn)) {
+          setSitePicker({
+            code,
+            tasks: siteTasks,
+            clockedIn: alreadyClockedIn && attendanceOn,
+            latitude: coords?.latitude,
+            longitude: coords?.longitude,
+          });
+          return;
+        }
+        skipSitePickerRef.current = false;
         try {
           if (alreadyClockedIn) {
             await clockOutRequest(state.accessToken, {
@@ -548,6 +577,68 @@ export default function ScanScreen() {
         </Card>
       )}
 
+      {sitePicker && (
+        <Card style={styles.resultCard}>
+          <Text style={styles.sitePickerTitle}>Start a site task</Text>
+          <Text style={styles.claimHint}>These are for the whole site. Pick the one you are starting.</Text>
+          <View style={styles.sitePickerActions}>
+            {sitePicker.tasks.map((task) => (
+              <Button
+                key={task.id}
+                style={styles.claimActionButton}
+                disabled={startingSiteTask}
+                loading={startingSiteTask}
+                onPress={async () => {
+                  if (!state.accessToken) return;
+                  setStartingSiteTask(true);
+                  try {
+                    const updated = await startTaskRequest(state.accessToken, task.id, {
+                      qrValue: sitePicker.code,
+                      latitude: sitePicker.latitude,
+                      longitude: sitePicker.longitude,
+                    });
+                    dispatch({ type: "UPDATE_TASK", taskId: task.id, patch: updated });
+                    setSitePicker(null);
+                    router.push(`/tasks/${task.id}`);
+                  } catch (error) {
+                    setSitePicker(null);
+                    setResult({
+                      code: sitePicker.code,
+                      ok: false,
+                      reason: error instanceof Error ? error.message : "Could not start the task.",
+                      geofenceDetail: error instanceof ApiError ? asGeofenceDetail(error.detail) : undefined,
+                    });
+                  } finally {
+                    setStartingSiteTask(false);
+                  }
+                }}
+              >
+                {task.title}
+              </Button>
+            ))}
+            {sitePicker.clockedIn && (
+              <Button
+                variant="outline"
+                style={styles.claimActionButton}
+                disabled={startingSiteTask}
+                onPress={() => {
+                  // Same scan, but go on to clock out instead of picking a task.
+                  const code = sitePicker.code;
+                  setSitePicker(null);
+                  skipSitePickerRef.current = true;
+                  void scan(code);
+                }}
+              >
+                Clock out instead
+              </Button>
+            )}
+            <Button variant="outline" style={styles.claimActionButton} onPress={() => setSitePicker(null)}>
+              Cancel
+            </Button>
+          </View>
+        </Card>
+      )}
+
       {result && (
         <Card style={[styles.resultCard, result.ok ? styles.resultOk : styles.resultBad]}>
           <View style={styles.resultHeader}>
@@ -854,6 +945,15 @@ const styles = StyleSheet.create({
   resultInfo: {
     backgroundColor: colors.infoSoft,
     borderColor: "#abcbed",
+  },
+  // Buttons stacked, one per task - a row would squeeze several titles.
+  sitePickerActions: {
+    gap: spacing.sm,
+  },
+  sitePickerTitle: {
+    fontSize: typography.body,
+    fontWeight: "700",
+    color: colors.foreground,
   },
   claimHint: {
     fontSize: typography.tiny,

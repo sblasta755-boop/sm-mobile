@@ -79,26 +79,34 @@ export function taskSubmissionBlocked(
   qrVerified?: boolean;
   startMethod?: string | null;
   requiresBeforeAfter: boolean;
-  checklist: { type: string; done?: boolean }[];
+  checklist: { type: string; done?: boolean; photoCount?: number }[];
   evidence: { kind: string }[];
   },
   /** The organisation's tasks.requireAreaScan; true (the original rule)
    * unless its policy says otherwise. */
   requireAreaScan = true,
+  /** The organisation's single-Evidence mode (no Before photo) requires at
+   * least one photo; the server enforces it, this just says so up front. */
+  requireEvidencePhoto = false,
 ) {
   const alreadySubmitted = !SUBMITTABLE_STATUSES.has(task.status);
+  // Photo items that name a photoCount own their photos: they are done when
+  // they have exactly that many, which missingChecks already covers. Older
+  // photo items keep the task-level rule below.
+  const photoItemsOwnTheirPhotos = task.checklist.some((item) => item.type === "photo_required" && item.photoCount);
+  const legacyPhotoItem = task.checklist.some((item) => item.type === "photo_required" && !item.photoCount);
   const missingEvidence =
     (task.requiresBeforeAfter &&
       (!task.evidence.some((e) => e.kind === "before") ||
         !task.evidence.some((e) => e.kind === "after"))) ||
-    (task.checklist.some((item) => item.type === "photo_required") &&
+    (legacyPhotoItem &&
       // An investigation task (requiresBeforeAfter: false) just needs
-      // any one photo taken — see TaskController.add_evidence's
-      // evidence_bar_met split; a before/after task additionally needs
-      // an "after" specifically, already covered by the check above.
+      // any one photo taken - see TaskController.add_evidence; a
+      // before/after task additionally needs an "after", covered above.
       (task.requiresBeforeAfter
         ? !task.evidence.some((e) => e.kind === "after")
-        : task.evidence.length === 0));
+        : task.evidence.length === 0)) ||
+    (requireEvidencePhoto && !task.requiresBeforeAfter && !photoItemsOwnTheirPhotos && task.evidence.length === 0);
   const missingChecks = task.checklist.some((item) => item.type !== "note" && !item.done);
   // Not started at all, or - only when the policy demands an area scan -
   // started without one. Without that demand a manual start is enough.

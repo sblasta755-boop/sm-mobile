@@ -137,6 +137,7 @@ export default function AppTabsLayout() {
           group's _layout.tsx. */}
       <Tabs.Screen name="incidents/new" options={{ href: null }} />
       <Tabs.Screen name="corrective-actions/[actionId]" options={{ href: null }} />
+      <Tabs.Screen name="kanban" options={{ href: null }} />
       <Tabs.Screen name="tasks/[taskId]/index" options={{ href: null }} />
       <Tabs.Screen name="tasks/[taskId]/declaration" options={{ href: null }} />
       <Tabs.Screen name="tasks/[taskId]/evidence" options={{ href: null }} />

@@ -51,6 +51,12 @@ export interface WorkflowPolicy {
     requireLocation: boolean;
     requireAreaScan: boolean;
     requireEvidence: boolean;
+    /** "before_after" (Before + After photos) or "single" (no Before photo;
+     * photos are called Evidence). */
+    evidenceMode?: "before_after" | "single";
+    /** Who reviews a task a supervisor / site manager did: "site_manager" or "none". */
+    supervisorTaskReview?: "site_manager" | "none";
+    supervisorTasksRequireClockIn?: boolean;
   };
   qr: { enabled: boolean };
 }
@@ -153,12 +159,17 @@ export interface ChecklistItem {
   sectionId?: string;
   sectionName?: string;
   sectionOrder?: number;
+  /** photo_required items: how many photos prove the item. Absent on tasks
+   * from before photos were tied to items (they keep the old rule). */
+  photoCount?: number;
 }
 
 export interface Evidence {
   id: string;
   taskId: string;
-  kind: "before" | "after" | "issue" | "signature" | "note";
+  kind: "before" | "after" | "evidence" | "issue" | "signature" | "note";
+  /** Set when the photo proves a specific checklist item. */
+  checklistItemId?: string | null;
   label: string;
   capturedAt: string;
   device: string;
@@ -243,6 +254,10 @@ export interface Task {
    * backend) - tags the task without changing anything about how it
    * flows through the normal Task/Inspection lifecycle. */
   isHourlyCompliance?: boolean;
+  /** Done by a supervisor / site manager rather than a cleaner. */
+  isSupervisorTask?: boolean;
+  /** Belongs to the whole site (no room); started by scanning the site QR. */
+  isSiteWide?: boolean;
   /** How this task repeats, set only on a recurring task's own template
    * (the task a supervisor created with "Recurring" ticked on the web
    * Add-task form) - absent on a normal once-off task and on the daily

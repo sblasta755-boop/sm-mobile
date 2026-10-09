@@ -9,7 +9,15 @@ import { Button } from "@/components/Button";
 import { StatusBadge, VerifiedBadge } from "@/components/StatusBadge";
 import { GeofenceDistanceMap } from "@/components/GeofenceDistanceMap";
 import { useSmartClean } from "@/features/store";
-import { ApiError, clockIn as clockInRequest, clockOut as clockOutRequest, resolveQr } from "@/api/client";
+import { useHasModule } from "@/features/modules";
+import type { Task } from "@/types/smartclean";
+import {
+  ApiError,
+  clockIn as clockInRequest,
+  clockOut as clockOutRequest,
+  resolveQr,
+  startTask as startTaskRequest,
+} from "@/api/client";
 import { reportBatteryOnce } from "@/features/deviceHealth";
 import { getCurrentCoords } from "@/services/geolocation";
 import { useTenantBranding } from "@/services/branding";
@@ -70,7 +78,7 @@ function extractCode(raw: string): string {
  * routes that belong to the cleaner's own app and would be wrong here.
  */
 export default function SuperviseScan() {
-  const { state, currentUser, refreshBackendData } = useSmartClean();
+  const { state, currentUser, dispatch, refreshBackendData } = useSmartClean();
   const branding = useTenantBranding();
   const [permission, requestPermission] = useCameraPermissions();
   const [cameraOn, setCameraOn] = useState(false);
@@ -80,6 +88,19 @@ export default function SuperviseScan() {
   const [distanceMapOpen, setDistanceMapOpen] = useState(false);
   const [scanning, setScanning] = useState(false);
   const scanLockRef = useRef(false);
+  // Site-wide tasks the site QR can start (resolve's siteTasks) - offered
+  // instead of clocking out when already clocked in (or the organisation has
+  // no attendance), so one scan can start work or end the shift.
+  const attendanceOn = useHasModule("attendance");
+  const [sitePicker, setSitePicker] = useState<{
+    code: string;
+    tasks: Task[];
+    clockedIn: boolean;
+    latitude: number | undefined;
+    longitude: number | undefined;
+  } | null>(null);
+  const [startingSiteTask, setStartingSiteTask] = useState(false);
+  const skipSitePickerRef = useRef(false);
 
   const clocked = currentUser ? state.attendance[currentUser.id]?.clockedInAt : undefined;
 
@@ -114,6 +135,18 @@ export default function SuperviseScan() {
         const alreadyClockedIn = Boolean(
           currentUser && state.attendance[currentUser.id]?.clockedInAt,
         );
+        const siteTasks = (resolved.siteTasks ?? []) as Task[];
+        if (siteTasks.length > 0 && !skipSitePickerRef.current && (alreadyClockedIn || !attendanceOn)) {
+          setSitePicker({
+            code,
+            tasks: siteTasks,
+            clockedIn: alreadyClockedIn && attendanceOn,
+            latitude: coords?.latitude,
+            longitude: coords?.longitude,
+          });
+          return;
+        }
+        skipSitePickerRef.current = false;
         try {
           if (alreadyClockedIn) {
             await clockOutRequest(state.accessToken, {
@@ -158,7 +191,7 @@ export default function SuperviseScan() {
         setScanning(false);
       }
     },
-    [state.accessToken, state.attendance, currentUser, refreshBackendData],
+    [state.accessToken, state.attendance, currentUser, refreshBackendData, attendanceOn],
   );
 
   const onBarcodeScanned = useCallback(
@@ -241,6 +274,66 @@ export default function SuperviseScan() {
           Scan
         </Button>
       </View>
+
+      {sitePicker && (
+        <Card style={styles.resultCard}>
+          <Text style={styles.sitePickerTitle}>Start a site task</Text>
+          <Text style={styles.sitePickerHint}>These are for the whole site. Pick the one you are starting.</Text>
+          <View style={styles.sitePickerActions}>
+            {sitePicker.tasks.map((task) => (
+              <Button
+                key={task.id}
+                disabled={startingSiteTask}
+                loading={startingSiteTask}
+                onPress={async () => {
+                  if (!state.accessToken) return;
+                  setStartingSiteTask(true);
+                  try {
+                    const updated = await startTaskRequest(state.accessToken, task.id, {
+                      qrValue: sitePicker.code,
+                      latitude: sitePicker.latitude,
+                      longitude: sitePicker.longitude,
+                    });
+                    dispatch({ type: "UPDATE_TASK", taskId: task.id, patch: updated });
+                    setSitePicker(null);
+                    router.push(`/tasks/${task.id}`);
+                  } catch (error) {
+                    setSitePicker(null);
+                    setResult({
+                      code: sitePicker.code,
+                      ok: false,
+                      reason: error instanceof Error ? error.message : "Could not start the task.",
+                      geofenceDetail: error instanceof ApiError ? asGeofenceDetail(error.detail) : undefined,
+                    });
+                  } finally {
+                    setStartingSiteTask(false);
+                  }
+                }}
+              >
+                {task.title}
+              </Button>
+            ))}
+            {sitePicker.clockedIn && (
+              <Button
+                variant="outline"
+                disabled={startingSiteTask}
+                onPress={() => {
+                  // Same scan, but go on to clock out instead of picking a task.
+                  const code = sitePicker.code;
+                  setSitePicker(null);
+                  skipSitePickerRef.current = true;
+                  void scan(code);
+                }}
+              >
+                Clock out instead
+              </Button>
+            )}
+            <Button variant="outline" onPress={() => setSitePicker(null)}>
+              Cancel
+            </Button>
+          </View>
+        </Card>
+      )}
 
       {result && (
         <Card style={[styles.resultCard, result.ok ? styles.resultOk : styles.resultBad]}>
@@ -369,6 +462,19 @@ function ChecklistLine({ icon, text }: { icon: keyof typeof Ionicons.glyphMap; t
 }
 
 const styles = StyleSheet.create({
+  sitePickerTitle: {
+    fontSize: typography.body,
+    fontWeight: "700",
+    color: colors.foreground,
+  },
+  sitePickerHint: {
+    fontSize: typography.tiny,
+    color: colors.mutedForeground,
+  },
+  // Buttons stacked, one per task - a row would squeeze several titles.
+  sitePickerActions: {
+    gap: spacing.sm,
+  },
   cameraFrame: {
     aspectRatio: 1,
     borderRadius: radius.xl,

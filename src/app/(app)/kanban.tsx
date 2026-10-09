@@ -1,0 +1,141 @@
+import { useMemo, useState } from "react";
+import { router } from "expo-router";
+import { Pressable, ScrollView, StyleSheet, Switch, Text, View, useWindowDimensions } from "react-native";
+import { Screen } from "@/components/Screen";
+import { Card } from "@/components/Card";
+import { StatusBadge } from "@/components/StatusBadge";
+import { TaskSearchBar } from "@/components/TaskSearchBar";
+import { useSmartClean } from "@/features/store";
+import { boardColumns, filterTasks, isOverdue, NO_FILTERS, type TaskFilters } from "@/domain/taskBoard";
+import { colors, radius, spacing, typography } from "@/theme";
+
+/**
+ * The same tasks as My shift, laid out as a board: one column per stage,
+ * left to right. Read-only - a task moves by being worked on, not by
+ * dragging - and every card opens the task. A supervisor sees every task at
+ * their sites and can narrow to their own.
+ */
+export default function KanbanScreen() {
+  const { state, currentUser } = useSmartClean();
+  const { width } = useWindowDimensions();
+  const [filters, setFilters] = useState<TaskFilters>(NO_FILTERS);
+  const isSupervisor = currentUser?.role === "supervisor";
+  const [mineOnly, setMineOnly] = useState(!isSupervisor);
+
+  const tasks = useMemo(
+    () =>
+      state.tasks.filter(
+        (task) => !task.isHourlyCompliance && (!mineOnly || task.assigneeId === currentUser?.id),
+      ),
+    [state.tasks, mineOnly, currentUser],
+  );
+  const nameOf = (id: string) => state.users.find((user) => user.id === id)?.name ?? "";
+  const visible = useMemo(
+    () => filterTasks(tasks, filters, (task) => nameOf(task.assigneeId)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [tasks, filters, state.users],
+  );
+  const columns = boardColumns(visible);
+  // One column fills most of the phone at a time; the rest scroll sideways.
+  const columnWidth = Math.min(320, Math.round(width * 0.8));
+
+  return (
+    <Screen title="Task board" scroll={false}>
+      <View style={styles.top}>
+        <TaskSearchBar filters={filters} onChange={setFilters} />
+        {isSupervisor && (
+          <View style={styles.mineRow}>
+            <Switch value={mineOnly} onValueChange={setMineOnly} />
+            <Text style={styles.mineText}>Only tasks assigned to me</Text>
+          </View>
+        )}
+      </View>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        snapToInterval={columnWidth + spacing.md}
+        decelerationRate="fast"
+        contentContainerStyle={styles.board}
+      >
+        {columns.map(({ column, items }) => (
+          <View key={column.key} style={[styles.column, { width: columnWidth }]}>
+            <View style={styles.columnHeader}>
+              <Text style={styles.columnTitle}>{column.label}</Text>
+              <View style={styles.count}>
+                <Text style={styles.countText}>{items.length}</Text>
+              </View>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.cards}>
+              {items.length === 0 ? (
+                <Text style={styles.empty}>Nothing here.</Text>
+              ) : (
+                items.map((task) => (
+                  <Pressable key={task.id} onPress={() => router.push(`/tasks/${task.id}`)}>
+                    <Card style={styles.card}>
+                      <Text style={styles.cardTitle}>{task.title}</Text>
+                      <Text style={styles.cardMeta} numberOfLines={1}>
+                        {task.locationName ?? "Whole site"} • Due {task.dueTime}
+                      </Text>
+                      {isSupervisor && !mineOnly && (
+                        <Text style={styles.cardMeta} numberOfLines={1}>
+                          {nameOf(task.assigneeId)}
+                        </Text>
+                      )}
+                      <View style={styles.badges}>
+                        {task.priority === "high" && <StatusBadge tone="destructive" label="Priority" />}
+                        {isOverdue(task) && <StatusBadge tone="warning" label="Overdue" />}
+                        {task.isSupervisorTask && <StatusBadge tone="info" label="Supervisor task" />}
+                      </View>
+                    </Card>
+                  </Pressable>
+                ))
+              )}
+            </ScrollView>
+          </View>
+        ))}
+      </ScrollView>
+    </Screen>
+  );
+}
+
+const styles = StyleSheet.create({
+  top: { paddingHorizontal: spacing.lg, paddingTop: spacing.md },
+  mineRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginBottom: spacing.sm },
+  mineText: { fontSize: typography.small, color: colors.foreground },
+  board: { paddingHorizontal: spacing.lg, paddingBottom: spacing.lg, gap: spacing.md },
+  column: {
+    backgroundColor: colors.muted,
+    borderRadius: radius.lg,
+    padding: spacing.sm,
+    maxHeight: "100%",
+  },
+  columnHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: spacing.xs,
+    paddingBottom: spacing.sm,
+  },
+  columnTitle: { fontSize: typography.body, fontWeight: "700", color: colors.foreground },
+  count: {
+    minWidth: 20,
+    height: 20,
+    paddingHorizontal: 5,
+    borderRadius: 10,
+    backgroundColor: colors.background,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  countText: { fontSize: 10, fontWeight: "700", color: colors.foreground },
+  cards: { gap: spacing.sm, paddingBottom: spacing.sm },
+  card: { gap: 2 },
+  cardTitle: { fontSize: typography.body, fontWeight: "600", color: colors.foreground },
+  cardMeta: { fontSize: typography.small, color: colors.mutedForeground },
+  badges: { flexDirection: "row", flexWrap: "wrap", gap: 4, marginTop: spacing.xs },
+  empty: {
+    fontSize: typography.small,
+    color: colors.mutedForeground,
+    textAlign: "center",
+    padding: spacing.md,
+  },
+});

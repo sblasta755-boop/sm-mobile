@@ -5,6 +5,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { Screen } from "@/components/Screen";
 import { Card } from "@/components/Card";
 import { StatusBadge } from "@/components/StatusBadge";
+import { TaskSearchBar } from "@/components/TaskSearchBar";
+import { filterTasks, filtersActive, NO_FILTERS, type TaskFilters } from "@/domain/taskBoard";
 import { DateStrip, isSameDay, startOfDay } from "@/components/DateStrip";
 import { useSmartClean } from "@/features/store";
 import { toneForTask, humanStatus } from "@/domain/status";
@@ -14,6 +16,7 @@ import type { TaskStatus } from "@/types/smartclean";
 export default function ShiftsScreen() {
   const { state, currentUser } = useSmartClean();
   const [activeGroup, setActiveGroup] = useState("Not started");
+  const [filters, setFilters] = useState<TaskFilters>(NO_FILTERS);
   const today = useMemo(() => startOfDay(new Date()), []);
   const [selectedDate, setSelectedDate] = useState(today);
   // Hourly-compliance rounds have their own dedicated screen ("My hourly
@@ -29,13 +32,16 @@ export default function ShiftsScreen() {
   // assigned-tasks list.
   const myTasks = useMemo(
     () =>
-      state.tasks.filter(
-        (t) =>
-          t.assigneeId === currentUser?.id &&
-          !t.isHourlyCompliance &&
-          isSameDay(new Date(t.scheduledAt), selectedDate),
+      filterTasks(
+        state.tasks.filter(
+          (t) =>
+            t.assigneeId === currentUser?.id &&
+            !t.isHourlyCompliance &&
+            isSameDay(new Date(t.scheduledAt), selectedDate),
+        ),
+        filters,
       ),
-    [state.tasks, currentUser, selectedDate],
+    [state.tasks, currentUser, selectedDate, filters],
   );
 
   const groups = useMemo(() => {
@@ -56,6 +62,13 @@ export default function ShiftsScreen() {
         <DateStrip today={today} selectedDate={selectedDate} onSelect={setSelectedDate} />
       }
     >
+      <View style={styles.boardRow}>
+        <Pressable accessibilityRole="button" onPress={() => router.push("/kanban")} style={styles.boardButton}>
+          <Ionicons name="albums-outline" size={14} color={colors.foreground} />
+          <Text style={styles.boardButtonText}>Board view</Text>
+        </Pressable>
+      </View>
+      <TaskSearchBar filters={filters} onChange={setFilters} />
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabsRow} contentContainerStyle={styles.tabsContent}>
         {groups.map((group) => {
           const selected = group.label === active.label;
@@ -84,7 +97,9 @@ export default function ShiftsScreen() {
       {active.items.length === 0 ? (
         <View style={styles.empty}>
           <Text style={styles.mutedSmall}>
-            {isSameDay(selectedDate, today)
+            {filtersActive(filters)
+              ? "No tasks match your search or filters."
+              : isSameDay(selectedDate, today)
               ? "Nothing here today."
               : `Nothing on ${selectedDate.toLocaleDateString("en-ZA", {
                   weekday: "short",
@@ -120,6 +135,19 @@ export default function ShiftsScreen() {
 }
 
 const styles = StyleSheet.create({
+  boardRow: { flexDirection: "row", justifyContent: "flex-end", marginBottom: spacing.sm },
+  boardButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.card,
+  },
+  boardButtonText: { fontSize: typography.small, fontWeight: "600", color: colors.foreground },
   tabsRow: {
     marginBottom: spacing.lg,
   },

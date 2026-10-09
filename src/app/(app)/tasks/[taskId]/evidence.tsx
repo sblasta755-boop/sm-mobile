@@ -9,20 +9,24 @@ import { Button } from "@/components/Button";
 import { useSmartClean } from "@/features/store";
 import { addTaskEvidence, fileUrl, uploadImage } from "@/api/client";
 import { taskStage } from "@/domain/status";
+import { evidenceForSlot, evidenceSlots, slotProgress, type EvidenceSlot, type SlotKind } from "@/domain/evidenceSlots";
 import { useHasCapability, useHasModule } from "@/features/modules";
 import { colors, radius, spacing, typography } from "@/theme";
 import type { Evidence } from "@/types/smartclean";
 
-type EvidenceKind = "before" | "after" | "issue";
-
-const CATEGORIES: { kind: EvidenceKind; label: string; description: string; icon: keyof typeof Ionicons.glyphMap }[] = [
-  { kind: "before", label: "Before", description: "Show the area as you found it", icon: "image-outline" },
-  { kind: "after", label: "After", description: "Show the finished, cleaned area", icon: "image-outline" },
-  { kind: "issue", label: "Issue", description: "Anything that needs a supervisor's attention", icon: "alert-circle-outline" },
-];
+// Icon per kind; the slots themselves (and their labels) come from the task -
+// see domain/evidenceSlots.ts.
+const KIND_ICON: Record<SlotKind, keyof typeof Ionicons.glyphMap> = {
+  before: "image-outline",
+  after: "image-outline",
+  evidence: "camera-outline",
+  issue: "alert-circle-outline",
+};
 
 export default function EvidenceScreen() {
-  const { taskId } = useLocalSearchParams<{ taskId: string }>();
+  // `item` opens straight onto one checklist item's photo slot (from the
+  // "Take photo" button beside that item on the task screen).
+  const { taskId, item: requestedItem } = useLocalSearchParams<{ taskId: string; item?: string }>();
   const { state, currentUser, dispatch } = useSmartClean();
   const hasAttendance = useHasModule("attendance");
   const canScan = useHasCapability("qr_task_start");
@@ -30,8 +34,8 @@ export default function EvidenceScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const [cameraOn, setCameraOn] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [activeKind, setActiveKind] = useState<EvidenceKind | null>(null);
-  const [openSection, setOpenSection] = useState<EvidenceKind | null>(null);
+  const [activeKey, setActiveKey] = useState<string | null>(null);
+  const [openSection, setOpenSection] = useState<string | null>(requestedItem ? `item:${requestedItem}` : null);
   // The inline preview is a 16:9 frame inside an accordion section (see
   // styles.cameraFrame), which on a portrait phone leaves a letterbox
   // strip barely tall enough to line a shot up. Expanding takes the
@@ -114,17 +118,7 @@ export default function EvidenceScreen() {
   // at one shot once unlocked - canCapture only gates by stage, not by
   // whether that category already has a photo.
   const stage = taskStage(task);
-  const beforeTaken = task.evidence.some((e) => e.kind === "before");
-  const canCaptureAfterOrIssue = stage === "finish";
-  const canCapture = (kind: EvidenceKind) => {
-    return kind === "before" ? true : canCaptureAfterOrIssue;
-  };
-  const lockedReason = (kind: EvidenceKind): string | null => {
-    if (canCapture(kind)) return null;
-    return beforeTaken
-      ? "Unlocks once the checklist is complete"
-      : "Take a Before photo first, then work through the checklist";
-  };
+  const slots = evidenceSlots(task, stage);
 
   // Always collapse when the stream goes away: the expanded overlay is
   // rendered off cameraOn, so stopping while expanded would leave
@@ -137,28 +131,39 @@ export default function EvidenceScreen() {
 
   function stopCamera() {
     setCameraOn(false);
-    setActiveKind(null);
+    setActiveKey(null);
   }
 
-  async function startCamera(kind: EvidenceKind) {
+  async function startCamera(key: string) {
     if (!permission?.granted) {
       const res = await requestPermission();
       if (!res.granted) return;
     }
     setCameraOn(true);
-    setActiveKind(kind);
+    setActiveKey(key);
   }
 
-  async function capture(kind: EvidenceKind) {
-    if (!cameraOn || !cameraRef.current || busy || !task || !state.accessToken || activeKind !== kind) return;
+  async function capture(slot: EvidenceSlot) {
+    if (!cameraOn || !cameraRef.current || busy || !task || !state.accessToken || activeKey !== slot.key) return;
     setBusy(true);
     try {
       const photo = await cameraRef.current.takePictureAsync({ quality: 0.6, base64: false, skipProcessing: true });
       if (!photo?.uri) return;
-      const label = kind === "before" ? "Before photo" : kind === "after" ? "After photo" : "Issue photo";
-      const filePath = await uploadImage(state.accessToken, photo.uri, `${kind}-${Date.now()}.jpg`);
+      // A checklist item's photo is labelled with the item and sent with its
+      // id, so the server ties the image to exactly that item.
+      const label = slot.checklistItemId
+        ? slot.label
+        : slot.kind === "before"
+          ? "Before photo"
+          : slot.kind === "after"
+            ? "After photo"
+            : slot.kind === "evidence"
+              ? "Evidence"
+              : "Issue photo";
+      const filePath = await uploadImage(state.accessToken, photo.uri, `${slot.kind}-${Date.now()}.jpg`);
       const updatedTask = await addTaskEvidence(state.accessToken, task.id, {
-        kind,
+        kind: slot.kind,
+        checklistItemId: slot.checklistItemId,
         label,
         filePath,
         liveCapture: true,
@@ -170,7 +175,6 @@ export default function EvidenceScreen() {
     }
   }
 
-  const evidenceFor = (kind: EvidenceKind) => task.evidence.filter((e) => e.kind === kind);
 
   return (
     <Screen title="Capture evidence" backTo={`/tasks/${task.id}`}>
@@ -180,41 +184,55 @@ export default function EvidenceScreen() {
       </Text>
 
       <View style={styles.sections}>
-        {CATEGORIES.map(({ kind, label, description, icon }) => {
-          const items = evidenceFor(kind);
-          const locked = lockedReason(kind);
-          const isOpen = openSection === kind;
-          const isActive = activeKind === kind;
+        {slots.map((slot) => {
+          const { key, kind, label, description } = slot;
+          const icon = KIND_ICON[kind];
+          const items = evidenceForSlot(task.evidence, slot);
+          const locked = slot.unlocked ? null : slot.lockedReason;
+          const isOpen = openSection === key;
+          const isActive = activeKey === key;
+          const complete = slot.required !== null && slot.taken >= slot.required;
 
           return (
-            <Card key={kind} style={styles.section} padded={false}>
+            <Card key={key} style={styles.section} padded={false}>
               <Pressable
                 style={styles.sectionHeader}
                 disabled={!!locked}
                 onPress={() => {
-                  const next = isOpen ? null : kind;
+                  const next = isOpen ? null : key;
                   setOpenSection(next);
                   // collapseAndStop, not stopCamera - switching category
                   // while expanded would otherwise tear the stream down
                   // but leave the expanded flag set.
-                  if (isActive && next !== kind) collapseAndStop();
+                  if (isActive && next !== key) collapseAndStop();
                 }}
               >
                 <View style={styles.sectionHeaderLeft}>
                   {locked ? (
                     <Ionicons name="lock-closed-outline" size={16} color={colors.mutedForeground} />
-                  ) : items.length > 0 ? (
+                  ) : (slot.required !== null ? complete : items.length > 0) ? (
                     <View style={styles.doneBadge}>
                       <Ionicons name="checkmark" size={12} color={colors.white} />
                     </View>
                   ) : (
                     <Ionicons name={icon} size={16} color={colors.mutedForeground} />
                   )}
-                  <Text style={[styles.sectionLabel, locked && styles.sectionLabelLocked]}>{label}</Text>
-                  {items.length > 0 && (
+                  <View style={styles.sectionLabelWrap}>
+                    <Text style={[styles.sectionLabel, locked && styles.sectionLabelLocked]} numberOfLines={2}>
+                      {label}
+                    </Text>
+                    {slot.sectionName && <Text style={styles.mutedSmall}>{slot.sectionName}</Text>}
+                  </View>
+                  {slot.required !== null ? (
                     <View style={styles.countBadge}>
-                      <Text style={styles.countBadgeText}>{items.length}</Text>
+                      <Text style={styles.countBadgeText}>{slotProgress(slot)}</Text>
                     </View>
+                  ) : (
+                    items.length > 0 && (
+                      <View style={styles.countBadge}>
+                        <Text style={styles.countBadgeText}>{items.length}</Text>
+                      </View>
+                    )
                   )}
                 </View>
                 <Ionicons
@@ -289,7 +307,7 @@ export default function EvidenceScreen() {
                               style={styles.cameraActionButton}
                               disabled={busy}
                               loading={busy}
-                              onPress={() => capture(kind)}
+                              onPress={() => capture(slot)}
                             >
                               Take photo
                             </Button>
@@ -299,8 +317,14 @@ export default function EvidenceScreen() {
                           </View>
                         </View>
                       ) : (
-                        <Button variant="outline" style={styles.openCameraButton} onPress={() => startCamera(kind)}>
-                          {items.length > 0 ? "Add another photo" : "Take photo"}
+                        <Button variant="outline" style={styles.openCameraButton} onPress={() => startCamera(key)}>
+                          {slot.required !== null
+                            ? complete
+                              ? "Retake photo"
+                              : "Take photo"
+                            : items.length > 0
+                              ? "Add another photo"
+                              : "Take photo"}
                         </Button>
                       )}
                       {isActive && permission && !permission.granted && (
@@ -392,6 +416,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: spacing.sm,
   },
+  sectionLabelWrap: { flexShrink: 1 },
   sectionLabel: {
     fontSize: typography.body,
     fontWeight: "700",

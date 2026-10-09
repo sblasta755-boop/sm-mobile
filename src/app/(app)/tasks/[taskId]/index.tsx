@@ -85,7 +85,8 @@ export default function TaskDetailScreen() {
   const hasAttendance = useHasModule("attendance");
   const canScanStart = useHasCapability("qr_task_start");
   const canManualStart = useHasCapability("manual_task_start");
-  const requireAreaScan = useWorkflowPolicy()?.tasks.requireAreaScan ?? true;
+  const policy = useWorkflowPolicy();
+  const requireAreaScan = policy?.tasks.requireAreaScan ?? true;
 
   async function startManually() {
     if (!task || !state.accessToken) return;
@@ -305,7 +306,11 @@ export default function TaskDetailScreen() {
 
   const doneCount = task.checklist.filter((c) => c.done).length;
   const pct = Math.round((doneCount / task.checklist.length) * 100);
-  const submission = taskSubmissionBlocked(task, requireAreaScan);
+  const submission = taskSubmissionBlocked(
+    task,
+    requireAreaScan,
+    policy?.tasks.evidenceMode === "single" && policy.tasks.requireEvidence,
+  );
   const stage = taskStage(task);
   const checklistUnlocked = isChecklistUnlocked(stage);
 
@@ -331,11 +336,17 @@ export default function TaskDetailScreen() {
                 <StatusBadge
                   tone={item.done ? "success" : "info"}
                   label={
-                    item.done
-                      ? "Photo captured"
-                      : task.requiresBeforeAfter
-                        ? "Auto-completes with before & after photos"
-                        : "Auto-completes once you take a photo"
+                    item.photoCount
+                      ? // Photos are tied to this item: show exactly how many it needs.
+                        `${Math.min(
+                          task.evidence.filter((e) => e.checklistItemId === item.id).length,
+                          item.photoCount,
+                        )} of ${item.photoCount} photo${item.photoCount === 1 ? "" : "s"}`
+                      : item.done
+                        ? "Photo captured"
+                        : task.requiresBeforeAfter
+                          ? "Auto-completes with before & after photos"
+                          : "Auto-completes once you take a photo"
                   }
                   icon="camera-outline"
                 />
@@ -348,6 +359,17 @@ export default function TaskDetailScreen() {
                 />
               )}
             </View>
+            {item.type === "photo_required" && item.photoCount && checklistUnlocked && (
+              <Button
+                variant="outline"
+                fullWidth={false}
+                style={styles.scanChip}
+                icon={<Ionicons name="camera-outline" size={14} color={colors.foreground} />}
+                onPress={() => router.push(`/tasks/${task.id}/evidence?item=${item.id}`)}
+              >
+                {item.done ? "Retake photo" : "Take photo"}
+              </Button>
+            )}
             {item.type === "note" && (
               <TextInput
                 style={styles.noteInput}
@@ -398,6 +420,18 @@ export default function TaskDetailScreen() {
           </Text>
           <StatusBadge tone={toneForTask(task.status)} label={humanStatus(task.status)} />
         </View>
+        {task.isSupervisorTask && (
+          // What makes this different from a cleaner's task, and who (if
+          // anyone) signs it off - so nobody wonders why there is no inspection.
+          <View style={styles.supervisorNote}>
+            <StatusBadge tone="info" label="Supervisor task" />
+            <Text style={[styles.mutedSmall, styles.supervisorNoteText]}>
+              {policy?.tasks.supervisorTaskReview === "none"
+                ? "Closes when you submit - your organisation doesn't review supervisor tasks."
+                : "A site manager reviews this after you submit it."}
+            </Text>
+          </View>
+        )}
         {task.qrVerified ? (
           <VerifiedBadge label="Room QR verified" />
         ) : task.startMethod === "manual" ? (
@@ -412,7 +446,7 @@ export default function TaskDetailScreen() {
                 icon={<Ionicons name="scan-outline" size={14} color={colors.foreground} />}
                 onPress={() => router.push("/scan")}
               >
-                Scan room QR to start
+                {task.isSiteWide ? "Scan site QR to start" : "Scan room QR to start"}
               </Button>
             )}
             {canManualStart && !requireAreaScan && (
@@ -493,12 +527,12 @@ export default function TaskDetailScreen() {
               <Ionicons name="camera-outline" size={18} color={colors.primary} />
               <View style={styles.beforePromptText}>
                 <Text style={styles.beforePromptTitle}>
-                  {task.requiresBeforeAfter ? "Checklist done — take an After photo" : "Take a photo"}
+                  {task.requiresBeforeAfter ? "Checklist done — take an After photo" : "Take your Evidence photo"}
                 </Text>
                 <Text style={styles.mutedSmall}>
                   {task.requiresBeforeAfter
                     ? "Capture an After photo (and an Issue photo if anything needs flagging) to finish up."
-                    : "Capture a photo of what you found to finish up."}
+                    : "Capture a photo as proof the work was done to finish up."}
                 </Text>
               </View>
             </View>
@@ -572,7 +606,9 @@ export default function TaskDetailScreen() {
             Already submitted — this task is{" "}
             {task.status === "submitted" || task.status === "resubmitted"
               ? "awaiting supervisor inspection"
-              : humanStatus(task.status)}
+              : task.isSupervisorTask && task.status === "approved"
+                ? "closed - review isn't required for supervisor tasks"
+                : humanStatus(task.status)}
             .
           </Text>
         </View>
@@ -642,6 +678,14 @@ const styles = StyleSheet.create({
   headerCard: {
     marginBottom: spacing.md,
     gap: spacing.sm,
+  },
+  supervisorNote: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: spacing.sm,
+  },
+  supervisorNoteText: {
+    flex: 1,
   },
   headerRow: {
     flexDirection: "row",

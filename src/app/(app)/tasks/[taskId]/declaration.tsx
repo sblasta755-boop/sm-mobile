@@ -7,6 +7,7 @@ import { Button } from "@/components/Button";
 import { Checkbox } from "@/components/Checkbox";
 import { StatusBadge, VerifiedBadge } from "@/components/StatusBadge";
 import { useSmartClean } from "@/features/store";
+import { useWorkflowPolicy } from "@/features/modules";
 import { submitTask } from "@/api/client";
 import { colors, radius, spacing, typography } from "@/theme";
 
@@ -27,6 +28,7 @@ function normalizeName(value: string) {
 export default function DeclarationScreen() {
   const { taskId } = useLocalSearchParams<{ taskId: string }>();
   const { state, currentUser, dispatch, refreshBackendData } = useSmartClean();
+  const policy = useWorkflowPolicy();
   const task = state.tasks.find((t) => t.id === taskId);
   const [agree, setAgree] = useState(false);
   const [signature, setSignature] = useState("");
@@ -50,6 +52,12 @@ export default function DeclarationScreen() {
       const updatedTask = await submitTask(state.accessToken, task.id);
       dispatch({ type: "UPDATE_TASK", taskId: task.id, patch: updatedTask });
       await refreshBackendData();
+      // A supervisor task in an organisation that does not review them is
+      // closed by the server on submit - say so, rather than leaving a task
+      // that quietly shows "approved" with no inspection behind it.
+      if (updatedTask.status === "approved" && updatedTask.isSupervisorTask) {
+        Alert.alert("Task closed", "Submitted and closed - your organisation doesn't review supervisor tasks.");
+      }
       router.push("/home");
     } catch (error) {
       Alert.alert("Could not submit task", error instanceof Error ? error.message : "Please try again.");
@@ -61,7 +69,14 @@ export default function DeclarationScreen() {
   const doneCount = task.checklist.filter((c) => c.done).length;
 
   return (
-    <Screen title="Submit for inspection" backTo={`/tasks/${task.id}`}>
+    <Screen
+      title={
+        task.isSupervisorTask && policy?.tasks.supervisorTaskReview === "none"
+          ? "Submit task"
+          : "Submit for inspection"
+      }
+      backTo={`/tasks/${task.id}`}
+    >
       <Card style={styles.summaryCard}>
         <Text style={styles.taskTitle}>{task.title}</Text>
         <Text style={styles.mutedSmall}>{task.locationName}</Text>
