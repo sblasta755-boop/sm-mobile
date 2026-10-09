@@ -4,6 +4,7 @@ import { router, usePathname } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useSmartClean } from "@/features/store";
+import { homePathForRole } from "@/features/roles";
 import { ProfileMenuSheet } from "@/components/ProfileMenuSheet";
 import { colors, spacing, typography } from "@/theme";
 
@@ -97,7 +98,7 @@ export function Screen({
     } else if (router.canGoBack()) {
       router.back();
     } else {
-      router.replace("/home");
+      router.replace(homePathForRole(currentUser?.role) as Parameters<typeof router.replace>[0]);
     }
   };
 

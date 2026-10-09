@@ -97,6 +97,7 @@ export function taskSubmissionBlocked(
   const legacyPhotoItem = task.checklist.some((item) => item.type === "photo_required" && !item.photoCount);
   const missingEvidence =
     (task.requiresBeforeAfter &&
+      !photoItemsOwnTheirPhotos &&
       (!task.evidence.some((e) => e.kind === "before") ||
         !task.evidence.some((e) => e.kind === "after"))) ||
     (legacyPhotoItem &&
@@ -135,7 +136,7 @@ export function taskStage(task: {
   requiresBeforeAfter?: boolean;
   qrVerified?: boolean;
   startMethod?: string | null;
-  checklist: { type: string; done?: boolean }[];
+  checklist: { type: string; done?: boolean; photoCount?: number }[];
   evidence: { kind: string }[];
 }): TaskStage {
   if (!hasStarted(task)) return "scan";
@@ -147,7 +148,10 @@ export function taskStage(task: {
   // "working" instead of getting stuck waiting for a "Before" photo the
   // task was never designed to ask for. Mirrors the web app's own
   // taskStage.ts — keep both in sync.
-  if (task.requiresBeforeAfter && !task.evidence.some((e) => e.kind === "before")) return "before";
+  // When photo items own their photos, Before / After belong to each item and
+  // are taken as that item is worked, so there is no task-level Before gate.
+  const itemOwnedPhotos = task.checklist.some((item) => item.type === "photo_required" && !!item.photoCount);
+  if (task.requiresBeforeAfter && !itemOwnedPhotos && !task.evidence.some((e) => e.kind === "before")) return "before";
   // "photo_required" items don't count toward this gate — they can only
   // ever become done by the backend auto-ticking them once the task's
   // own evidence bar is met (before+after for a requiresBeforeAfter

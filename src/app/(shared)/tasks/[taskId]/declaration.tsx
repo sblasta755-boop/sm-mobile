@@ -7,6 +7,7 @@ import { Button } from "@/components/Button";
 import { Checkbox } from "@/components/Checkbox";
 import { StatusBadge, VerifiedBadge } from "@/components/StatusBadge";
 import { useSmartClean } from "@/features/store";
+import { useHomePath } from "@/features/roles";
 import { useWorkflowPolicy } from "@/features/modules";
 import { submitTask } from "@/api/client";
 import { colors, radius, spacing, typography } from "@/theme";
@@ -28,6 +29,7 @@ function normalizeName(value: string) {
 export default function DeclarationScreen() {
   const { taskId } = useLocalSearchParams<{ taskId: string }>();
   const { state, currentUser, dispatch, refreshBackendData } = useSmartClean();
+  const homePath = useHomePath();
   const policy = useWorkflowPolicy();
   const task = state.tasks.find((t) => t.id === taskId);
   const [agree, setAgree] = useState(false);
@@ -58,7 +60,7 @@ export default function DeclarationScreen() {
       if (updatedTask.status === "approved" && updatedTask.isSupervisorTask) {
         Alert.alert("Task closed", "Submitted and closed - your organisation doesn't review supervisor tasks.");
       }
-      router.push("/home");
+      router.push(homePath as never);
     } catch (error) {
       Alert.alert("Could not submit task", error instanceof Error ? error.message : "Please try again.");
     } finally {

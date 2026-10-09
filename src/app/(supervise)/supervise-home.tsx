@@ -9,6 +9,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { useHasModule } from "@/features/modules";
 import { useSmartClean } from "@/features/store";
 import { toneForTask, humanStatus } from "@/domain/status";
+import { taskDestination } from "@/domain/inspections";
 import { colors, radius, spacing, typography } from "@/theme";
 
 /**
@@ -186,7 +187,7 @@ export default function SuperviseHome() {
         </Card>
       ) : (
         awaitingReview.slice(0, 5).map((task) => (
-          <Pressable key={task.id} onPress={() => router.push(`/tasks/${task.id}`)}>
+          <Pressable key={task.id} onPress={() => router.push(taskDestination(task, currentUser, state.inspections) as never)}>
             <Card style={styles.taskCard}>
               <View style={styles.taskIcon}>
                 <Ionicons name="clipboard-outline" size={18} color={colors.primary} />

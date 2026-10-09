@@ -42,13 +42,28 @@ interface SlotTask {
   evidence: { kind: string; checklistItemId?: string | null }[];
 }
 
+/** Does any photo item own its photos? Then Before / After / Evidence are
+ * taken FOR EACH ITEM, not once for the task. */
+export function hasItemPhotos(task: Pick<SlotTask, "checklist">): boolean {
+  return task.checklist.some((item) => item.type === "photo_required" && !!item.photoCount);
+}
+
+const kindCount = (
+  evidence: SlotTask["evidence"],
+  itemId: string,
+  kind: SlotKind | null,
+): number => evidence.filter((e) => e.checklistItemId === itemId && (kind === null || e.kind === kind)).length;
+
 export function evidenceSlots(task: SlotTask, stage: TaskStage): EvidenceSlot[] {
   const itemsWithPhotos = task.checklist.filter((item) => item.type === "photo_required" && item.photoCount);
   const before = !!task.requiresBeforeAfter;
+  const itemOwned = itemsWithPhotos.length > 0;
   const started = stage !== "scan";
   const slots: EvidenceSlot[] = [];
 
-  if (before) {
+  // A task with no photo items takes one Before and one After for the whole
+  // task, as it always did.
+  if (before && !itemOwned) {
     slots.push({
       key: "before",
       kind: "before",
@@ -62,25 +77,53 @@ export function evidenceSlots(task: SlotTask, stage: TaskStage): EvidenceSlot[] 
   }
 
   for (const item of itemsWithPhotos) {
-    // With a Before photo, the checklist (and so its photo items) opens once
-    // that is taken; without one, as soon as the task is started.
-    const open = before ? stage !== "scan" && stage !== "before" : started;
-    slots.push({
-      key: `item:${item.id}`,
-      kind: "evidence",
-      label: item.label,
-      description:
-        item.photoCount === 1 ? "Take 1 photo for this item" : `Take ${item.photoCount} photos for this item`,
-      checklistItemId: item.id,
-      sectionName: item.sectionName,
-      required: item.photoCount ?? 1,
-      taken: task.evidence.filter((e) => e.checklistItemId === item.id).length,
-      unlocked: open,
-      lockedReason: open ? null : before ? "Take a Before photo first" : "Start the task first",
-    });
+    const needed = item.photoCount ?? 1;
+    const plural = needed === 1 ? "photo" : "photos";
+    if (before) {
+      // Each photo item has its own Before and its own After.
+      const beforeTaken = kindCount(task.evidence, item.id, "before");
+      slots.push({
+        key: `item:${item.id}:before`,
+        kind: "before",
+        label: `${item.label} - Before`,
+        description: `Take ${needed} Before ${plural} for this item`,
+        checklistItemId: item.id,
+        sectionName: item.sectionName,
+        required: needed,
+        taken: beforeTaken,
+        unlocked: started,
+        lockedReason: started ? null : "Start the task first",
+      });
+      const beforeDone = beforeTaken >= needed;
+      slots.push({
+        key: `item:${item.id}:after`,
+        kind: "after",
+        label: `${item.label} - After`,
+        description: `Take ${needed} After ${plural} for this item`,
+        checklistItemId: item.id,
+        sectionName: item.sectionName,
+        required: needed,
+        taken: kindCount(task.evidence, item.id, "after"),
+        unlocked: started && beforeDone,
+        lockedReason: !started ? "Start the task first" : beforeDone ? null : "Take the Before photo first",
+      });
+    } else {
+      slots.push({
+        key: `item:${item.id}`,
+        kind: "evidence",
+        label: item.label,
+        description: `Take ${needed} ${plural} for this item`,
+        checklistItemId: item.id,
+        sectionName: item.sectionName,
+        required: needed,
+        taken: kindCount(task.evidence, item.id, null),
+        unlocked: started,
+        lockedReason: started ? null : "Start the task first",
+      });
+    }
   }
 
-  if (before) {
+  if (before && !itemOwned) {
     slots.push({
       key: "after",
       kind: "after",
@@ -91,7 +134,7 @@ export function evidenceSlots(task: SlotTask, stage: TaskStage): EvidenceSlot[] 
       unlocked: stage === "finish",
       lockedReason: stage === "finish" ? null : "Unlocks once the checklist is complete",
     });
-  } else if (itemsWithPhotos.length === 0) {
+  } else if (!before && !itemOwned) {
     // No Before/After and no per-item photos: one task-level photo, called Evidence.
     slots.push({
       key: "evidence",
@@ -105,6 +148,7 @@ export function evidenceSlots(task: SlotTask, stage: TaskStage): EvidenceSlot[] 
     });
   }
 
+  const issueOpen = stage === "finish" || (started && (!before || itemOwned));
   slots.push({
     key: "issue",
     kind: "issue",
@@ -112,11 +156,38 @@ export function evidenceSlots(task: SlotTask, stage: TaskStage): EvidenceSlot[] 
     description: "Anything that needs a supervisor's attention",
     required: null,
     taken: task.evidence.filter((e) => e.kind === "issue").length,
-    unlocked: stage === "finish" || (!before && started),
-    lockedReason: stage === "finish" || (!before && started) ? null : "Unlocks once the checklist is complete",
+    unlocked: issueOpen,
+    lockedReason: issueOpen ? null : "Unlocks once the checklist is complete",
   });
 
   return slots;
+}
+
+/** The slot to open for a checklist item's "Take photo" button: its first
+ * one that is not yet full (Before, then After), else its last. */
+export function slotKeyForItem(slots: EvidenceSlot[], itemId: string): string | undefined {
+  const mine = slots.filter((slot) => slot.checklistItemId === itemId);
+  return (mine.find((slot) => slot.required !== null && slot.taken < slot.required) ?? mine[mine.length - 1])?.key;
+}
+
+/** How far a photo item is: "1 of 2 photos" (a before-and-after item counts
+ * its Before and its After), plus the finished flag. */
+export function itemPhotoProgress(
+  task: Pick<SlotTask, "requiresBeforeAfter" | "evidence">,
+  item: { id: string; photoCount?: number },
+): { taken: number; required: number; label: string } {
+  const needed = item.photoCount ?? 1;
+  const beforeAfter = !!task.requiresBeforeAfter;
+  const required = beforeAfter ? needed * 2 : needed;
+  const taken = beforeAfter
+    ? Math.min(kindCount(task.evidence, item.id, "before"), needed) +
+      Math.min(kindCount(task.evidence, item.id, "after"), needed)
+    : Math.min(kindCount(task.evidence, item.id, null), needed);
+  return {
+    taken,
+    required,
+    label: `${taken} of ${required} photo${required === 1 ? "" : "s"}${beforeAfter ? " (Before + After)" : ""}`,
+  };
 }
 
 /** The photos a slot owns, in capture order. */
@@ -124,7 +195,11 @@ export function evidenceForSlot<T extends { kind: string; checklistItemId?: stri
   evidence: T[],
   slot: EvidenceSlot,
 ): T[] {
-  if (slot.checklistItemId) return evidence.filter((e) => e.checklistItemId === slot.checklistItemId);
+  if (slot.checklistItemId) {
+    return evidence.filter(
+      (e) => e.checklistItemId === slot.checklistItemId && (slot.kind === "evidence" || e.kind === slot.kind),
+    );
+  }
   if (slot.kind === "evidence") return evidence.filter((e) => e.kind === "evidence" && !e.checklistItemId);
   return evidence.filter((e) => e.kind === slot.kind);
 }

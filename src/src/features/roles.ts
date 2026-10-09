@@ -24,3 +24,48 @@ export function useCanManageSiteLayout(): boolean {
   const { currentUser } = useSmartClean();
   return !!currentUser && (SITE_LAYOUT_ROLES as readonly string[]).includes(currentUser.role);
 }
+
+// ---- Where each role lives ----
+//
+// Every role has its own app (route group) with its own home and tab bar -
+// see app/index.tsx. Screens that more than one role reaches (a task, a
+// corrective action, the board) live in app/(shared)/ so they open on top of
+// whichever app the person came from instead of dragging them into another
+// role's. Their "go home" and "scan" targets therefore have to follow the
+// ROLE, not assume the cleaner's /home and /scan.
+
+const HOME_BY_ROLE: Record<string, string> = {
+  system_admin: "/platform-dashboard",
+  org_admin: "/manage-home",
+  operations_manager: "/manage-home",
+  site_manager: "/manage-home",
+  supervisor: "/supervise-home",
+  client_auditor: "/audit-home",
+};
+
+/** The home screen of the app this role belongs to. Cleaners, waiters and any role this build has not heard of get the field app, as app/index.tsx does. */
+export function homePathForRole(role: string | undefined): string {
+  return (role && HOME_BY_ROLE[role]) || "/home";
+}
+
+/** Is this role served by the cleaner/waiter field app? (False for every role with an app of its own.) */
+export function isFieldRole(role: string | undefined): boolean {
+  return !role || !(role in HOME_BY_ROLE);
+}
+
+/** The QR scanner for this role: the cleaner's full scanner, or the supervisor's. Roles with no scanner fall back to their home. */
+export function scanPathForRole(role: string | undefined): string {
+  if (role === "supervisor") return "/supervise-scan";
+  if (isFieldRole(role)) return "/scan";
+  return homePathForRole(role);
+}
+
+export function useHomePath(): string {
+  const { currentUser } = useSmartClean();
+  return homePathForRole(currentUser?.role);
+}
+
+export function useScanPath(): string {
+  const { currentUser } = useSmartClean();
+  return scanPathForRole(currentUser?.role);
+}

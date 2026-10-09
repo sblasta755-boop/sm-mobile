@@ -7,9 +7,17 @@ import { Screen } from "@/components/Screen";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { useSmartClean } from "@/features/store";
+import { useScanPath } from "@/features/roles";
 import { addTaskEvidence, fileUrl, uploadImage } from "@/api/client";
 import { taskStage } from "@/domain/status";
-import { evidenceForSlot, evidenceSlots, slotProgress, type EvidenceSlot, type SlotKind } from "@/domain/evidenceSlots";
+import {
+  evidenceForSlot,
+  evidenceSlots,
+  slotKeyForItem,
+  slotProgress,
+  type EvidenceSlot,
+  type SlotKind,
+} from "@/domain/evidenceSlots";
 import { useHasCapability, useHasModule } from "@/features/modules";
 import { colors, radius, spacing, typography } from "@/theme";
 import type { Evidence } from "@/types/smartclean";
@@ -28,6 +36,7 @@ export default function EvidenceScreen() {
   // "Take photo" button beside that item on the task screen).
   const { taskId, item: requestedItem } = useLocalSearchParams<{ taskId: string; item?: string }>();
   const { state, currentUser, dispatch } = useSmartClean();
+  const scanPath = useScanPath();
   const hasAttendance = useHasModule("attendance");
   const canScan = useHasCapability("qr_task_start");
   const task = state.tasks.find((t) => t.id === taskId);
@@ -35,7 +44,11 @@ export default function EvidenceScreen() {
   const [cameraOn, setCameraOn] = useState(false);
   const [busy, setBusy] = useState(false);
   const [activeKey, setActiveKey] = useState<string | null>(null);
-  const [openSection, setOpenSection] = useState<string | null>(requestedItem ? `item:${requestedItem}` : null);
+  const [openSection, setOpenSection] = useState<string | null>(() => {
+    // Opened from an item's "Take photo": go straight to that item's next photo.
+    if (!requestedItem || !task) return null;
+    return slotKeyForItem(evidenceSlots(task, taskStage(task)), requestedItem) ?? null;
+  });
   // The inline preview is a 16:9 frame inside an accordion section (see
   // styles.cameraFrame), which on a portrait phone leaves a letterbox
   // strip barely tall enough to line a shot up. Expanding takes the
@@ -70,7 +83,7 @@ export default function EvidenceScreen() {
               : "Clock in from Home before capturing task evidence."}
           </Text>
           {canScan && (
-            <Button style={styles.clockInPromptButton} onPress={() => router.push("/scan")}>
+            <Button style={styles.clockInPromptButton} onPress={() => router.push(scanPath as never)}>
               Go to Scan
             </Button>
           )}

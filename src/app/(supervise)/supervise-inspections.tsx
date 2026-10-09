@@ -7,6 +7,7 @@ import { Card } from "@/components/Card";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useSmartClean } from "@/features/store";
 import { toneForTask, humanStatus } from "@/domain/status";
+import { taskDestination } from "@/domain/inspections";
 import { colors, radius, spacing, typography } from "@/theme";
 import type { TaskStatus } from "@/types/smartclean";
 
@@ -27,7 +28,7 @@ const GROUPS: { label: string; statuses: TaskStatus[] }[] = [
 ];
 
 export default function SuperviseInspections() {
-  const { state } = useSmartClean();
+  const { state, currentUser } = useSmartClean();
   const [activeGroup, setActiveGroup] = useState(GROUPS[0].label);
 
   const groups = useMemo(
@@ -79,7 +80,7 @@ export default function SuperviseInspections() {
         </Card>
       ) : (
         active.items.map((task) => (
-          <Pressable key={task.id} onPress={() => router.push(`/tasks/${task.id}`)}>
+          <Pressable key={task.id} onPress={() => router.push(taskDestination(task, currentUser, state.inspections) as never)}>
             <Card style={styles.taskCard}>
               <View style={styles.taskIcon}>
                 <Ionicons name="clipboard-outline" size={18} color={colors.primary} />

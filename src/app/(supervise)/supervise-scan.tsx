@@ -120,6 +120,24 @@ export default function SuperviseScan() {
           return;
         }
 
+        // A room or zone code: the server has already marked THIS person's task
+        // there as scanned (QrCodesController.resolve), so open it. This is how
+        // a supervisor starts a task of their own that needs an area scan.
+        if (resolved.valid && (resolved.kind === "room" || resolved.kind === "zone")) {
+          const task = resolved.task as { id: string } | null;
+          if (task) {
+            router.push(`/tasks/${task.id}`);
+            return;
+          }
+          setResult({
+            code,
+            ok: false,
+            reason: "You have no task to do in this room today.",
+            accuracyMeters: coords?.accuracy ?? null,
+          });
+          return;
+        }
+
         if (!resolved.valid || resolved.kind !== "site") {
           setResult({
             code,

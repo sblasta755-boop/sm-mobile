@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { router, useLocalSearchParams } from "expo-router";
+import { Redirect, router, useLocalSearchParams } from "expo-router";
 import { Alert, Linking, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Screen } from "@/components/Screen";
@@ -10,9 +10,12 @@ import { Checkbox } from "@/components/Checkbox";
 import { ProgressBar } from "@/components/ProgressBar";
 import { StatusBadge, VerifiedBadge } from "@/components/StatusBadge";
 import { useSmartClean } from "@/features/store";
+import { useHomePath, useScanPath } from "@/features/roles";
 import { fileUrl, startTask, updateChecklistItem } from "@/api/client";
 import { useHasCapability, useHasModule, useWorkflowPolicy } from "@/features/modules";
 import { firstIncompleteKey, groupChecklist, isSectioned } from "@/domain/checklistSections";
+import { itemPhotoProgress } from "@/domain/evidenceSlots";
+import { taskDestination } from "@/domain/inspections";
 import { toneForTask, humanStatus, taskSubmissionBlocked, taskStage, isChecklistUnlocked } from "@/domain/status";
 import { colors, radius, spacing, typography } from "@/theme";
 
@@ -77,6 +80,8 @@ function StepsField({
 export default function TaskDetailScreen() {
   const { taskId } = useLocalSearchParams<{ taskId: string }>();
   const { state, currentUser, dispatch } = useSmartClean();
+  const homePath = useHomePath();
+  const scanPath = useScanPath();
   // Sections opened/closed by hand; otherwise only the first incomplete one is open.
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
   const task = state.tasks.find((t) => t.id === taskId);
@@ -137,11 +142,18 @@ export default function TaskDetailScreen() {
     return (
       <Screen title="Task not found">
         <Text style={styles.mutedSmall}>This task does not exist.</Text>
-        <Button variant="outline" style={styles.backButton} onPress={() => router.push("/home")}>
+        <Button variant="outline" style={styles.backButton} onPress={() => router.push(homePath as never)}>
           Back home
         </Button>
       </Screen>
     );
+  }
+
+  // Someone reviewing a submitted task came here to INSPECT it, not to see the
+  // cleaner's view of it - send them to the inspection.
+  const destination = taskDestination(task, currentUser, state.inspections);
+  if (destination.startsWith("/inspections/")) {
+    return <Redirect href={destination as never} />;
   }
 
   // An hourly-compliance round this user was named a candidate for but
@@ -159,7 +171,7 @@ export default function TaskDetailScreen() {
     (task.hourlyComplianceCandidateIds ?? []).includes(currentUser?.id ?? "");
   if (isUnclaimedCandidate) {
     return (
-      <Screen title={task.title} backTo="/home">
+      <Screen title={task.title} backTo={homePath}>
         <Card style={styles.clockInPromptCard}>
           <Ionicons name="people-outline" size={28} color={colors.primary} style={styles.clockInPromptIcon} />
           <Text style={styles.clockInPromptTitle}>
@@ -173,11 +185,11 @@ export default function TaskDetailScreen() {
           <Button
             style={styles.clockInPromptButton}
             icon={<Ionicons name="scan-outline" size={16} color={colors.primaryForeground} />}
-            onPress={() => router.push("/scan")}
+            onPress={() => router.push(scanPath as never)}
           >
             Scan room QR
           </Button>
-          <Button variant="outline" style={styles.clockInPromptButton} onPress={() => router.push("/home")}>
+          <Button variant="outline" style={styles.clockInPromptButton} onPress={() => router.push(homePath as never)}>
             Back home
           </Button>
         </Card>
@@ -195,7 +207,7 @@ export default function TaskDetailScreen() {
   // it wasn't on time would defeat that entirely.
   if (task.hourlyComplianceLocked) {
     return (
-      <Screen title={task.title} backTo="/home">
+      <Screen title={task.title} backTo={homePath}>
         <Card style={styles.clockInPromptCard}>
           <Ionicons name="lock-closed-outline" size={28} color={colors.destructive} style={styles.clockInPromptIcon} />
           <Text style={styles.clockInPromptTitle}>This round&apos;s window has closed</Text>
@@ -204,7 +216,7 @@ export default function TaskDetailScreen() {
               ? `The ${task.hourlyComplianceSlot} round's time window has passed - it's locked and can no longer be recorded.`
               : "This round's time window has passed - it's locked and can no longer be recorded."}
           </Text>
-          <Button variant="outline" style={styles.clockInPromptButton} onPress={() => router.push("/home")}>
+          <Button variant="outline" style={styles.clockInPromptButton} onPress={() => router.push(homePath as never)}>
             Back home
           </Button>
         </Card>
@@ -222,7 +234,7 @@ export default function TaskDetailScreen() {
   const isToday = (iso: string) => new Date(iso).toDateString() === new Date().toDateString();
   if (taskIsWorkable && !isToday(task.scheduledAt)) {
     return (
-      <Screen title={task.title} backTo="/home">
+      <Screen title={task.title} backTo={homePath}>
         <Card style={styles.clockInPromptCard}>
           <Ionicons name="lock-closed-outline" size={28} color={colors.destructive} style={styles.clockInPromptIcon} />
           <Text style={styles.clockInPromptTitle}>This task is locked</Text>
@@ -231,7 +243,7 @@ export default function TaskDetailScreen() {
             {new Date(task.scheduledAt).toLocaleDateString("en-ZA", { weekday: "long", day: "numeric", month: "long" })}
             . Tasks can only be worked on their own day - this one is view-only.
           </Text>
-          <Button variant="outline" style={styles.clockInPromptButton} onPress={() => router.push("/home")}>
+          <Button variant="outline" style={styles.clockInPromptButton} onPress={() => router.push(homePath as never)}>
             Back home
           </Button>
         </Card>
@@ -252,11 +264,11 @@ export default function TaskDetailScreen() {
               : "Clock in from Home before working on checklist items or capturing evidence."}
           </Text>
           {canScanStart && (
-            <Button style={styles.clockInPromptButton} icon={<Ionicons name="scan-outline" size={16} color={colors.primaryForeground} />} onPress={() => router.push("/scan")}>
+            <Button style={styles.clockInPromptButton} icon={<Ionicons name="scan-outline" size={16} color={colors.primaryForeground} />} onPress={() => router.push(scanPath as never)}>
               Scan to clock in
             </Button>
           )}
-          <Button variant="outline" style={styles.clockInPromptButton} onPress={() => router.push("/home")}>
+          <Button variant="outline" style={styles.clockInPromptButton} onPress={() => router.push(homePath as never)}>
             Back home
           </Button>
         </Card>
@@ -296,7 +308,7 @@ export default function TaskDetailScreen() {
           >
             Go to that task
           </Button>
-          <Button variant="outline" style={styles.clockInPromptButton} onPress={() => router.push("/home")}>
+          <Button variant="outline" style={styles.clockInPromptButton} onPress={() => router.push(homePath as never)}>
             Back home
           </Button>
         </Card>
@@ -338,10 +350,7 @@ export default function TaskDetailScreen() {
                   label={
                     item.photoCount
                       ? // Photos are tied to this item: show exactly how many it needs.
-                        `${Math.min(
-                          task.evidence.filter((e) => e.checklistItemId === item.id).length,
-                          item.photoCount,
-                        )} of ${item.photoCount} photo${item.photoCount === 1 ? "" : "s"}`
+                        itemPhotoProgress(task, item).label
                       : item.done
                         ? "Photo captured"
                         : task.requiresBeforeAfter
@@ -444,7 +453,7 @@ export default function TaskDetailScreen() {
                 fullWidth={false}
                 style={styles.scanChip}
                 icon={<Ionicons name="scan-outline" size={14} color={colors.foreground} />}
-                onPress={() => router.push("/scan")}
+                onPress={() => router.push(scanPath as never)}
               >
                 {task.isSiteWide ? "Scan site QR to start" : "Scan room QR to start"}
               </Button>

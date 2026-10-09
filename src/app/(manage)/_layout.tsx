@@ -45,7 +45,7 @@ export default function ManageTabsLayout() {
     currentUser &&
     !MANAGEMENT_ROLES.includes(currentUser.role)
   ) {
-    return <Redirect href="/home" />;
+    return <Redirect href="/" />;
   }
 
   return (

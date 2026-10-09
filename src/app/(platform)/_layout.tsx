@@ -38,7 +38,7 @@ export default function PlatformTabsLayout() {
   // reached this group by a stale deep link should land somewhere that
   // works rather than on four screens of permission errors.
   if (state.sessionRestored && currentUser && currentUser.role !== "system_admin") {
-    return <Redirect href="/home" />;
+    return <Redirect href="/" />;
   }
 
   return (

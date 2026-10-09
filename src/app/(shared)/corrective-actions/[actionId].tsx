@@ -6,6 +6,7 @@ import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useSmartClean } from "@/features/store";
+import { useHomePath, useScanPath } from "@/features/roles";
 import { updateCorrectiveAction } from "@/api/client";
 import { humanStatus } from "@/domain/status";
 import { colors, spacing, typography } from "@/theme";
@@ -14,6 +15,8 @@ import { formatDateTime } from "@/services/formatDateTime";
 export default function CorrectiveActionDetailScreen() {
   const { actionId } = useLocalSearchParams<{ actionId: string }>();
   const { state, dispatch, refreshBackendData } = useSmartClean();
+  const homePath = useHomePath();
+  const scanPath = useScanPath();
   const ca = state.correctiveActions.find((c) => c.id === actionId);
 
   if (!ca) {
@@ -35,7 +38,7 @@ export default function CorrectiveActionDetailScreen() {
       });
       dispatch({ type: "UPDATE_CA", id: ca.id, patch: updated });
       await refreshBackendData();
-      router.push("/home");
+      router.push(homePath as never);
     } catch {
       // best-effort — UI stays on this screen so the cleaner can retry
     }
@@ -59,7 +62,7 @@ export default function CorrectiveActionDetailScreen() {
       </Card>
 
       <View style={styles.actions}>
-        <Button variant="outline" icon={<Ionicons name="scan-outline" size={16} color={colors.foreground} />} onPress={() => router.push("/scan")}>
+        <Button variant="outline" icon={<Ionicons name="scan-outline" size={16} color={colors.foreground} />} onPress={() => router.push(scanPath as never)}>
           Rescan room QR
         </Button>
         <Button

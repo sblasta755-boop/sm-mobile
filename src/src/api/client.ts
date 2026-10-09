@@ -1368,3 +1368,25 @@ export async function collectStaffOnboarding(claimId: string, claimSecret: strin
     hasSeenWelcome: auth.hasSeenWelcome ?? false,
   };
 }
+
+// ---- Inspections ----
+
+/** Approve (score >= 80) or send a task back (with a reason, which also
+ * creates a corrective action). Same endpoint the web inspector uses. */
+export function decideInspection(
+  accessToken: string,
+  inspectionId: string,
+  payload: {
+    decision: "approve" | "reject";
+    score: number;
+    scores?: Record<string, number>;
+    comments?: string;
+    reason?: string;
+  },
+) {
+  return request<Record<string, unknown>>(
+    `/inspections/${inspectionId}/decision`,
+    { method: "POST", body: JSON.stringify(payload) },
+    accessToken,
+  );
+}

@@ -43,7 +43,7 @@ export default function AuditTabsLayout() {
   // routes by role, but a stale deep link should land somewhere that
   // works rather than on screens whose every request 403s.
   if (state.sessionRestored && currentUser && currentUser.role !== "client_auditor") {
-    return <Redirect href="/home" />;
+    return <Redirect href="/" />;
   }
 
   return (

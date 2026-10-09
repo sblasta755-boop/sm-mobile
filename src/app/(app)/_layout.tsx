@@ -4,6 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHasCapability, useHasModule } from "@/features/modules";
 import { useSmartClean } from "@/features/store";
+import { isFieldRole } from "@/features/roles";
 import { colors, sizes, spacing, typography } from "@/theme";
 
 export default function AppTabsLayout() {
@@ -32,6 +33,13 @@ export default function AppTabsLayout() {
 
   if (state.sessionRestored && !currentUser) {
     return <Redirect href="/login" />;
+  }
+
+  // The field app is for cleaners and waiters. Anyone else who lands here (a
+  // stale deep link, a screen that still says "/home") goes to their own app
+  // rather than being shown this tab bar.
+  if (state.sessionRestored && currentUser && !isFieldRole(currentUser.role)) {
+    return <Redirect href="/" />;
   }
 
   return (
@@ -129,18 +137,14 @@ export default function AppTabsLayout() {
           that showed up once notifications/privacy/incidents/tasks/etc.
           moved in here from top-level app/), so each needs href: null to
           stay reachable via router.push() without cluttering the bar. */}
-      <Tabs.Screen name="hourly-compliance" options={{ href: null }} />
       <Tabs.Screen name="performance-profile" options={{ href: null }} />
+      {/* Task, kanban, corrective-action detail, incident report and hourly
+          compliance live in app/(shared)/ - every role reaches them, so they
+          must not open inside the cleaner's tab bar. */}
       {/* notifications, privacy and profile/edit used to be declared
           here. They now live in app/(shared)/ so that every role's
           profile can reach them, not just the cleaner's - see that
           group's _layout.tsx. */}
-      <Tabs.Screen name="incidents/new" options={{ href: null }} />
-      <Tabs.Screen name="corrective-actions/[actionId]" options={{ href: null }} />
-      <Tabs.Screen name="kanban" options={{ href: null }} />
-      <Tabs.Screen name="tasks/[taskId]/index" options={{ href: null }} />
-      <Tabs.Screen name="tasks/[taskId]/declaration" options={{ href: null }} />
-      <Tabs.Screen name="tasks/[taskId]/evidence" options={{ href: null }} />
       <Tabs.Screen name="site-layout/index" options={{ href: null }} />
       <Tabs.Screen name="site-layout/photo-backdrop" options={{ href: null }} />
       <Tabs.Screen name="site-layout/sketch" options={{ href: null }} />

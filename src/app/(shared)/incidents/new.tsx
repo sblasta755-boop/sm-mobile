@@ -8,6 +8,7 @@ import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { SelectField } from "@/components/SelectField";
 import { useSmartClean } from "@/features/store";
+import { useHomePath, useScanPath } from "@/features/roles";
 import { useHasCapability } from "@/features/modules";
 import { createIncident, fileUrl, uploadImage } from "@/api/client";
 import { colors, radius, spacing, typography } from "@/theme";
@@ -34,6 +35,8 @@ export default function NewIncidentScreen() {
     taskId?: string;
   }>();
   const { state, currentUser, dispatch, refreshBackendData } = useSmartClean();
+  const homePath = useHomePath();
+  const scanPath = useScanPath();
   // Organisations without QR codes have nothing to scan, so the location is
   // chosen from a list instead. Fails open (QR) before bootstrap lands.
   const qrAvailable = useHasCapability("qr_codes");
@@ -141,7 +144,7 @@ export default function NewIncidentScreen() {
       // Back to the task that prompted this report (rather than /home)
       // when arriving via taskId - the cleaner was mid-task and should
       // land back where they left off, not at the top of the app.
-      router.push(taskId ? `/tasks/${taskId}` : "/home");
+      router.push(taskId ? `/tasks/${taskId}` : (homePath as never));
     } finally {
       setBusy(false);
     }
@@ -168,7 +171,7 @@ export default function NewIncidentScreen() {
           <Button
             variant="outline"
             style={styles.scanPromptButton}
-            onPress={() => router.push(taskId ? `/tasks/${taskId}` : "/home")}
+            onPress={() => router.push(taskId ? `/tasks/${taskId}` : (homePath as never))}
           >
             {taskId ? "Back to task" : "Back home"}
           </Button>
@@ -190,14 +193,14 @@ export default function NewIncidentScreen() {
           <Button
             style={styles.scanPromptButton}
             icon={<Ionicons name="scan-outline" size={16} color={colors.primaryForeground} />}
-            onPress={() => router.push("/scan")}
+            onPress={() => router.push(scanPath as never)}
           >
             Scan QR code
           </Button>
           <Button
             variant="outline"
             style={styles.scanPromptButton}
-            onPress={() => router.push(taskId ? `/tasks/${taskId}` : "/home")}
+            onPress={() => router.push(taskId ? `/tasks/${taskId}` : (homePath as never))}
           >
             {taskId ? "Back to task" : "Back home"}
           </Button>

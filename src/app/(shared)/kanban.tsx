@@ -6,6 +6,7 @@ import { Card } from "@/components/Card";
 import { StatusBadge } from "@/components/StatusBadge";
 import { TaskSearchBar } from "@/components/TaskSearchBar";
 import { useSmartClean } from "@/features/store";
+import { taskDestination } from "@/domain/inspections";
 import { boardColumns, filterTasks, isOverdue, NO_FILTERS, type TaskFilters } from "@/domain/taskBoard";
 import { colors, radius, spacing, typography } from "@/theme";
 
@@ -70,7 +71,7 @@ export default function KanbanScreen() {
                 <Text style={styles.empty}>Nothing here.</Text>
               ) : (
                 items.map((task) => (
-                  <Pressable key={task.id} onPress={() => router.push(`/tasks/${task.id}`)}>
+                  <Pressable key={task.id} onPress={() => router.push(taskDestination(task, currentUser, state.inspections) as never)}>
                     <Card style={styles.card}>
                       <Text style={styles.cardTitle}>{task.title}</Text>
                       <Text style={styles.cardMeta} numberOfLines={1}>

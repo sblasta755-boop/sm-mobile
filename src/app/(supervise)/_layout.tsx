@@ -34,7 +34,7 @@ export default function SuperviseTabsLayout() {
   }
 
   if (state.sessionRestored && currentUser && currentUser.role !== "supervisor") {
-    return <Redirect href="/home" />;
+    return <Redirect href="/" />;
   }
 
   return (
