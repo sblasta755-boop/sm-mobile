@@ -5,7 +5,7 @@ import { Screen } from "@/components/Screen";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { Checkbox } from "@/components/Checkbox";
-import { VerifiedBadge } from "@/components/StatusBadge";
+import { StatusBadge, VerifiedBadge } from "@/components/StatusBadge";
 import { useSmartClean } from "@/features/store";
 import { submitTask } from "@/api/client";
 import { colors, radius, spacing, typography } from "@/theme";
@@ -74,6 +74,7 @@ export default function DeclarationScreen() {
             Started: {task.startedAt ? new Date(task.startedAt).toLocaleTimeString("en-ZA") : "—"}
           </Text>
           {task.qrVerified && <VerifiedBadge label="QR + geofence verified" />}
+          {!task.qrVerified && task.startMethod === "manual" && <StatusBadge tone="neutral" label="Started manually" />}
         </View>
       </Card>
 

@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from "expo-router";
-import { Linking, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, Linking, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Screen } from "@/components/Screen";
 import { Card } from "@/components/Card";
@@ -9,7 +9,8 @@ import { Checkbox } from "@/components/Checkbox";
 import { ProgressBar } from "@/components/ProgressBar";
 import { StatusBadge, VerifiedBadge } from "@/components/StatusBadge";
 import { useSmartClean } from "@/features/store";
-import { fileUrl, updateChecklistItem } from "@/api/client";
+import { fileUrl, startTask, updateChecklistItem } from "@/api/client";
+import { useHasCapability, useHasModule, useWorkflowPolicy } from "@/features/modules";
 import { toneForTask, humanStatus, taskSubmissionBlocked, taskStage, isChecklistUnlocked } from "@/domain/status";
 import { colors, radius, spacing, typography } from "@/theme";
 
@@ -75,6 +76,22 @@ export default function TaskDetailScreen() {
   const { taskId } = useLocalSearchParams<{ taskId: string }>();
   const { state, currentUser, dispatch } = useSmartClean();
   const task = state.tasks.find((t) => t.id === taskId);
+  // Organisation workflow (see useHasCapability: QR fails open, manual
+  // fails closed). Presentation only - the server authorises every start.
+  const hasAttendance = useHasModule("attendance");
+  const canScanStart = useHasCapability("qr_task_start");
+  const canManualStart = useHasCapability("manual_task_start");
+  const requireAreaScan = useWorkflowPolicy()?.tasks.requireAreaScan ?? true;
+
+  async function startManually() {
+    if (!task || !state.accessToken) return;
+    try {
+      const updated = await startTask(state.accessToken, task.id);
+      dispatch({ type: "UPDATE_TASK", taskId: task.id, patch: updated });
+    } catch (error) {
+      Alert.alert("Could not start task", error instanceof Error ? error.message : "Please try again.");
+    }
+  }
 
   async function toggleCheck(itemId: string, value: boolean | string) {
     if (!task || !state.accessToken) return;
@@ -216,18 +233,24 @@ export default function TaskDetailScreen() {
       </Screen>
     );
   }
-  if (taskIsWorkable && task.clockedIn === false) {
+  // No attendance module = no clock-in to demand (the backend skips the
+  // same check), so this gate only applies when attendance is in use.
+  if (hasAttendance && taskIsWorkable && task.clockedIn === false) {
     return (
       <Screen title={task.title}>
         <Card style={styles.clockInPromptCard}>
           <Ionicons name="scan-outline" size={28} color={colors.primary} style={styles.clockInPromptIcon} />
           <Text style={styles.clockInPromptTitle}>Clock in to start this task</Text>
           <Text style={[styles.mutedSmall, styles.clockInPromptText]}>
-            Scan your site&apos;s QR code to clock in before working on checklist items or capturing evidence.
+            {canScanStart
+              ? "Scan your site's QR code to clock in before working on checklist items or capturing evidence."
+              : "Clock in from Home before working on checklist items or capturing evidence."}
           </Text>
-          <Button style={styles.clockInPromptButton} icon={<Ionicons name="scan-outline" size={16} color={colors.primaryForeground} />} onPress={() => router.push("/scan")}>
-            Scan to clock in
-          </Button>
+          {canScanStart && (
+            <Button style={styles.clockInPromptButton} icon={<Ionicons name="scan-outline" size={16} color={colors.primaryForeground} />} onPress={() => router.push("/scan")}>
+              Scan to clock in
+            </Button>
+          )}
           <Button variant="outline" style={styles.clockInPromptButton} onPress={() => router.push("/home")}>
             Back home
           </Button>
@@ -278,7 +301,7 @@ export default function TaskDetailScreen() {
 
   const doneCount = task.checklist.filter((c) => c.done).length;
   const pct = Math.round((doneCount / task.checklist.length) * 100);
-  const submission = taskSubmissionBlocked(task);
+  const submission = taskSubmissionBlocked(task, requireAreaScan);
   const stage = taskStage(task);
   const checklistUnlocked = isChecklistUnlocked(stage);
 
@@ -311,16 +334,27 @@ export default function TaskDetailScreen() {
         </View>
         {task.qrVerified ? (
           <VerifiedBadge label="Room QR verified" />
+        ) : task.startMethod === "manual" ? (
+          <StatusBadge tone="neutral" label="Started manually" />
         ) : (
-          <Button
-            variant="outline"
-            fullWidth={false}
-            style={styles.scanChip}
-            icon={<Ionicons name="scan-outline" size={14} color={colors.foreground} />}
-            onPress={() => router.push("/scan")}
-          >
-            Scan room QR to start
-          </Button>
+          <>
+            {canScanStart && (
+              <Button
+                variant="outline"
+                fullWidth={false}
+                style={styles.scanChip}
+                icon={<Ionicons name="scan-outline" size={14} color={colors.foreground} />}
+                onPress={() => router.push("/scan")}
+              >
+                Scan room QR to start
+              </Button>
+            )}
+            {canManualStart && !requireAreaScan && (
+              <Button variant="outline" fullWidth={false} style={styles.scanChip} onPress={startManually}>
+                Start task
+              </Button>
+            )}
+          </>
         )}
         <View style={styles.progressRow}>
           <View style={styles.progressBarWrap}>
@@ -506,7 +540,11 @@ export default function TaskDetailScreen() {
           <View style={styles.warningBox}>
             <Ionicons name="warning-outline" size={14} color={colors.warningForeground} />
             <View style={styles.warningText}>
-              {submission.missingQr && <Text style={styles.warningLine}>Scan the room QR before starting.</Text>}
+              {submission.missingQr && (
+                <Text style={styles.warningLine}>
+                  {requireAreaScan ? "Scan the room QR before starting." : "Start the task before submitting."}
+                </Text>
+              )}
               {submission.missingChecks && <Text style={styles.warningLine}>Complete all checklist items.</Text>}
               {submission.missingEvidence && <Text style={styles.warningLine}>Capture required before / after evidence.</Text>}
             </View>

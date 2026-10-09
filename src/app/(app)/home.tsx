@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { router } from "expo-router";
-import { ImageBackground, Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, ImageBackground, Pressable, StyleSheet, Text, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { BrokenGlassIcon } from "@/components/BrokenGlassIcon";
@@ -10,13 +10,15 @@ import { Button } from "@/components/Button";
 import { ProgressBar } from "@/components/ProgressBar";
 import { StatusBadge } from "@/components/StatusBadge";
 import { DateStrip, isSameDay, startOfDay } from "@/components/DateStrip";
-import { useHasModule } from "@/features/modules";
+import { useHasCapability, useHasModule } from "@/features/modules";
+import { clockIn as clockInRequest, clockOut as clockOutRequest } from "@/api/client";
+import { getCurrentCoords } from "@/services/geolocation";
 import { useSmartClean } from "@/features/store";
 import { toneForTask, humanStatus } from "@/domain/status";
 import { colors, radius, spacing, typography } from "@/theme";
 
 export default function HomeScreen() {
-  const { state, currentUser } = useSmartClean();
+  const { state, currentUser, refreshBackendData } = useSmartClean();
   // Entry points to the three gateable screens a cleaner can reach.
   // Hiding them is presentation only - the server 402s these routes for
   // an organisation whose plan excludes them - but offering a button
@@ -25,6 +27,15 @@ export default function HomeScreen() {
   const hasHourlyCompliance = useHasModule("hourly_compliance");
   const hasCorrectiveActions = useHasModule("corrective_actions");
   const hasIncidents = useHasModule("incidents");
+  // How this organisation lets people clock. Defaults (before bootstrap, or
+  // from an older backend) are the original QR-only flow - see
+  // useHasCapability. Presentation only; the server authorises the method.
+  const hasAttendance = useHasModule("attendance");
+  const canScanClock = useHasCapability("qr_attendance");
+  const canManualClock = useHasCapability("manual_attendance");
+  const canGeofenceClock = useHasCapability("geofence_attendance");
+  const hasQr = useHasCapability("qr_codes");
+  const [clocking, setClocking] = useState(false);
   const today = useMemo(() => startOfDay(new Date()), []);
   const [selectedDate, setSelectedDate] = useState(today);
   const site = state.sites.find((s) => currentUser?.siteIds.includes(s.id));
@@ -67,12 +78,46 @@ export default function HomeScreen() {
   );
   const clocked = currentUser ? state.attendance[currentUser.id]?.clockedInAt : undefined;
 
+  // Clock in/out without scanning, for organisations whose policy allows
+  // the "manual" or "geofence" method. A geofence clock-in is the same
+  // request with the device position, which the server checks against the
+  // site; a manual one records the site selection only. The server decides
+  // whether the method is permitted - this just makes the request.
+  async function clockWithoutScan(direction: "in" | "out") {
+    if (!state.accessToken || !site) return;
+    setClocking(true);
+    try {
+      const method = canManualClock ? "manual" : "geofence";
+      const coords = method === "geofence" || state.subscription?.policy?.attendance.requireGeofence
+        ? await getCurrentCoords()
+        : null;
+      const payload = {
+        siteId: site.id,
+        method,
+        latitude: coords?.latitude,
+        longitude: coords?.longitude,
+      } as const;
+      if (direction === "in") await clockInRequest(state.accessToken, payload);
+      else await clockOutRequest(state.accessToken, payload);
+      await refreshBackendData();
+    } catch (error) {
+      Alert.alert(
+        direction === "in" ? "Could not clock in" : "Could not clock out",
+        error instanceof Error ? error.message : "Please try again.",
+      );
+    } finally {
+      setClocking(false);
+    }
+  }
+  const canClockWithoutScan = canManualClock || canGeofenceClock;
+
   return (
     <Screen
       headerContent={
         <DateStrip today={today} selectedDate={selectedDate} onSelect={setSelectedDate} />
       }
     >
+      {hasAttendance && (
       <Card padded={false} style={styles.shiftCard}>
         <ImageBackground
           source={
@@ -105,9 +150,22 @@ export default function HomeScreen() {
           </View>
 
           {!clocked ? (
-            <Button icon={<Ionicons name="scan" size={18} color={colors.primaryForeground} />} onPress={() => router.push("/scan")}>
-              Scan site QR to clock in
-            </Button>
+            <View style={styles.clockedActions}>
+              {canScanClock && hasQr && (
+                <Button icon={<Ionicons name="scan" size={18} color={colors.primaryForeground} />} onPress={() => router.push("/scan")}>
+                  Scan site QR to clock in
+                </Button>
+              )}
+              {canClockWithoutScan && (
+                <Button
+                  variant={canScanClock && hasQr ? "outline" : undefined}
+                  disabled={clocking || !site}
+                  onPress={() => clockWithoutScan("in")}
+                >
+                  Clock in
+                </Button>
+              )}
+            </View>
           ) : (
             <View style={styles.clockedActions}>
               <View style={styles.clockedPill}>
@@ -116,17 +174,25 @@ export default function HomeScreen() {
                   {new Date(clocked).toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit" })}
                 </Text>
               </View>
-              <Button
-                variant="outline"
-                icon={<Ionicons name="log-out-outline" size={18} color={colors.foreground} />}
-                onPress={() => router.push("/scan")}
-              >
-                Scan site QR to clock out
-              </Button>
+              {canScanClock && hasQr && (
+                <Button
+                  variant="outline"
+                  icon={<Ionicons name="log-out-outline" size={18} color={colors.foreground} />}
+                  onPress={() => router.push("/scan")}
+                >
+                  Scan site QR to clock out
+                </Button>
+              )}
+              {canClockWithoutScan && (
+                <Button variant="outline" disabled={clocking} onPress={() => clockWithoutScan("out")}>
+                  Clock out
+                </Button>
+              )}
             </View>
           )}
         </ImageBackground>
       </Card>
+      )}
 
       <Card style={styles.progressCard}>
         <View style={styles.progressHeader}>
@@ -243,7 +309,7 @@ export default function HomeScreen() {
             sends the cleaner to Scan first rather than straight to the
             report form - see app/(app)/incidents/new.tsx. */}
         {hasIncidents && (
-          <Button variant="outline" icon={<BrokenGlassIcon size={16} color={colors.foreground} />} onPress={() => router.push("/scan")}>
+          <Button variant="outline" icon={<BrokenGlassIcon size={16} color={colors.foreground} />} onPress={() => router.push(hasQr ? "/scan" : "/incidents/new")}>
             Report incident
           </Button>
         )}

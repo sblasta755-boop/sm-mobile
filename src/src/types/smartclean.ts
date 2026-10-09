@@ -36,6 +36,25 @@ export type SubscriptionStatus =
   | "suspended"
   | "cancelled";
 
+export interface WorkflowPolicy {
+  attendance: {
+    enabled: boolean;
+    clockInMethods: string[];
+    defaultClockInMethod: string;
+    requireSiteSelection: boolean;
+    requireGeofence: boolean;
+  };
+  tasks: {
+    enabled: boolean;
+    startMethods: string[];
+    defaultStartMethod: string;
+    requireLocation: boolean;
+    requireAreaScan: boolean;
+    requireEvidence: boolean;
+  };
+  qr: { enabled: boolean };
+}
+
 export interface SubscriptionState {
   tier: SubscriptionTier | null;
   tierLabel: string | null;
@@ -44,6 +63,12 @@ export interface SubscriptionState {
    * grants. The server sends the answer rather than the tier so this
    * client never reimplements the matrix and drifts from it. */
   modules: string[];
+  /** Workflow methods the organisation supports (e.g. "qr_codes",
+   * "manual_attendance", "manual_task_start"). Optional so a build talking
+   * to an older backend keeps working - absent means "behave as before". */
+  capabilities?: string[];
+  /** The organisation's resolved workflow rules. */
+  policy?: WorkflowPolicy;
   seats: number | null;
   currentPeriodEnd: string | null;
   trialEndsAt: string | null;
@@ -179,6 +204,8 @@ export interface Task {
   requiresBeforeAfter: boolean;
   requiredQr: string;
   qrVerified?: boolean;
+  /** How the task was started: "qr", "manual", or absent before it starts. */
+  startMethod?: "qr" | "manual" | null;
   // Whether the assignee is currently clocked in — undefined when the
   // backend didn't compute this for the response. Gates the whole task
   // screen (checklist + evidence), matching the web app.

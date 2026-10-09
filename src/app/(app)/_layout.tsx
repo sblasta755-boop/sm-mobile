@@ -2,7 +2,7 @@ import { Redirect, Tabs } from "expo-router";
 import { StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useHasModule } from "@/features/modules";
+import { useHasCapability, useHasModule } from "@/features/modules";
 import { useSmartClean } from "@/features/store";
 import { colors, sizes, spacing, typography } from "@/theme";
 
@@ -12,6 +12,10 @@ export default function AppTabsLayout() {
   // Corrective actions is the only gateable module with a tab of its
   // own. Fails open before bootstrap lands - see useHasModule.
   const hasCorrectiveActions = useHasModule("corrective_actions");
+  // The Scan tab only exists for organisations that use QR codes. Scanning
+  // also serves incidents and tables, but all of that is QR - with QR off
+  // there is nothing left to scan. Fails open before bootstrap lands.
+  const hasQr = useHasCapability("qr_codes");
   // The table-grid tab is for the "waiter" role only. A cleaner CAN
   // still operate a table session (the backend's _WAITER_ROLES allows
   // both, so a cleaner covering a waiter's section is never blocked) -
@@ -73,6 +77,7 @@ export default function AppTabsLayout() {
             </View>
           ),
           tabBarLabel: () => null,
+          ...(hasQr ? {} : { href: null }),
         }}
       />
       <Tabs.Screen

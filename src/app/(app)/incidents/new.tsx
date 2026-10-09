@@ -8,6 +8,7 @@ import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { SelectField } from "@/components/SelectField";
 import { useSmartClean } from "@/features/store";
+import { useHasCapability } from "@/features/modules";
 import { createIncident, fileUrl, uploadImage } from "@/api/client";
 import { colors, radius, spacing, typography } from "@/theme";
 import type { IncidentPriority } from "@/types/smartclean";
@@ -32,7 +33,11 @@ export default function NewIncidentScreen() {
     locationId?: string;
     taskId?: string;
   }>();
-  const { state, dispatch, refreshBackendData } = useSmartClean();
+  const { state, currentUser, dispatch, refreshBackendData } = useSmartClean();
+  // Organisations without QR codes have nothing to scan, so the location is
+  // chosen from a list instead. Fails open (QR) before bootstrap lands.
+  const qrAvailable = useHasCapability("qr_codes");
+  const [pickedLabel, setPickedLabel] = useState("");
   const [category, setCategory] = useState(CATEGORIES[0]);
   const [priority, setPriority] = useState<IncidentPriority>("medium");
   const [description, setDescription] = useState("");
@@ -66,8 +71,16 @@ export default function NewIncidentScreen() {
   // in for a fresh scan rather than sending the cleaner to re-scan a
   // room they're already standing in mid-task.
   const sourceTask = taskId ? state.tasks.find((t) => t.id === taskId) : undefined;
+  // The rooms a person can pick when QR is off: their own sites' locations.
+  const pickable = state.locations
+    .filter((l) => !currentUser?.siteIds.length || currentUser.siteIds.includes(l.siteId))
+    .map((l) => ({
+      id: l.id,
+      label: `${state.sites.find((s) => s.id === l.siteId)?.name ?? "Site"} - ${l.name}`,
+    }));
+  const pickedId = pickable.find((p) => p.label === pickedLabel)?.id;
   const linkedLocation = state.locations.find(
-    (l) => l.id === (linkedLocationId ?? sourceTask?.locationId),
+    (l) => l.id === (linkedLocationId ?? sourceTask?.locationId ?? (qrAvailable ? undefined : pickedId)),
   );
   const site = linkedLocation ? state.sites.find((s) => s.id === linkedLocation.siteId) : undefined;
   // A stale/tampered link shouldn't silently let the report through with
@@ -134,6 +147,36 @@ export default function NewIncidentScreen() {
     }
   }
 
+  if (!hasValidScan && !qrAvailable) {
+    return (
+      <Screen title="Report incident">
+        <Card style={styles.scanPromptCard}>
+          <Ionicons name="location-outline" size={28} color={colors.primary} style={styles.scanPromptIcon} />
+          <Text style={styles.scanPromptTitle}>Where did it happen?</Text>
+          {pickable.length === 0 ? (
+            <Text style={[styles.emptyLocations, styles.scanPromptText]}>
+              There are no rooms or zones set up for your site yet. Ask your manager to add some.
+            </Text>
+          ) : (
+            <SelectField
+              label="Room / zone"
+              value={pickedLabel || "Choose a room or zone"}
+              options={pickable.map((p) => p.label)}
+              onChange={setPickedLabel}
+            />
+          )}
+          <Button
+            variant="outline"
+            style={styles.scanPromptButton}
+            onPress={() => router.push(taskId ? `/tasks/${taskId}` : "/home")}
+          >
+            {taskId ? "Back to task" : "Back home"}
+          </Button>
+        </Card>
+      </Screen>
+    );
+  }
+
   if (!hasValidScan) {
     return (
       <Screen title="Report incident">
@@ -174,7 +217,9 @@ export default function NewIncidentScreen() {
           </View>
           <View style={styles.lockedRow}>
             <Ionicons name="lock-closed-outline" size={12} color={colors.mutedForeground} />
-            <Text style={styles.lockedText}>Set from the QR code you scanned.</Text>
+            <Text style={styles.lockedText}>
+              {qrAvailable ? "Set from the QR code you scanned." : "Chosen from your site's rooms."}
+            </Text>
           </View>
         </View>
 

@@ -310,6 +310,12 @@ export function addTaskEvidence(
   );
 }
 
+/** Start a task without scanning its area - only accepted where the
+ * organisation's policy allows manual starts. */
+export function startTask(accessToken: string, taskId: string) {
+  return request<Task>(`/tasks/${taskId}/start`, { method: "POST" }, accessToken);
+}
+
 export function submitTask(accessToken: string, taskId: string) {
   return request<Task>(
     `/tasks/${taskId}/submit`,
@@ -340,11 +346,22 @@ export function createIncident(accessToken: string, payload: Record<string, unkn
 
 // ---- Attendance ----
 
-export function clockIn(accessToken: string, payload: { siteId: string; qrValue: string; latitude?: number; longitude?: number }) {
+/** `qrValue` is required only for the "qr" method; a manual clock-in sends
+ * just the site. The server authorises the method against the
+ * organisation's policy. */
+export interface ClockPayload {
+  siteId: string;
+  qrValue?: string;
+  method?: "qr" | "manual" | "geofence";
+  latitude?: number;
+  longitude?: number;
+}
+
+export function clockIn(accessToken: string, payload: ClockPayload) {
   return request<Record<string, unknown>>("/attendance/clock-in", { method: "POST", body: JSON.stringify(payload) }, accessToken);
 }
 
-export function clockOut(accessToken: string, payload: { siteId: string; qrValue: string; latitude?: number; longitude?: number }) {
+export function clockOut(accessToken: string, payload: ClockPayload) {
   return request<Record<string, unknown>>("/attendance/clock-out", { method: "POST", body: JSON.stringify(payload) }, accessToken);
 }
 

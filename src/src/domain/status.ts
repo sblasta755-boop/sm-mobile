@@ -65,13 +65,27 @@ export function toneForCA(status: CAStatus): StatusTone {
 // supervisor's "Recent inspections" alongside the real one.
 const SUBMITTABLE_STATUSES = new Set(["assigned", "not_started", "in_progress", "rework_required"]);
 
-export function taskSubmissionBlocked(task: {
+/** Whether the cleaner has "started" the task: scanned the room, or - where
+ * the organisation allows it - started it manually. Mirrors the backend,
+ * which records the method on the task (startMethod) and never reports a
+ * manual start as QR-verified. */
+function hasStarted(task: { qrVerified?: boolean; startMethod?: string | null }): boolean {
+  return !!task.qrVerified || task.startMethod === "manual";
+}
+
+export function taskSubmissionBlocked(
+  task: {
   status: string;
   qrVerified?: boolean;
+  startMethod?: string | null;
   requiresBeforeAfter: boolean;
   checklist: { type: string; done?: boolean }[];
   evidence: { kind: string }[];
-}) {
+  },
+  /** The organisation's tasks.requireAreaScan; true (the original rule)
+   * unless its policy says otherwise. */
+  requireAreaScan = true,
+) {
   const alreadySubmitted = !SUBMITTABLE_STATUSES.has(task.status);
   const missingEvidence =
     (task.requiresBeforeAfter &&
@@ -86,10 +100,13 @@ export function taskSubmissionBlocked(task: {
         ? !task.evidence.some((e) => e.kind === "after")
         : task.evidence.length === 0));
   const missingChecks = task.checklist.some((item) => item.type !== "note" && !item.done);
+  // Not started at all, or - only when the policy demands an area scan -
+  // started without one. Without that demand a manual start is enough.
+  const missingQr = requireAreaScan ? !task.qrVerified : !hasStarted(task);
   return {
-    blocked: alreadySubmitted || !task.qrVerified || missingEvidence || missingChecks,
+    blocked: alreadySubmitted || missingQr || missingEvidence || missingChecks,
     alreadySubmitted,
-    missingQr: !task.qrVerified,
+    missingQr,
     missingEvidence,
     missingChecks,
   };
@@ -109,10 +126,11 @@ export type TaskStage = "scan" | "before" | "working" | "finish";
 export function taskStage(task: {
   requiresBeforeAfter?: boolean;
   qrVerified?: boolean;
+  startMethod?: string | null;
   checklist: { type: string; done?: boolean }[];
   evidence: { kind: string }[];
 }): TaskStage {
-  if (!task.qrVerified) return "scan";
+  if (!hasStarted(task)) return "scan";
   // The Before-photo gate only applies to a task that actually wants a
   // before/after pair (requiresBeforeAfter — the normal cleaning-task
   // shape). An investigation task (see IncidentController.

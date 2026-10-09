@@ -39,6 +39,28 @@ export function useHasModule(key: string): boolean {
   return modules.size === 0 || modules.has(key);
 }
 
+/** Whether the organisation supports a workflow method (qr_codes,
+ * manual_attendance, manual_task_start, ...).
+ *
+ * Fails OPEN for the QR capabilities until bootstrap lands (or when the
+ * backend predates capabilities), because QR is how the product worked
+ * before this was configurable: hiding the Scan tab on a cold start would
+ * strand a cleaner who needs it. The manual capabilities fail CLOSED -
+ * they only exist when the server says so. The server enforces either way.
+ */
+export function useHasCapability(key: string): boolean {
+  const subscription = useSubscription();
+  const capabilities = subscription?.capabilities;
+  if (!capabilities) return key.startsWith("qr_") || key === "location_based_tasks";
+  return capabilities.includes(key);
+}
+
+/** The resolved workflow policy, or null before bootstrap lands (or from an
+ * older backend). Callers treat null as the original QR-first rules. */
+export function useWorkflowPolicy() {
+  return useSubscription()?.policy ?? null;
+}
+
 /** The organisation's plan, or null before bootstrap lands. Used by the
  * banner that explains a suspended or past-due account. */
 export function useSubscription() {

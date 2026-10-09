@@ -9,6 +9,7 @@ import { Button } from "@/components/Button";
 import { useSmartClean } from "@/features/store";
 import { addTaskEvidence, fileUrl, uploadImage } from "@/api/client";
 import { taskStage } from "@/domain/status";
+import { useHasCapability, useHasModule } from "@/features/modules";
 import { colors, radius, spacing, typography } from "@/theme";
 import type { Evidence } from "@/types/smartclean";
 
@@ -23,6 +24,8 @@ const CATEGORIES: { kind: EvidenceKind; label: string; description: string; icon
 export default function EvidenceScreen() {
   const { taskId } = useLocalSearchParams<{ taskId: string }>();
   const { state, currentUser, dispatch } = useSmartClean();
+  const hasAttendance = useHasModule("attendance");
+  const canScan = useHasCapability("qr_task_start");
   const task = state.tasks.find((t) => t.id === taskId);
   const [permission, requestPermission] = useCameraPermissions();
   const [cameraOn, setCameraOn] = useState(false);
@@ -51,18 +54,22 @@ export default function EvidenceScreen() {
   // deep link. The backend hard-blocks add_evidence regardless; this just
   // stops a doomed camera session before it starts.
   const taskIsWorkable = ["assigned", "not_started", "in_progress", "rework_required"].includes(task.status);
-  if (taskIsWorkable && task.clockedIn === false) {
+  if (hasAttendance && taskIsWorkable && task.clockedIn === false) {
     return (
       <Screen title="Capture evidence" backTo={`/tasks/${task.id}`}>
         <Card style={styles.clockInPromptCard}>
           <Ionicons name="camera-outline" size={28} color={colors.primary} style={styles.clockInPromptIcon} />
           <Text style={styles.clockInPromptTitle}>Clock in to capture evidence</Text>
           <Text style={[styles.mutedSmall, styles.clockInPromptText]}>
-            Scan your site&apos;s QR code to clock in before capturing task evidence.
+            {canScan
+              ? "Scan your site's QR code to clock in before capturing task evidence."
+              : "Clock in from Home before capturing task evidence."}
           </Text>
-          <Button style={styles.clockInPromptButton} onPress={() => router.push("/scan")}>
-            Go to Scan
-          </Button>
+          {canScan && (
+            <Button style={styles.clockInPromptButton} onPress={() => router.push("/scan")}>
+              Go to Scan
+            </Button>
+          )}
           <Button variant="outline" style={styles.clockInPromptButton} onPress={() => router.push(`/tasks/${task.id}`)}>
             Back to task
           </Button>
