@@ -1,8 +1,10 @@
 import { useMemo } from "react";
+import { router } from "expo-router";
 import { StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Screen } from "@/components/Screen";
 import { Card } from "@/components/Card";
+import { Button } from "@/components/Button";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useHasModule } from "@/features/modules";
 import { useSmartClean } from "@/features/store";
@@ -81,6 +83,14 @@ export default function AuditHome() {
             : `${completed.length} of ${totalScored} signed off`}
         </Text>
       </Card>
+
+      <Button
+        variant="outline"
+        icon={<Ionicons name="document-text-outline" size={16} color={colors.foreground} />}
+        onPress={() => router.push("/management-report")}
+      >
+        Management report
+      </Button>
 
       <View style={styles.tiles}>
         <Tile label="Outstanding" value={outstanding.length} />

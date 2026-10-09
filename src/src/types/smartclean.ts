@@ -254,6 +254,10 @@ export interface Task {
    * backend) - tags the task without changing anything about how it
    * flows through the normal Task/Inspection lifecycle. */
   isHourlyCompliance?: boolean;
+  /** Labels such as "Opening" or "Closing" that group this kind of work. */
+  tags?: string[];
+  /** The task's raw server-side metadata; only roomQrVerification is read (reports). */
+  metadata?: Record<string, unknown>;
   /** Done by a supervisor / site manager rather than a cleaner. */
   isSupervisorTask?: boolean;
   /** Belongs to the whole site (no room); started by scanning the site QR. */

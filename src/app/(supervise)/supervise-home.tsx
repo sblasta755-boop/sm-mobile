@@ -148,6 +148,14 @@ export default function SuperviseHome() {
         Task board
       </Button>
 
+      <Button
+        variant="outline"
+        icon={<Ionicons name="document-text-outline" size={16} color={colors.foreground} />}
+        onPress={() => router.push("/management-report")}
+      >
+        Management report
+      </Button>
+
       {myTasks.length > 0 && (
         <>
           <View style={styles.sectionHeader}>

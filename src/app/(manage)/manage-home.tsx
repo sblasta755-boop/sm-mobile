@@ -4,6 +4,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Screen } from "@/components/Screen";
 import { Card } from "@/components/Card";
+import { Button } from "@/components/Button";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useSmartClean } from "@/features/store";
 import { colors, spacing, typography } from "@/theme";
@@ -65,6 +66,14 @@ export default function ManageHome() {
           </View>
         </Card>
       )}
+
+      <Button
+        variant="outline"
+        icon={<Ionicons name="document-text-outline" size={16} color={colors.foreground} />}
+        onPress={() => router.push("/management-report")}
+      >
+        Management report
+      </Button>
 
       <View style={styles.tiles}>
         <Tile label="Open tasks" value={openTasks.length} />

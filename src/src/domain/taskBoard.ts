@@ -10,6 +10,7 @@ export interface BoardTask {
   dueAt?: string | null;
   isSupervisorTask?: boolean;
   isSiteWide?: boolean;
+  tags?: string[];
 }
 
 export type PriorityFilter = "all" | "high" | "medium" | "low";
@@ -44,6 +45,7 @@ export function matchesQuery(task: BoardTask, query: string, extra = ""): boolea
     task.priority ?? "",
     task.status.replace(/_/g, " "),
     task.isSupervisorTask ? "supervisor task" : "",
+    (task.tags ?? []).join(" "),
     extra,
   ]
     .join(" ")
