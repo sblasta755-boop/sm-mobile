@@ -5,7 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Screen } from "@/components/Screen";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
-import { ProgressBar } from "@/components/ProgressBar";
+import { ScoreControl } from "@/components/ScoreControl";
 import { StatusBadge, VerifiedBadge } from "@/components/StatusBadge";
 import { useSmartClean } from "@/features/store";
 import { useHomePath } from "@/features/roles";
@@ -21,8 +21,6 @@ import {
 } from "@/domain/inspections";
 import { colors, radius, spacing, typography } from "@/theme";
 import type { ChecklistItem } from "@/types/smartclean";
-
-const STEP = 5;
 
 /**
  * The inspection itself, on the phone: look at what was done (checklist,
@@ -63,12 +61,6 @@ export default function InspectionScreen() {
   // A task a supervisor did themselves is reviewed above them.
   const needsManager = !!task.isSupervisorTask && !canReviewSupervisorTask(currentUser?.role);
   const allowed = canInspectRole(currentUser?.role) && !selfApproval && !needsManager;
-
-  const setScore = (category: string, delta: number) =>
-    setScores((current) => ({
-      ...current,
-      [category]: Math.max(0, Math.min(100, (current[category] ?? 0) + delta)),
-    }));
 
   const finish = async (decision: "approve" | "reject") => {
     if (!state.accessToken) return;
@@ -218,29 +210,12 @@ export default function InspectionScreen() {
           <Text style={styles.sectionTitle}>Score</Text>
           <Card style={styles.card}>
             {categories.map((category) => (
-              <View key={category} style={styles.scoreRow}>
-                <View style={styles.scoreHead}>
-                  <Text style={styles.checkLabel}>{category}</Text>
-                  <View style={styles.stepper}>
-                    <Pressable
-                      accessibilityLabel={`Lower ${category}`}
-                      onPress={() => setScore(category, -STEP)}
-                      style={styles.stepButton}
-                    >
-                      <Ionicons name="remove" size={16} color={colors.foreground} />
-                    </Pressable>
-                    <Text style={styles.scoreValue}>{scores[category]}</Text>
-                    <Pressable
-                      accessibilityLabel={`Raise ${category}`}
-                      onPress={() => setScore(category, STEP)}
-                      style={styles.stepButton}
-                    >
-                      <Ionicons name="add" size={16} color={colors.foreground} />
-                    </Pressable>
-                  </View>
-                </View>
-                <ProgressBar value={scores[category] ?? 0} />
-              </View>
+              <ScoreControl
+                key={category}
+                label={category}
+                value={scores[category] ?? 0}
+                onChange={(next) => setScores((current) => ({ ...current, [category]: next }))}
+              />
             ))}
             <View style={styles.overall}>
               <Text style={styles.muted}>Overall (pass ≥ {PASS_SCORE})</Text>

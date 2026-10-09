@@ -1,20 +1,26 @@
 import { Stack } from "expo-router";
+import { View } from "react-native";
+import { RoleTabBar } from "@/components/RoleTabBar";
+import { colors } from "@/theme";
 
 /**
- * Screens every role reaches from its own profile, wherever that profile
- * lives.
+ * Screens every role reaches, whichever app it came from: tasks, inspections,
+ * the board, corrective-action detail, incident reports, notifications,
+ * privacy and profile editing.
  *
- * These three (edit profile, notifications, privacy notice) used to sit
- * inside app/(app)/ - the cleaner's tab group - because the cleaner was
- * the only role with a profile screen that linked to them. Expo Router
- * groups don't share routes, so a supervisor's profile pushing
- * "/notifications" was pushing at a route that did not exist outside the
- * cleaner's group; those two rows on supervise-profile.tsx did nothing.
- *
- * A plain Stack rather than Tabs: none of these is a tab root anywhere.
- * Each is drilled into from a profile screen and returns there, so they
- * keep whichever tab bar the pushing group already had.
+ * Expo Router groups don't share routes, so a screen needed by several roles
+ * lives here and is pushed on top of the role's own tab group. That would
+ * normally hide the tab bar, so this layout draws the signed-in role's bar
+ * underneath the stack (RoleTabBar): navigation is always one tap away on
+ * every screen, and content never runs under the phone's system buttons.
  */
 export default function SharedLayout() {
-  return <Stack screenOptions={{ headerShown: false }} />;
+  return (
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <View style={{ flex: 1 }}>
+        <Stack screenOptions={{ headerShown: false }} />
+      </View>
+      <RoleTabBar />
+    </View>
+  );
 }

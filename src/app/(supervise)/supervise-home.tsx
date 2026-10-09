@@ -6,6 +6,7 @@ import { Screen } from "@/components/Screen";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { StatusBadge } from "@/components/StatusBadge";
+import { TaskRow } from "@/components/TaskRow";
 import { useHasModule } from "@/features/modules";
 import { useSmartClean } from "@/features/store";
 import { toneForTask, humanStatus } from "@/domain/status";
@@ -151,22 +152,12 @@ export default function SuperviseHome() {
         <>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>My tasks</Text>
-          </View>
-          {myTasks.map((task) => (
-            <Pressable key={task.id} onPress={() => router.push(`/tasks/${task.id}`)}>
-              <Card style={styles.emptyCard}>
-                <Ionicons name="clipboard-outline" size={20} color={colors.primary} />
-                <View style={styles.flex}>
-                  <Text style={styles.warningTitle} numberOfLines={1}>
-                    {task.title}
-                  </Text>
-                  <Text style={styles.warningText} numberOfLines={1}>
-                    {task.locationName ?? "Whole site"}
-                  </Text>
-                </View>
-                <StatusBadge tone={toneForTask(task.status)} label={humanStatus(task.status)} />
-              </Card>
+            <Pressable accessibilityRole="button" onPress={() => router.push("/my-tasks")}>
+              <Text style={styles.link}>View all</Text>
             </Pressable>
+          </View>
+          {myTasks.slice(0, 3).map((task) => (
+            <TaskRow key={task.id} task={task} onPress={() => router.push(`/tasks/${task.id}`)} />
           ))}
         </>
       )}

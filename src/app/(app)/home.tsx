@@ -9,6 +9,7 @@ import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { ProgressBar } from "@/components/ProgressBar";
 import { StatusBadge } from "@/components/StatusBadge";
+import { TaskRow } from "@/components/TaskRow";
 import { DateStrip, isSameDay, startOfDay } from "@/components/DateStrip";
 import { useHasCapability, useHasModule } from "@/features/modules";
 import { clockIn as clockInRequest, clockOut as clockOutRequest } from "@/api/client";
@@ -225,25 +226,7 @@ export default function HomeScreen() {
       )}
       <View style={styles.list}>
         {myTasks.slice(0, 3).map((t) => (
-          <Pressable key={t.id} onPress={() => router.push(`/tasks/${t.id}`)}>
-            <Card style={styles.taskCard}>
-              <View style={styles.taskIcon}>
-                <Ionicons name="cube-outline" size={20} color={colors.primary} />
-              </View>
-              <View style={styles.taskInfo}>
-                <Text style={styles.taskTitle} numberOfLines={1}>
-                  {t.title}
-                </Text>
-                <Text style={styles.mutedSmall} numberOfLines={1}>
-                  {t.locationName} • Due {t.dueTime}
-                </Text>
-              </View>
-              <View style={styles.taskBadges}>
-                <StatusBadge tone={toneForTask(t.status)} label={humanStatus(t.status)} />
-                {t.priority === "high" && <StatusBadge tone="destructive" label="Priority" />}
-              </View>
-            </Card>
-          </Pressable>
+          <TaskRow key={t.id} task={t} onPress={() => router.push(`/tasks/${t.id}`)} />
         ))}
       </View>
 
