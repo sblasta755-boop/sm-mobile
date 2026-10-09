@@ -1,6 +1,6 @@
 import type { Evidence } from "@/types/smartclean";
 import type { ManagementReport, ReportSection } from "./managementReport";
-import { SOMA_LOGO_ASPECT, SOMA_LOGO_DATA_URI } from "./somaLogo";
+import { SOMA_LOGO_ASPECT, SOMA_LOGO_DATA_URI, SOMA_WEBSITE_URL } from "./somaLogo";
 
 // The management report as one HTML document, for expo-print to turn into a
 // PDF on the phone. Mirrors the web page (reports.management.tsx): letterhead
@@ -113,7 +113,7 @@ export function buildManagementReportHtml(options: ReportHtmlOptions): string {
       <div class="proof">DIGITAL PROOF OF SERVICE</div>
       <div class="sub">MANAGEMENT ${esc(title.toUpperCase())} | ${esc(generatedAtLabel)}</div>
       <div class="powered"><span>POWERED BY</span>
-        <img src="${SOMA_LOGO_DATA_URI}" alt="Šoma360" width="${logoWidth}" height="${logoHeight}"></div>
+        <a href="${esc(SOMA_WEBSITE_URL)}"><img src="${SOMA_LOGO_DATA_URI}" alt="Šoma360" width="${logoWidth}" height="${logoHeight}"></a></div>
     </div>
   </div>`;
 
@@ -142,6 +142,7 @@ export function buildManagementReportHtml(options: ReportHtmlOptions): string {
   .sub { font-size: 7.5px; color: #64748b; margin-top: 2px; }
   .powered { margin-top: 6px; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
   .powered span { font-size: 7px; letter-spacing: .14em; color: #64748b; }
+  .powered a { display: block; text-decoration: none; }
   .powered img { display: block; }
   .eyebrow { font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: ${TEAL}; margin: 0; }
   h1 { font-size: 26px; margin: 4px 0 0; color: ${NAVY}; }

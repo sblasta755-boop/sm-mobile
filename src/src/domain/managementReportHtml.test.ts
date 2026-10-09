@@ -84,4 +84,8 @@ describe("buildManagementReportHtml", () => {
     expect(html).toContain('alt="Šoma360"');
     expect(html).not.toContain("SMART FACILITIES");
   });
+
+  it("links the logo to the Šoma360 website", () => {
+    expect(render()).toMatch(/<a href="https:\/\/soma360\.mycelixai\.com\/"><img src="data:image\/png;base64,/);
+  });
 });
