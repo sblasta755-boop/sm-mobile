@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { router, useLocalSearchParams } from "expo-router";
-import { Alert, StyleSheet, Text, TextInput, View } from "react-native";
+import { StyleSheet, Text, TextInput, View } from "react-native";
 import { Screen } from "@/components/Screen";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
@@ -10,7 +10,8 @@ import { useSmartClean } from "@/features/store";
 import { useHomePath } from "@/features/roles";
 import { useWorkflowPolicy } from "@/features/modules";
 import { submitTask } from "@/api/client";
-import { colors, radius, spacing, typography } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles } from "@/theme";
+import { appAlert } from "@/components/Dialog";
 
 // A typed name is the whole "signature" here (no drawn/canvas capture),
 // so the only thing actually worth enforcing is that it's genuinely the
@@ -58,11 +59,11 @@ export default function DeclarationScreen() {
       // closed by the server on submit - say so, rather than leaving a task
       // that quietly shows "approved" with no inspection behind it.
       if (updatedTask.status === "approved" && updatedTask.isSupervisorTask) {
-        Alert.alert("Task closed", "Submitted and closed - your organisation doesn't review supervisor tasks.");
+        appAlert("Task closed", "Submitted and closed - your organisation doesn't review supervisor tasks.");
       }
       router.push(homePath as never);
     } catch (error) {
-      Alert.alert("Could not submit task", error instanceof Error ? error.message : "Please try again.");
+      appAlert("Could not submit task", error instanceof Error ? error.message : "Please try again.");
     } finally {
       setBusy(false);
     }
@@ -134,7 +135,7 @@ export default function DeclarationScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   mutedSmall: {
     fontSize: typography.small,
     color: colors.mutedForeground,
@@ -197,4 +198,4 @@ const styles = StyleSheet.create({
     fontSize: typography.tiny,
     color: colors.destructive,
   },
-});
+}));

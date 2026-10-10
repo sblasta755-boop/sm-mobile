@@ -5,9 +5,10 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHasCapability, useHasModule } from "@/features/modules";
 import { useSmartClean } from "@/features/store";
 import { isFieldRole } from "@/features/roles";
-import { colors, sizes, spacing, typography } from "@/theme";
+import { colors, sizes, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 
 export default function AppTabsLayout() {
+  useThemeVersion(); // re-render with the new colours when the theme changes
   const { currentUser, state } = useSmartClean();
   const insets = useSafeAreaInsets();
   // Corrective actions is the only gateable module with a tab of its
@@ -154,7 +155,7 @@ export default function AppTabsLayout() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   primaryTab: {
     marginTop: -20,
     width: 52,
@@ -169,4 +170,4 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 6 },
     elevation: 6,
   },
-});
+}));

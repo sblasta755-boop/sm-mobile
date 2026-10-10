@@ -4,9 +4,10 @@ import { Ionicons } from "@expo/vector-icons";
 import { Screen } from "@/components/Screen";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
+import { AppearanceRow, ReportsRow } from "@/components/ProfilePreferences";
 import { BiometricLockRow } from "@/components/BiometricLockRow";
 import { useSmartClean } from "@/features/store";
-import { colors, radius, spacing, typography } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles } from "@/theme";
 import { APP_VERSION } from "@/constants/version";
 
 /**
@@ -72,6 +73,8 @@ export default function SuperviseProfile() {
           <Ionicons name="chevron-forward" size={16} color={colors.mutedForeground} />
         </Pressable>
         <BiometricLockRow />
+        <ReportsRow />
+        <AppearanceRow />
       </Card>
 
       <Button variant="outline" onPress={() => signOut()}>
@@ -83,7 +86,7 @@ export default function SuperviseProfile() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   identityCard: {
     flexDirection: "row",
     alignItems: "center",
@@ -166,4 +169,4 @@ const styles = StyleSheet.create({
     fontSize: typography.tiny,
     color: colors.mutedForeground,
   },
-});
+}));

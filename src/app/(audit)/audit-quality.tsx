@@ -5,7 +5,7 @@ import { Card } from "@/components/Card";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useSmartClean } from "@/features/store";
 import { humanStatus, toneForInspection } from "@/domain/status";
-import { colors, spacing, typography } from "@/theme";
+import { colors, spacing, typography, themedStyles } from "@/theme";
 import type { Inspection } from "@/types/smartclean";
 
 /**
@@ -117,7 +117,7 @@ function InspectionRow({ inspection }: { inspection: Inspection }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   tiles: {
     flexDirection: "row",
     gap: spacing.sm,
@@ -181,4 +181,4 @@ const styles = StyleSheet.create({
     fontSize: typography.small,
     color: colors.mutedForeground,
   },
-});
+}));

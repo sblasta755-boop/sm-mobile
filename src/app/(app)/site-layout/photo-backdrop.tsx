@@ -9,7 +9,7 @@ import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { useSmartClean } from "@/features/store";
 import { fileUrl, updateFloorPlanImage, uploadImage } from "@/api/client";
-import { colors, radius, spacing, typography } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles } from "@/theme";
 
 /**
  * Photo of an existing paper/printed floor plan, used as the visual
@@ -211,7 +211,7 @@ export default function PhotoBackdropScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   captureOverlay: {
     ...StyleSheet.absoluteFillObject,
     alignItems: "center",
@@ -280,4 +280,4 @@ const styles = StyleSheet.create({
   saveButton: {
     marginTop: spacing.md,
   },
-});
+}));

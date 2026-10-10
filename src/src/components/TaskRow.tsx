@@ -3,7 +3,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Card } from "@/components/Card";
 import { StatusBadge } from "@/components/StatusBadge";
 import { humanStatus, toneForTask } from "@/domain/status";
-import { colors, radius, spacing, typography } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles } from "@/theme";
 import type { Task } from "@/types/smartclean";
 
 /**
@@ -37,7 +37,7 @@ export function TaskRow({ task, onPress }: { task: Task; onPress: () => void }) 
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   card: { flexDirection: "row", alignItems: "center", gap: spacing.md },
   icon: {
     width: 44,
@@ -51,4 +51,4 @@ const styles = StyleSheet.create({
   title: { fontSize: typography.body, fontWeight: "600", color: colors.foreground },
   meta: { fontSize: typography.small, color: colors.mutedForeground },
   badges: { alignItems: "flex-end", gap: 4 },
-});
+}));

@@ -19,7 +19,7 @@ import {
   snoozeTableSessionBill,
 } from "@/api/client";
 import type { TableSession, WaiterSessionEndReason } from "@/types/smartclean";
-import { colors, radius, spacing, typography } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles } from "@/theme";
 
 const END_REASONS: { value: WaiterSessionEndReason; label: string; autoTask: boolean }[] = [
   { value: "paid", label: "Paid", autoTask: true },
@@ -459,7 +459,7 @@ export default function TableSessionDetailScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   section: {
     marginBottom: spacing.md,
     gap: spacing.xs,
@@ -572,4 +572,4 @@ const styles = StyleSheet.create({
   cancelButton: {
     marginTop: spacing.xs,
   },
-});
+}));

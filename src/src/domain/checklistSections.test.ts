@@ -1,5 +1,7 @@
 import { firstIncompleteKey, groupChecklist, isSectioned } from "./checklistSections";
 
+import { taskSubmissionBlocked } from "./status";
+
 describe("groupChecklist", () => {
   const flat = [
     { id: "a", type: "checkbox", done: true },
@@ -48,8 +50,6 @@ describe("groupChecklist", () => {
     expect(firstIncompleteKey(groups)).toBeNull();
   });
 });
-
-import { taskSubmissionBlocked } from "./status";
 
 describe("submission across sections", () => {
   const task = (floorsDone: boolean) => ({

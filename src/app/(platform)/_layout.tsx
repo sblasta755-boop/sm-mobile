@@ -2,7 +2,7 @@ import { Redirect, Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useSmartClean } from "@/features/store";
-import { colors, sizes, spacing, typography } from "@/theme";
+import { colors, sizes, spacing, typography, useThemeVersion } from "@/theme";
 
 /**
  * Šoma360's own operator console, as a separate app from the customer
@@ -26,6 +26,7 @@ import { colors, sizes, spacing, typography } from "@/theme";
  * module gate.
  */
 export default function PlatformTabsLayout() {
+  useThemeVersion(); // re-render with the new colours when the theme changes
   const { currentUser, state } = useSmartClean();
   const insets = useSafeAreaInsets();
 

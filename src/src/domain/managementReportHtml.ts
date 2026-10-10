@@ -126,6 +126,7 @@ export function buildManagementReportHtml(options: ReportHtmlOptions): string {
 
   return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
 <style>
+  /* The footer (site | report | type • page x of n) is stamped onto the PDF afterwards - see pdfFooter.ts. */
   @page { size: A4; margin: 14mm 12mm 16mm; }
   * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   body { margin: 0; font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #0f172a; font-size: 11px; }
@@ -170,7 +171,6 @@ export function buildManagementReportHtml(options: ReportHtmlOptions): string {
   .approval { display: flex; gap: 12px; background: #f8fafc; padding: 12px; border-radius: 4px; }
   .approval > div { flex: 1; }
   .approval .name { font-size: 15px; font-weight: 700; margin-top: 6px; }
-  .footer { margin-top: 24px; font-size: 7px; color: #64748b; text-transform: uppercase; letter-spacing: .06em; }
 </style></head><body>
 <table class="layout"><thead><tr><td>${letterhead}</td></tr></thead><tbody><tr><td>
   <section>
@@ -215,7 +215,6 @@ export function buildManagementReportHtml(options: ReportHtmlOptions): string {
     <h3>Management review</h3>
     <table class="grid"><thead><tr><th>Reviewed by / designation</th><th>Signature &amp; date</th></tr></thead>
       <tbody><tr><td>MANAGEMENT</td><td>${esc(reviewerName)} (${esc(reviewDateLabel)})</td></tr></tbody></table>
-    <p class="footer">${esc(report.siteName)} | ${esc(reportName.trim() || "Daily Service")} | Management report</p>
   </section>
 </td></tr></tbody></table>
 </body></html>`;

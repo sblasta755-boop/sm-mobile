@@ -8,7 +8,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { scanOnboardingCode } from "@/api/client";
-import { colors, radius, spacing, typography } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles } from "@/theme";
 
 /**
  * Where a brand-new organisation's administrator scans the code their
@@ -125,7 +125,7 @@ export default function OnboardScan() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: colors.black,
@@ -185,4 +185,4 @@ const styles = StyleSheet.create({
     color: colors.destructive,
     textAlign: "center",
   },
-});
+}));

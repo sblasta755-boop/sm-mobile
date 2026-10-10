@@ -1,7 +1,7 @@
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { Screen } from "@/components/Screen";
 import { Card } from "@/components/Card";
-import { colors, spacing, typography } from "@/theme";
+import { colors, spacing, typography, themedStyles } from "@/theme";
 
 // Previously the profile menu's "Privacy & POPIA notice" row was a no-op
 // (onPress={() => {}}) - this is the real screen it now pushes to. Text
@@ -31,7 +31,7 @@ export default function PrivacyScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   content: {
     padding: spacing.md,
   },
@@ -49,4 +49,4 @@ const styles = StyleSheet.create({
     color: colors.mutedForeground,
     lineHeight: 18,
   },
-});
+}));

@@ -9,7 +9,7 @@ import { useSmartClean } from "@/features/store";
 import { useHomePath, useScanPath } from "@/features/roles";
 import { updateCorrectiveAction } from "@/api/client";
 import { humanStatus } from "@/domain/status";
-import { colors, spacing, typography } from "@/theme";
+import { colors, spacing, typography, themedStyles } from "@/theme";
 import { formatDateTime } from "@/services/formatDateTime";
 
 export default function CorrectiveActionDetailScreen() {
@@ -95,7 +95,7 @@ export default function CorrectiveActionDetailScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   card: {
     marginBottom: spacing.md,
     gap: spacing.xs,
@@ -148,4 +148,4 @@ const styles = StyleSheet.create({
   timelineActor: {
     fontWeight: "700",
   },
-});
+}));

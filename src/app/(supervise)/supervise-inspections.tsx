@@ -8,7 +8,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { useSmartClean } from "@/features/store";
 import { toneForTask, humanStatus } from "@/domain/status";
 import { taskDestination } from "@/domain/inspections";
-import { colors, radius, spacing, typography } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles } from "@/theme";
 import type { TaskStatus } from "@/types/smartclean";
 
 /**
@@ -103,7 +103,7 @@ export default function SuperviseInspections() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   tabsRow: {
     marginBottom: spacing.md,
     flexGrow: 0,
@@ -188,4 +188,4 @@ const styles = StyleSheet.create({
     fontSize: typography.small,
     color: colors.mutedForeground,
   },
-});
+}));

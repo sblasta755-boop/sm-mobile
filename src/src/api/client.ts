@@ -1390,3 +1390,59 @@ export function decideInspection(
     accessToken,
   );
 }
+
+// ---- Visitor wayfinding (staff installing beacons) ----
+
+export interface WayfindingBeaconRecord {
+  id: string;
+  code: string;
+  name: string;
+  kind: string;
+  latitude: number;
+  longitude: number;
+  safePoint: boolean;
+  active: boolean;
+  edgeCount: number;
+}
+
+export function listWayfindingBeacons(accessToken: string, siteId: string) {
+  return request<WayfindingBeaconRecord[]>(
+    `/wayfinding/beacons?siteId=${encodeURIComponent(siteId)}`,
+    {},
+    accessToken,
+  );
+}
+
+/** Installs a beacon at the phone's current position; the server links it
+ * to the nearest existing beacons automatically. */
+export function installWayfindingBeacon(
+  accessToken: string,
+  payload: {
+    siteId: string;
+    name: string;
+    kind: string;
+    latitude: number;
+    longitude: number;
+    accuracyM: number | null;
+    safePoint: boolean;
+  },
+) {
+  return request<WayfindingBeaconRecord>(
+    "/wayfinding/beacons",
+    { method: "POST", body: JSON.stringify(payload) },
+    accessToken,
+  );
+}
+
+/** A staff walk between two beacons: trusted on its own, marks the path
+ * verified and completes any open "walk this path" task. `blocked` closes it. */
+export function recordWayfindingPatrol(
+  accessToken: string,
+  payload: { aBeaconId: string; bBeaconId: string; seconds?: number; blocked?: boolean; note?: string },
+) {
+  return request<{ tasksCompleted: number; walkSeconds: number }>(
+    "/wayfinding/patrol",
+    { method: "POST", body: JSON.stringify(payload) },
+    accessToken,
+  );
+}

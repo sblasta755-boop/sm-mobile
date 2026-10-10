@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { router } from "expo-router";
-import { Alert, ImageBackground, Pressable, StyleSheet, Text, View } from "react-native";
+import { ImageBackground, Pressable, StyleSheet, Text, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { BrokenGlassIcon } from "@/components/BrokenGlassIcon";
@@ -16,7 +16,8 @@ import { clockIn as clockInRequest, clockOut as clockOutRequest } from "@/api/cl
 import { getCurrentCoords } from "@/services/geolocation";
 import { useSmartClean } from "@/features/store";
 import { toneForTask, humanStatus } from "@/domain/status";
-import { colors, radius, spacing, typography } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles, status } from "@/theme";
+import { appAlert } from "@/components/Dialog";
 
 export default function HomeScreen() {
   const { state, currentUser, refreshBackendData } = useSmartClean();
@@ -102,7 +103,7 @@ export default function HomeScreen() {
       else await clockOutRequest(state.accessToken, payload);
       await refreshBackendData();
     } catch (error) {
-      Alert.alert(
+      appAlert(
         direction === "in" ? "Could not clock in" : "Could not clock out",
         error instanceof Error ? error.message : "Please try again.",
       );
@@ -309,7 +310,7 @@ export default function HomeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   boardLinks: { flexDirection: "row", alignItems: "center", gap: spacing.md },
   shiftCard: {
     marginBottom: spacing.lg,
@@ -465,11 +466,11 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     marginBottom: spacing.sm,
     backgroundColor: colors.warningSoft,
-    borderColor: "#efd384",
+    borderColor: status.warning.border,
   },
   quickActions: {
     marginTop: spacing.lg,
     flexDirection: "row",
     gap: spacing.sm,
   },
-});
+}));

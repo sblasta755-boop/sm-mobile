@@ -7,7 +7,7 @@ import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { useSmartClean } from "@/features/store";
 import { collectOnboarding, pollOnboarding } from "@/api/client";
-import { colors, radius, spacing, typography } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles } from "@/theme";
 
 // The customer is standing there watching this screen while their
 // contact decides, so it polls briskly. 3s keeps the wait feeling live
@@ -131,7 +131,7 @@ export default function OnboardWaiting() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: colors.background,
@@ -179,4 +179,4 @@ const styles = StyleSheet.create({
     color: colors.destructive,
     textAlign: "center",
   },
-});
+}));

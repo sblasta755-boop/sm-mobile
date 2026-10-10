@@ -57,6 +57,48 @@ the workflow run number, so each build can be installed over the previous one.
 
 - Only `arm64-v8a` and `armeabi-v7a` are built (virtually all phones; smaller and faster).
   Add `x86_64` in the workflow's `-PreactNativeArchitectures` for emulators.
-- Android push notifications need Firebase (`google-services.json`); the app config has none
-  today, so FCM push isn't set up by this build.
 - iOS can't be built this way (needs macOS + Apple signing).
+
+## 4. Push notifications (Firebase) - one-time setup
+
+Push has two halves. The build handles one automatically; the other is a one-time upload.
+
+**A. In the APK (automatic):** the app needs Firebase's *client* file `google-services.json`.
+
+1. Firebase console → your project → Project settings → *Your apps* → add an **Android** app
+   with package name `za.co.smartclean.mobile` (if not already there).
+2. Download its `google-services.json`, then `base64 -w0 google-services.json`.
+3. Add it as repository secret **`GOOGLE_SERVICES_JSON_BASE64`**.
+
+The workflow decodes it, checks it is the right kind of file for the right package, and wires it
+into the build. Without the secret the APK still builds, with a warning, but gets no push.
+
+**B. Sending (once, outside the pipeline):** the backend sends through Expo's push service, which
+needs the Firebase *service-account* key for the same project:
+
+1. Firebase console → Project settings → Service accounts → *Generate new private key*
+   (this is the `...firebase-adminsdk...json` file - **never commit it or put it in a secret that
+   reaches the app**; it is a different file from `google-services.json`).
+2. expo.dev → your project → Credentials → Android → *FCM V1 service account key* → upload it.
+
+This is stored in your Expo account, not the repo, so it does not repeat per build.
+
+## 5. Download email
+
+After a successful build the workflow publishes the APK as a GitHub release (`build-<run number>`)
+and emails the link with the version, branch, commit and whether push is enabled.
+Add repository **variables** (Settings → Secrets and variables → Actions → Variables) and secrets:
+
+| Type | Name | Notes |
+|---|---|---|
+| Variable | `MAIL_TO` | recipient(s), comma-separated. **Unset = no email** (warning only) |
+| Variable | `EMAIL_PROVIDER` | `smtp` (default) or `brevo` |
+| Variable | `MAIL_FROM` | SMTP only, e.g. `Šoma360 <builds@yourdomain>` |
+| Secret / Variable | `SMTP_HOST`, `SMTP_USER`, `SMTP_PASS` / `SMTP_PORT`, `SMTP_SECURE` | SMTP only |
+| Secret / Variable | `BREVO_API_KEY` / `BREVO_FROM_EMAIL`, `BREVO_FROM_NAME` | Brevo only |
+
+These are the same names the EAS workflow and the backend use, so existing values work as-is.
+
+If the repository is **private**, the link asks the recipient to sign in to GitHub (they need
+access to the repo). For a link that opens for anyone, the APK would have to be hosted elsewhere
+(e.g. an S3/R2 bucket) - not done here.

@@ -10,7 +10,7 @@ import { filterTasks, filtersActive, NO_FILTERS, type TaskFilters } from "@/doma
 import { DateStrip, isSameDay, startOfDay } from "@/components/DateStrip";
 import { useSmartClean } from "@/features/store";
 import { toneForTask, humanStatus } from "@/domain/status";
-import { colors, radius, spacing, typography } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles } from "@/theme";
 import type { TaskStatus } from "@/types/smartclean";
 
 export default function ShiftsScreen() {
@@ -134,7 +134,7 @@ export default function ShiftsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   boardRow: { flexDirection: "row", justifyContent: "flex-end", marginBottom: spacing.sm },
   boardButton: {
     flexDirection: "row",
@@ -247,4 +247,4 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: colors.foreground,
   },
-});
+}));

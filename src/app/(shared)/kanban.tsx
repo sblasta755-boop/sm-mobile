@@ -8,7 +8,7 @@ import { TaskSearchBar } from "@/components/TaskSearchBar";
 import { useSmartClean } from "@/features/store";
 import { taskDestination } from "@/domain/inspections";
 import { boardColumns, filterTasks, isOverdue, NO_FILTERS, type TaskFilters } from "@/domain/taskBoard";
-import { colors, radius, spacing, typography } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles } from "@/theme";
 
 /**
  * The same tasks as My shift, laid out as a board: one column per stage,
@@ -99,7 +99,7 @@ export default function KanbanScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   top: { paddingHorizontal: spacing.lg, paddingTop: spacing.md },
   mineRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginBottom: spacing.sm },
   mineText: { fontSize: typography.small, color: colors.foreground },
@@ -139,4 +139,4 @@ const styles = StyleSheet.create({
     textAlign: "center",
     padding: spacing.md,
   },
-});
+}));

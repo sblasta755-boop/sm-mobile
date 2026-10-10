@@ -3,7 +3,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHasModule } from "@/features/modules";
 import { useSmartClean } from "@/features/store";
-import { colors, sizes, spacing, typography } from "@/theme";
+import { colors, sizes, spacing, typography, useThemeVersion } from "@/theme";
 
 /**
  * The client auditor's app: read the record, change nothing.
@@ -30,6 +30,7 @@ import { colors, sizes, spacing, typography } from "@/theme";
  * exist.
  */
 export default function AuditTabsLayout() {
+  useThemeVersion(); // re-render with the new colours when the theme changes
   const { currentUser, state } = useSmartClean();
   const insets = useSafeAreaInsets();
   // Fails open before bootstrap lands - see useHasModule.

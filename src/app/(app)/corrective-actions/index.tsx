@@ -6,7 +6,7 @@ import { Card } from "@/components/Card";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useSmartClean } from "@/features/store";
 import { humanStatus } from "@/domain/status";
-import { colors, radius, spacing, typography } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles } from "@/theme";
 import type { StatusTone } from "@/theme";
 
 export default function CorrectiveActionsScreen() {
@@ -46,7 +46,7 @@ export default function CorrectiveActionsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   empty: {
     borderWidth: 1,
     borderStyle: "dashed",
@@ -80,4 +80,4 @@ const styles = StyleSheet.create({
     fontSize: typography.small,
     color: colors.mutedForeground,
   },
-});
+}));

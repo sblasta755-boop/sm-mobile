@@ -11,7 +11,7 @@ import {
   revealStaffOnboardingCode,
   type StaffGrant,
 } from "@/api/client";
-import { colors, radius, spacing, typography } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles } from "@/theme";
 
 /**
  * Create a team member's account and hand them a QR code to scan.
@@ -245,7 +245,7 @@ function Field({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   form: { gap: spacing.md },
   field: { gap: spacing.xs },
   label: {
@@ -335,4 +335,4 @@ const styles = StyleSheet.create({
     fontSize: typography.small,
     fontWeight: "600",
   },
-});
+}));

@@ -10,7 +10,7 @@ import { Checkbox } from "@/components/Checkbox";
 import { useSmartClean } from "@/features/store";
 import { getMyAttendanceDays, type AttendanceDay } from "@/api/client";
 import { useTenantBranding } from "@/services/branding";
-import { colors, radius, spacing, typography } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles } from "@/theme";
 import { buildPerformanceProfileHtml } from "@/domain/performanceProfilePdf";
 
 const SECTIONS = [
@@ -179,7 +179,7 @@ export default function PerformanceProfileScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   introCard: {
     marginBottom: spacing.lg,
     gap: spacing.xs,
@@ -248,4 +248,4 @@ const styles = StyleSheet.create({
     fontSize: typography.tiny,
     color: colors.mutedForeground,
   },
-});
+}));

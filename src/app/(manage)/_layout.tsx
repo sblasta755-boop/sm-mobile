@@ -2,7 +2,7 @@ import { Redirect, Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useSmartClean } from "@/features/store";
-import { colors, sizes, spacing, typography } from "@/theme";
+import { colors, sizes, spacing, typography, useThemeVersion } from "@/theme";
 
 /**
  * The management app: org_admin, operations_manager and site_manager.
@@ -30,6 +30,7 @@ import { colors, sizes, spacing, typography } from "@/theme";
 const MANAGEMENT_ROLES = ["org_admin", "operations_manager", "site_manager"];
 
 export default function ManageTabsLayout() {
+  useThemeVersion(); // re-render with the new colours when the theme changes
   const { currentUser, state } = useSmartClean();
   const insets = useSafeAreaInsets();
 

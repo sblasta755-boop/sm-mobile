@@ -5,7 +5,7 @@ import { Card } from "@/components/Card";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useSmartClean } from "@/features/store";
 import { getPlatformSummary, type PlatformSummary } from "@/api/client";
-import { colors, spacing, typography } from "@/theme";
+import { colors, spacing, typography, themedStyles } from "@/theme";
 
 // Plain-language gloss for the audit action slugs the activity feed
 // surfaces. Mirrors ACTIVITY_VERB in the web console's
@@ -141,7 +141,7 @@ function Tile({ label, value }: { label: string; value: number | string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   refreshWrap: {
     height: 0,
     overflow: "hidden",
@@ -221,4 +221,4 @@ const styles = StyleSheet.create({
     fontSize: typography.small,
     fontWeight: "600",
   },
-});
+}));

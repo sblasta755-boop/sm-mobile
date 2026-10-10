@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { PanResponder, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { colors, radius, spacing, typography } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles } from "@/theme";
 
 const clamp = (n: number) => Math.max(0, Math.min(100, Math.round(n)));
 
@@ -115,7 +115,7 @@ export function ScoreControl({
 
 const THUMB = 22;
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   wrap: { gap: 4 },
   head: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   label: { flex: 1, fontSize: typography.small, color: colors.foreground },
@@ -161,4 +161,4 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     elevation: 3,
   },
-});
+}));

@@ -6,7 +6,7 @@ import { Screen } from "@/components/Screen";
 import { Card } from "@/components/Card";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useSmartClean } from "@/features/store";
-import { colors, radius, spacing, typography } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles } from "@/theme";
 
 /**
  * Corrective actions across this supervisor's sites.
@@ -144,7 +144,7 @@ export default function SuperviseActions() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   tabsRow: {
     marginBottom: spacing.md,
     flexGrow: 0,
@@ -225,4 +225,4 @@ const styles = StyleSheet.create({
     fontSize: typography.small,
     color: colors.mutedForeground,
   },
-});
+}));

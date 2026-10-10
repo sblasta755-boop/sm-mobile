@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useSmartClean } from "@/features/store";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
-import { colors, radius, spacing, typography } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles } from "@/theme";
 import type { Role } from "@/types/smartclean";
 
 /**
@@ -98,7 +98,7 @@ export default function Welcome() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: colors.background,
@@ -144,4 +144,4 @@ const styles = StyleSheet.create({
   cta: {
     marginTop: spacing.sm,
   },
-});
+}));

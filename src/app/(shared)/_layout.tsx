@@ -1,7 +1,7 @@
 import { Stack } from "expo-router";
 import { View } from "react-native";
 import { RoleTabBar } from "@/components/RoleTabBar";
-import { colors } from "@/theme";
+import { colors, useThemeVersion } from "@/theme";
 
 /**
  * Screens every role reaches, whichever app it came from: tasks, inspections,
@@ -15,6 +15,7 @@ import { colors } from "@/theme";
  * every screen, and content never runs under the phone's system buttons.
  */
 export default function SharedLayout() {
+  useThemeVersion(); // re-render with the new colours when the theme changes
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <View style={{ flex: 1 }}>

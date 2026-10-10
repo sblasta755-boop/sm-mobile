@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Alert, StyleSheet, Text, TextInput, View } from "react-native";
+import { StyleSheet, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Screen } from "@/components/Screen";
 import { Card } from "@/components/Card";
@@ -11,7 +11,8 @@ import {
   rejectOnboarding,
   type OnboardingGrant,
 } from "@/api/client";
-import { colors, radius, spacing, typography } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles } from "@/theme";
+import { appAlert } from "@/components/Dialog";
 
 // The operator is expected to be sitting on this screen with a customer
 // on the phone, so it polls rather than waiting for a manual refresh.
@@ -70,7 +71,7 @@ export default function PlatformApprovals() {
       await approveOnboarding(state.accessToken, grant.id);
       await load();
     } catch (err) {
-      Alert.alert("Could not approve", err instanceof Error ? err.message : "Please try again.");
+      appAlert("Could not approve", err instanceof Error ? err.message : "Please try again.");
     } finally {
       setBusyId(null);
     }
@@ -85,7 +86,7 @@ export default function PlatformApprovals() {
       setReason("");
       await load();
     } catch (err) {
-      Alert.alert("Could not reject", err instanceof Error ? err.message : "Please try again.");
+      appAlert("Could not reject", err instanceof Error ? err.message : "Please try again.");
     } finally {
       setBusyId(null);
     }
@@ -190,7 +191,7 @@ export default function PlatformApprovals() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   card: {
     marginBottom: spacing.md,
     gap: spacing.xs,
@@ -281,4 +282,4 @@ const styles = StyleSheet.create({
     fontSize: typography.small,
     fontWeight: "600",
   },
-});
+}));

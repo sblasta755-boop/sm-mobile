@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { colors, radius, spacing, typography } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles } from "@/theme";
 
 export function SelectField({
   label,
@@ -59,7 +59,7 @@ export function SelectField({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   field: {
     gap: spacing.xs,
   },
@@ -116,4 +116,4 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: colors.primary,
   },
-});
+}));

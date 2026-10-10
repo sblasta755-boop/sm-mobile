@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import { PanResponder, StyleSheet, View, type LayoutChangeEvent } from "react-native";
 import Svg, { Circle, Polygon, Rect } from "react-native-svg";
-import { colors, radius } from "@/theme";
+import { colors, radius, themedStyles } from "@/theme";
 
 /**
  * A quick, rough on-screen room-shape sketch - the manual fallback when
@@ -175,7 +175,7 @@ export function RoomSketchCanvas({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   canvas: {
     width: "100%",
     height: 320,
@@ -185,4 +185,4 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     overflow: "hidden",
   },
-});
+}));

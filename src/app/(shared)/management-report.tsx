@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
 import { Redirect } from "expo-router";
-import { Alert, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
+import * as FileSystem from "expo-file-system/legacy";
 import { Ionicons } from "@expo/vector-icons";
 import { Screen } from "@/components/Screen";
 import { Card } from "@/components/Card";
@@ -18,7 +19,9 @@ import {
   suggestedReportName,
 } from "@/domain/managementReport";
 import { buildManagementReportHtml } from "@/domain/managementReportHtml";
-import { colors, radius, spacing, typography } from "@/theme";
+import { stampReportFooter } from "@/domain/pdfFooter";
+import { colors, radius, spacing, typography, themedStyles } from "@/theme";
+import { appAlert } from "@/components/Dialog";
 
 // Who may produce a client-facing report - the same people the web Reports
 // page is open to. Cleaners and waiters never see this screen.
@@ -97,7 +100,12 @@ export default function ManagementReportScreen() {
         reviewDateLabel: longDate(dayKey(now)),
         photoSrc: (photo) => fileUrl(photo.filePath) ?? photo.uri ?? null,
       });
-      const { uri } = await Print.printToFileAsync({ html, base64: false });
+      // A4 explicitly: Android's print engine defaults to Letter.
+      const printed = await Print.printToFileAsync({ html, base64: true, width: 595, height: 842 });
+      // The print engine cannot number pages, so the footer is stamped on after.
+      const stamped = await stampReportFooter(printed.base64 ?? "", report.siteName, name.trim() || "Daily Service");
+      const uri = `${FileSystem.cacheDirectory}${(name.trim() || "Daily Service").replace(/[^\w-]+/g, "_")}_${dayKey(now)}.pdf`;
+      await FileSystem.writeAsStringAsync(uri, stamped, { encoding: FileSystem.EncodingType.Base64 });
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(uri, {
           mimeType: "application/pdf",
@@ -105,10 +113,10 @@ export default function ManagementReportScreen() {
           UTI: "com.adobe.pdf",
         });
       } else {
-        Alert.alert("Report ready", "Sharing isn't available on this device.");
+        appAlert("Report ready", "Sharing isn't available on this device.");
       }
     } catch (error) {
-      Alert.alert("Could not create the report", error instanceof Error ? error.message : "Please try again.");
+      appAlert("Could not create the report", error instanceof Error ? error.message : "Please try again.");
     } finally {
       setBusy(false);
     }
@@ -263,7 +271,7 @@ function Summary({ label, value }: { label: string; value: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   intro: { fontSize: typography.small, color: colors.mutedForeground, marginBottom: spacing.md },
   card: { gap: spacing.sm, marginBottom: spacing.md },
   label: { fontSize: typography.small, fontWeight: "700", color: colors.foreground },
@@ -307,4 +315,4 @@ const styles = StyleSheet.create({
   summary: { flexDirection: "row", justifyContent: "space-around" },
   summaryItem: { alignItems: "center" },
   summaryValue: { fontSize: 22, fontWeight: "800", color: colors.foreground },
-});
+}));

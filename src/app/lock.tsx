@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Button } from "@/components/Button";
 import { useSmartClean } from "@/features/store";
 import { getCapability, labelFor, requestUnlock, type BiometricKind } from "@/services/biometrics";
-import { colors, radius, spacing, typography } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles } from "@/theme";
 
 /**
  * The gate in front of a restored-but-locked session.
@@ -131,7 +131,7 @@ export default function LockScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: colors.background,
@@ -188,4 +188,4 @@ const styles = StyleSheet.create({
   unlockButton: {
     marginTop: spacing.xs,
   },
-});
+}));

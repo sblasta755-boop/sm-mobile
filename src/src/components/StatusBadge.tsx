@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { radius, spacing, status, typography, type StatusTone } from "@/theme";
+import { radius, spacing, status, typography, type StatusTone, themedStyles } from "@/theme";
 
 const ICON: Record<StatusTone, keyof typeof Ionicons.glyphMap> = {
   success: "checkmark",
@@ -40,7 +40,7 @@ export function VerifiedBadge({ label = "Verified" }: { label?: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   badge: {
     flexDirection: "row",
     alignItems: "center",
@@ -56,4 +56,4 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     textTransform: "capitalize",
   },
-});
+}));

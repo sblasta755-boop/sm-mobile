@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { WebView } from "react-native-webview";
-import { colors, radius, spacing, typography } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles } from "@/theme";
 
 /**
  * Shows why a geofenced QR scan/clock-in was rejected: the device's
@@ -111,7 +111,7 @@ function buildMapHtml({
 </html>`;
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   wrap: {
     borderRadius: radius.lg,
     overflow: "hidden",
@@ -137,4 +137,4 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: colors.foreground,
   },
-});
+}));

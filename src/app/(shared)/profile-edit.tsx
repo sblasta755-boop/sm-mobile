@@ -5,7 +5,7 @@ import { Screen } from "@/components/Screen";
 import { Button } from "@/components/Button";
 import { useSmartClean } from "@/features/store";
 import { toUserRecord, updateUser } from "@/api/client";
-import { colors, radius, spacing, typography } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles } from "@/theme";
 
 // Name/email/phone editing for the signed-in user. Phone has no
 // dedicated backend column - it round-trips through the JSONB profile
@@ -87,7 +87,7 @@ export default function EditProfileScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   form: {
     gap: spacing.lg,
   },
@@ -109,4 +109,4 @@ const styles = StyleSheet.create({
     color: colors.foreground,
     backgroundColor: colors.card,
   },
-});
+}));

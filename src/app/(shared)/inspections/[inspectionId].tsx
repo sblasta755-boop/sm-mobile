@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { router, useLocalSearchParams } from "expo-router";
-import { Alert, Image, Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Image, Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Screen } from "@/components/Screen";
 import { Card } from "@/components/Card";
@@ -19,8 +19,9 @@ import {
   PASS_SCORE,
   TASK_CATEGORIES,
 } from "@/domain/inspections";
-import { colors, radius, spacing, typography } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles } from "@/theme";
 import type { ChecklistItem } from "@/types/smartclean";
+import { appAlert } from "@/components/Dialog";
 
 /**
  * The inspection itself, on the phone: look at what was done (checklist,
@@ -74,7 +75,7 @@ export default function InspectionScreen() {
         reason: decision === "reject" ? reason.trim() : undefined,
       });
       await refreshBackendData();
-      Alert.alert(
+      appAlert(
         decision === "approve" ? "Approved" : "Sent back",
         decision === "approve"
           ? `${task.title} passed with a score of ${overall}.`
@@ -82,13 +83,13 @@ export default function InspectionScreen() {
       );
       router.replace(backToList as never);
     } catch (error) {
-      Alert.alert("Could not save the inspection", error instanceof Error ? error.message : "Please try again.");
+      appAlert("Could not save the inspection", error instanceof Error ? error.message : "Please try again.");
       setDeciding(null);
     }
   };
 
   const confirm = (decision: "approve" | "reject") =>
-    Alert.alert(
+    appAlert(
       decision === "approve" ? "Approve this task?" : "Send this task back?",
       decision === "approve"
         ? `It will be recorded as passed with a score of ${overall}.`
@@ -292,7 +293,7 @@ export default function InspectionScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   flex: { flex: 1 },
   card: { gap: spacing.sm, marginBottom: spacing.md },
   muted: { fontSize: typography.small, color: colors.mutedForeground },
@@ -374,4 +375,4 @@ const styles = StyleSheet.create({
   viewerImage: { width: "100%", height: "75%" },
   viewerLabel: { color: colors.white, marginTop: spacing.md, fontSize: typography.body, fontWeight: "600" },
   viewerHint: { color: "rgba(255,255,255,0.6)", marginTop: 4, fontSize: typography.tiny },
-});
+}));

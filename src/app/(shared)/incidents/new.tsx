@@ -11,7 +11,7 @@ import { useSmartClean } from "@/features/store";
 import { useHomePath, useScanPath } from "@/features/roles";
 import { useHasCapability } from "@/features/modules";
 import { createIncident, fileUrl, uploadImage } from "@/api/client";
-import { colors, radius, spacing, typography } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles } from "@/theme";
 import type { IncidentPriority } from "@/types/smartclean";
 
 const CATEGORIES = ["Safety", "Security", "Damage", "Complaint", "Lost property", "Maintenance", "Chemical spill", "Missing stock"];
@@ -377,7 +377,7 @@ export default function NewIncidentScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   form: {
     gap: spacing.md,
   },
@@ -582,4 +582,4 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-});
+}));

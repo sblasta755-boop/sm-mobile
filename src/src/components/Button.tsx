@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
-import { colors, radius, spacing, typography } from "@/theme";
+import { ActivityIndicator, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
+import { colors, radius, spacing, typography, themedStyles } from "@/theme";
+import { appAlert } from "@/components/Dialog";
 
 type Variant = "primary" | "outline" | "destructive" | "ghost";
 
@@ -44,7 +45,7 @@ export function Button({
           (result as Promise<unknown>)
             .catch((error: unknown) => {
               // A failure nothing else reported - never let it vanish silently.
-              Alert.alert("Something went wrong", error instanceof Error ? error.message : "Please try again.");
+              appAlert("Something went wrong", error instanceof Error ? error.message : "Please try again.");
             })
             .finally(() => {
               locked.current = false;
@@ -82,7 +83,7 @@ export function Button({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   base: {
     minHeight: 44,
     borderRadius: radius.md,
@@ -109,18 +110,18 @@ const styles = StyleSheet.create({
   pressed: {
     opacity: 0.85,
   },
-});
+}));
 
-const variantStyles: Record<Variant, ViewStyle> = StyleSheet.create({
+const variantStyles: Record<Variant, ViewStyle> = themedStyles(() => StyleSheet.create({
   primary: { backgroundColor: colors.primary },
   outline: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
   destructive: { backgroundColor: colors.destructive },
   ghost: { backgroundColor: "transparent" },
-});
+}));
 
-const textStyles = StyleSheet.create({
+const textStyles = themedStyles(() => StyleSheet.create({
   primary: { color: colors.primaryForeground },
   outline: { color: colors.foreground },
   destructive: { color: colors.white },
   ghost: { color: colors.primary },
-});
+}));

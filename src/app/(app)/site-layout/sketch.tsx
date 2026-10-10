@@ -8,7 +8,7 @@ import { SelectField } from "@/components/SelectField";
 import { RoomSketchCanvas, type RoomSketchResult } from "@/components/RoomSketchCanvas";
 import { useSmartClean } from "@/features/store";
 import { updateLocationPosition } from "@/api/client";
-import { colors, spacing, typography } from "@/theme";
+import { colors, spacing, typography, themedStyles } from "@/theme";
 
 const MODES = ["Box", "Polygon"] as const;
 
@@ -128,7 +128,7 @@ export default function SketchScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   emptyText: {
     fontSize: typography.body,
     color: colors.mutedForeground,
@@ -151,4 +151,4 @@ const styles = StyleSheet.create({
     fontSize: typography.small,
     color: colors.destructive,
   },
-});
+}));

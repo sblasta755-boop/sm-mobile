@@ -21,6 +21,9 @@ jobs:
     name: Gradle release build
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    permissions:
+      # Publishes the APK as a release so the emailed link has somewhere to point.
+      contents: write
     defaults:
       run:
         working-directory: src
@@ -44,6 +47,28 @@ jobs:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+      - name: Configure Firebase (push notifications)
+        id: firebase
+        run: |
+          # google-services.json is the Firebase *client* config for this Android app
+          # (package za.co.smartclean.mobile). It is a secret here, not a committed file.
+          if [ -z "$GOOGLE_SERVICES_JSON_BASE64" ]; then
+            echo "::warning::GOOGLE_SERVICES_JSON_BASE64 is not set - this APK will build but cannot receive push notifications (see src/docs/ANDROID_APK_BUILD.md)."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          printf '%s' "$GOOGLE_SERVICES_JSON_BASE64" | tr -d '[:space:]' | base64 --decode > google-services.json \
+            || { echo "::error::GOOGLE_SERVICES_JSON_BASE64 is not valid base64. Re-create it with: base64 -w0 google-services.json"; exit 1; }
+          # Wrong file (e.g. the service-account/admin-SDK key) or wrong app = silent push failure later.
+          jq -e '.project_info.project_id and (.client | length > 0)' google-services.json > /dev/null \
+            || { echo "::error::That is not a google-services.json (the Android client file from Firebase console > Project settings > Your apps). A service-account key will not work here."; exit 1; }
+          jq -e '[.client[].client_info.android_client_info.package_name] | index("za.co.smartclean.mobile")' google-services.json > /dev/null \
+            || { echo "::error::google-services.json has no Android app with package za.co.smartclean.mobile. Register that package in Firebase and download the file again."; exit 1; }
+          echo "Firebase project: $(jq -r .project_info.project_id google-services.json)"
+          echo "enabled=true" >> "$GITHUB_OUTPUT"
+        env:
+          GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v5
@@ -110,10 +135,64 @@ jobs:
           apksigner="$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)"
           "$apksigner" verify --print-certs android/app/build/outputs/apk/release/app-release.apk
 
+      - name: Name the APK
+        id: apk
+        run: |
+          version="$(node -p "require('./app.json').expo.version")"
+          name="soma360-${version}-build${{ github.run_number }}.apk"
+          cp android/app/build/outputs/apk/release/app-release.apk "$name"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "size=$(du -m "$name" | cut -f1)" >> "$GITHUB_OUTPUT"
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: soma360-release-${{ github.run_number }}
-          path: src/android/app/build/outputs/apk/release/app-release.apk
+          path: src/${{ steps.apk.outputs.name }}
           if-no-files-found: error
           retention-days: 30
+
+      - name: Publish release (gives the email a download link)
+        id: release
+        run: |
+          tag="build-${{ github.run_number }}"
+          gh release create "$tag" "${{ steps.apk.outputs.name }}" \
+            --repo "$GITHUB_REPOSITORY" --prerelease \
+            --title "Šoma360 ${{ steps.apk.outputs.version }} (build ${{ github.run_number }})" \
+            --notes "Branch \`${{ github.ref_name }}\`, commit ${GITHUB_SHA::7}. Signed release APK."
+          echo "url=https://github.com/$GITHUB_REPOSITORY/releases/download/$tag/${{ steps.apk.outputs.name }}" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Email the download link
+        if: ${{ vars.MAIL_TO != '' }}
+        run: |
+          npm install --no-save nodemailer
+          node scripts/send-build-email.mjs
+        env:
+          APK_URL: ${{ steps.release.outputs.url }}
+          APK_NAME: ${{ steps.apk.outputs.name }}
+          APK_SIZE_MB: ${{ steps.apk.outputs.size }}
+          APP_VERSION: ${{ steps.apk.outputs.version }}
+          VERSION_CODE: ${{ github.run_number }}
+          BRANCH: ${{ github.ref_name }}
+          COMMIT: ${{ github.sha }}
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          PUSH_ENABLED: ${{ steps.firebase.outputs.enabled }}
+          EMAIL_PROVIDER: ${{ vars.EMAIL_PROVIDER || 'smtp' }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ vars.SMTP_PORT || '587' }}
+          SMTP_SECURE: ${{ vars.SMTP_SECURE || 'false' }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          MAIL_FROM: ${{ vars.MAIL_FROM }}
+          MAIL_TO: ${{ vars.MAIL_TO }}
+          BREVO_API_KEY: ${{ secrets.BREVO_API_KEY }}
+          BREVO_FROM_EMAIL: ${{ vars.BREVO_FROM_EMAIL }}
+          BREVO_FROM_NAME: ${{ vars.BREVO_FROM_NAME || 'Šoma360' }}
+
+      - name: Warn when no email is configured
+        if: ${{ vars.MAIL_TO == '' }}
+        run: echo "::warning::MAIL_TO is not set, so no download email was sent. The APK is under Artifacts and in the build-${{ github.run_number }} release."

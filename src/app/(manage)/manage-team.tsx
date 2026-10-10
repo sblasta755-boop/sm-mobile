@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { SvgXml } from "react-native-svg";
 import { Ionicons } from "@expo/vector-icons";
 import { Screen } from "@/components/Screen";
@@ -14,9 +14,10 @@ import {
   revealStaffOnboardingCode,
   type StaffGrant,
 } from "@/api/client";
-import { colors, radius, spacing, typography } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles } from "@/theme";
 import type { StatusTone } from "@/theme";
 import type { DemoUser } from "@/types/smartclean";
+import { appAlert } from "@/components/Dialog";
 
 /**
  * The manager's team roster, and where an unfinished onboarding is
@@ -103,7 +104,7 @@ export default function ManageTeam() {
       setGrant(revealed);
       setQrSvg(await fetchStaffOnboardingQrSvg(state.accessToken, selected.id));
     } catch (err) {
-      Alert.alert("Could not show the code", err instanceof Error ? err.message : "Try again.");
+      appAlert("Could not show the code", err instanceof Error ? err.message : "Try again.");
     } finally {
       setBusy(false);
     }
@@ -116,7 +117,7 @@ export default function ManageTeam() {
       await reopenStaffOnboardingCode(state.accessToken, selected.id);
       await loadGrant(selected);
     } catch (err) {
-      Alert.alert("Could not reissue", err instanceof Error ? err.message : "Try again.");
+      appAlert("Could not reissue", err instanceof Error ? err.message : "Try again.");
     } finally {
       setBusy(false);
     }
@@ -244,7 +245,7 @@ function statusOf(user: DemoUser): string {
   return typeof status === "string" ? status : "Active";
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   searchRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -332,4 +333,4 @@ const styles = StyleSheet.create({
     color: colors.mutedForeground,
     lineHeight: 19,
   },
-});
+}));

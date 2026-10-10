@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Redirect, router, useLocalSearchParams } from "expo-router";
-import { Alert, Linking, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Linking, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Screen } from "@/components/Screen";
 import { Card } from "@/components/Card";
@@ -17,7 +17,8 @@ import { firstIncompleteKey, groupChecklist, isSectioned } from "@/domain/checkl
 import { itemPhotoProgress } from "@/domain/evidenceSlots";
 import { taskDestination } from "@/domain/inspections";
 import { toneForTask, humanStatus, taskSubmissionBlocked, taskStage, isChecklistUnlocked } from "@/domain/status";
-import { colors, radius, spacing, typography } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles } from "@/theme";
+import { appAlert } from "@/components/Dialog";
 
 // steps_required checklist items store their value as a single
 // newline-joined string (same shape as a "note" item's value) so the
@@ -99,7 +100,7 @@ export default function TaskDetailScreen() {
       const updated = await startTask(state.accessToken, task.id);
       dispatch({ type: "UPDATE_TASK", taskId: task.id, patch: updated });
     } catch (error) {
-      Alert.alert("Could not start task", error instanceof Error ? error.message : "Please try again.");
+      appAlert("Could not start task", error instanceof Error ? error.message : "Please try again.");
     }
   }
 
@@ -646,7 +647,7 @@ export default function TaskDetailScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   sectionHeader: {
     flexDirection: "row",
     alignItems: "center",
@@ -908,4 +909,4 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 4,
   },
-});
+}));

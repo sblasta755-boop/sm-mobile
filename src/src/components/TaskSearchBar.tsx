@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { filtersActive, NO_FILTERS, type PriorityFilter, type TaskFilters } from "@/domain/taskBoard";
-import { colors, radius, spacing, typography } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles } from "@/theme";
 
 const PRIORITIES: { value: PriorityFilter; label: string }[] = [
   { value: "all", label: "Any priority" },
@@ -107,7 +107,7 @@ export function TaskSearchBar({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   wrap: { marginBottom: spacing.md, gap: spacing.sm },
   row: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   inputWrap: {
@@ -170,4 +170,4 @@ const styles = StyleSheet.create({
   toggleRow: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
   toggleText: { fontSize: typography.small, color: colors.foreground },
   clear: { fontSize: typography.small, color: colors.primary },
-});
+}));

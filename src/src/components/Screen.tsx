@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { Fragment, useState, type ReactNode } from "react";
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { router, usePathname } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useSmartClean } from "@/features/store";
 import { homePathForRole } from "@/features/roles";
 import { ProfileMenuSheet } from "@/components/ProfileMenuSheet";
-import { colors, spacing, typography } from "@/theme";
+import { colors, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 
 // Every group's bottom-tab roots (see each _layout.tsx's <Tabs.Screen>
 // entries) don't get a back button - they're always reachable from the
@@ -70,6 +70,7 @@ export function Screen({
   scroll?: boolean;
   backTo?: string;
 }) {
+  const themeVersion = useThemeVersion();
   const { state, currentUser } = useSmartClean();
   const insets = useSafeAreaInsets();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -147,7 +148,8 @@ export function Screen({
         style={styles.content}
         contentContainerStyle={scroll ? styles.contentContainer : undefined}
       >
-        {children}
+        {/* Keyed so a theme change rebuilds the screen with the new colours. */}
+        <Fragment key={themeVersion}>{children}</Fragment>
       </Content>
 
       <ProfileMenuSheet visible={menuOpen} onClose={() => setMenuOpen(false)} />
@@ -196,7 +198,7 @@ function ProfileTrigger({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: colors.background,
@@ -323,4 +325,4 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     paddingBottom: spacing.xxl,
   },
-});
+}));

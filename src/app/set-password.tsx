@@ -16,7 +16,7 @@ import { useSmartClean } from "@/features/store";
 import { setInitialPassword } from "@/api/client";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
-import { colors, radius, spacing, typography } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles } from "@/theme";
 
 /**
  * The first thing a QR-onboarded administrator sees.
@@ -175,7 +175,7 @@ export default function SetPassword() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   flex: {
     flex: 1,
     backgroundColor: colors.background,
@@ -280,4 +280,4 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: colors.mutedForeground,
   },
-});
+}));

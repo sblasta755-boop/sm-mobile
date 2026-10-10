@@ -8,7 +8,7 @@ import { Button } from "@/components/Button";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useHasModule } from "@/features/modules";
 import { useSmartClean } from "@/features/store";
-import { colors, radius, spacing, typography } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles } from "@/theme";
 
 /**
  * What an auditor opens the app to ask: is this contract being
@@ -177,7 +177,7 @@ function Tile({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   flex: {
     flex: 1,
     minWidth: 0,
@@ -274,4 +274,4 @@ const styles = StyleSheet.create({
     color: colors.mutedForeground,
     lineHeight: 18,
   },
-});
+}));

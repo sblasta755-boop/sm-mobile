@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { router, useLocalSearchParams } from "expo-router";
-import { ActivityIndicator, Alert, Image, Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Image, Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -13,7 +13,8 @@ import { addTaskEvidence, fileUrl, uploadImage } from "@/api/client";
 import { taskStage } from "@/domain/status";
 import { evidenceForSlot, evidenceSlots, slotProgress, type EvidenceSlot } from "@/domain/evidenceSlots";
 import { useHasCapability, useHasModule } from "@/features/modules";
-import { colors, radius, spacing, typography } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles } from "@/theme";
+import { appAlert } from "@/components/Dialog";
 
 /** The word on a tile: a checklist item's photos are just Before / After / Photo. */
 function tileTitle(slot: EvidenceSlot): string {
@@ -142,13 +143,13 @@ export default function EvidenceScreen() {
 
   async function openCamera(slot: EvidenceSlot) {
     if (!slot.unlocked) {
-      Alert.alert("Not yet", slot.lockedReason ?? "This photo isn't available yet.");
+      appAlert("Not yet", slot.lockedReason ?? "This photo isn't available yet.");
       return;
     }
     if (!permission?.granted) {
       const res = await requestPermission();
       if (!res.granted) {
-        Alert.alert("Camera needed", "Allow camera access to capture task evidence.");
+        appAlert("Camera needed", "Allow camera access to capture task evidence.");
         return;
       }
     }
@@ -186,7 +187,7 @@ export default function EvidenceScreen() {
       const after = evidenceSlots(updatedTask, taskStage(updatedTask)).find((slot) => slot.key === cameraSlot.key);
       if (!after || after.required === null || after.taken >= after.required) setCameraSlotKey(null);
     } catch (error) {
-      Alert.alert("Could not save the photo", error instanceof Error ? error.message : "Please try again.");
+      appAlert("Could not save the photo", error instanceof Error ? error.message : "Please try again.");
     } finally {
       setBusy(false);
     }
@@ -314,7 +315,7 @@ export default function EvidenceScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   mutedSmall: { fontSize: typography.small, color: colors.mutedForeground },
   helpText: { fontSize: typography.small, color: colors.mutedForeground, marginBottom: spacing.md },
   group: { marginBottom: spacing.md, gap: spacing.sm },
@@ -398,4 +399,4 @@ const styles = StyleSheet.create({
   clockInPromptTitle: { fontSize: typography.h2, fontWeight: "700", color: colors.foreground, textAlign: "center" },
   clockInPromptText: { textAlign: "center" },
   clockInPromptButton: { marginTop: spacing.sm, alignSelf: "stretch" },
-});
+}));

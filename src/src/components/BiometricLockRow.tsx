@@ -9,7 +9,7 @@ import {
   setLockEnabled,
   type BiometricKind,
 } from "@/services/biometrics";
-import { colors, spacing, typography } from "@/theme";
+import { colors, spacing, typography, themedStyles } from "@/theme";
 
 /**
  * The biometric lock toggle, shared by every role's profile screen.
@@ -93,7 +93,7 @@ export function BiometricLockRow() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   row: {
     flexDirection: "row",
     alignItems: "center",
@@ -116,4 +116,4 @@ const styles = StyleSheet.create({
     color: colors.mutedForeground,
     lineHeight: 17,
   },
-});
+}));

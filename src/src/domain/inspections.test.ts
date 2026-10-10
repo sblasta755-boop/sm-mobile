@@ -5,8 +5,9 @@ import {
   latestInspectionFor,
   overallScore,
   PASS_SCORE,
-} from "./inspections";
+ taskDestination } from "./inspections";
 import type { Inspection } from "@/types/smartclean";
+
 
 const insp = (over: Partial<Inspection>): Inspection => ({
   id: "i",
@@ -48,8 +49,6 @@ describe("inspection helpers", () => {
     expect(canReviewSupervisorTask("supervisor")).toBe(false);
   });
 });
-
-import { taskDestination } from "./inspections";
 
 describe("taskDestination", () => {
   const submitted = { id: "t1", status: "submitted", assigneeId: "cleaner" };

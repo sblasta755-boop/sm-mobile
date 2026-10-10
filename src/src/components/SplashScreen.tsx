@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AccessibilityInfo, Animated, Easing, Image, StyleSheet, Text, View } from "react-native";
-import { colors, radius, spacing, typography } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles } from "@/theme";
 
 /**
  * Animated in-app splash screen shown while the session is being restored.
@@ -334,7 +334,7 @@ export function SplashScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   screen: {
     flex: 1,
     alignItems: "center",
@@ -450,4 +450,4 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderTopColor: colors.primary,
   },
-});
+}));

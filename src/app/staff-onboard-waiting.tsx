@@ -7,7 +7,7 @@ import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { useSmartClean } from "@/features/store";
 import { collectStaffOnboarding, pollStaffOnboarding } from "@/api/client";
-import { colors, radius, spacing, typography } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles } from "@/theme";
 
 // The new starter is standing with their manager while this runs, so it
 // polls briskly.
@@ -132,7 +132,7 @@ export default function StaffOnboardWaiting() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: colors.background,
@@ -180,4 +180,4 @@ const styles = StyleSheet.create({
     color: colors.destructive,
     textAlign: "center",
   },
-});
+}));

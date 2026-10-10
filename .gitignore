@@ -43,3 +43,7 @@ yarn-error.*
 # generate-version npm script) - regenerated fresh on every
 # start/build, never hand-edited or meant to be committed
 src/src/constants/version.ts
+
+# Firebase client config (decoded from a CI secret)
+google-services.json
+GoogleService-Info.plist

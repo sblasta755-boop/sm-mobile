@@ -12,7 +12,7 @@ import {
   revealOnboardingCode,
   type OnboardingGrant,
 } from "@/api/client";
-import { colors, radius, spacing, typography } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles } from "@/theme";
 
 const TIERS = ["trial", "starter", "professional", "enterprise"] as const;
 
@@ -244,7 +244,7 @@ function Field({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   form: {
     gap: spacing.md,
   },
@@ -352,4 +352,4 @@ const styles = StyleSheet.create({
     fontSize: typography.small,
     fontWeight: "600",
   },
-});
+}));

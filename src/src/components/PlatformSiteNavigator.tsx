@@ -14,7 +14,7 @@ import {
   RoutingError,
   type RouteLeg,
 } from "@/services/routing";
-import { colors, radius, spacing, typography } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles } from "@/theme";
 import type { PlatformSite } from "@/api/client";
 
 const OFF_ROUTE_METERS = 40;
@@ -393,7 +393,7 @@ function buildNavigatorHtml(destination: [number, number], siteName: string): st
 </html>`;
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   overlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: colors.background,
@@ -496,4 +496,4 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     fontSize: typography.small,
   },
-});
+}));

@@ -7,11 +7,11 @@ import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { StatusBadge } from "@/components/StatusBadge";
 import { TaskRow } from "@/components/TaskRow";
-import { useHasModule } from "@/features/modules";
 import { useSmartClean } from "@/features/store";
+import { useHasModule } from "@/features/modules";
 import { toneForTask, humanStatus } from "@/domain/status";
 import { taskDestination } from "@/domain/inspections";
-import { colors, radius, spacing, typography } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles } from "@/theme";
 
 /**
  * A supervisor's day: what is waiting to be inspected, and what they
@@ -24,6 +24,7 @@ import { colors, radius, spacing, typography } from "@/theme";
  */
 export default function SuperviseHome() {
   const { state, currentUser } = useSmartClean();
+  const wayfindingOn = useHasModule("wayfinding");
   const hasInspections = useHasModule("inspections");
   const hasCorrectiveActions = useHasModule("corrective_actions");
   const hasHourlyCompliance = useHasModule("hourly_compliance");
@@ -156,6 +157,25 @@ export default function SuperviseHome() {
         Management report
       </Button>
 
+      {wayfindingOn && (
+        <>
+        <Button
+          variant="outline"
+          icon={<Ionicons name="compass-outline" size={16} color={colors.foreground} />}
+          onPress={() => router.push("/install-beacon" as never)}
+        >
+          Wayfinding signs
+        </Button>
+        <Button
+          variant="outline"
+          icon={<Ionicons name="walk-outline" size={16} color={colors.foreground} />}
+          onPress={() => router.push("/patrol-walk" as never)}
+        >
+          Walk a path
+        </Button>
+        </>
+      )}
+
       {myTasks.length > 0 && (
         <>
           <View style={styles.sectionHeader}>
@@ -255,7 +275,7 @@ export default function SuperviseHome() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   flex: { flex: 1 },
   shiftCard: {
     marginBottom: spacing.lg,
@@ -409,4 +429,4 @@ const styles = StyleSheet.create({
     color: colors.warningForeground,
     lineHeight: 19,
   },
-});
+}));

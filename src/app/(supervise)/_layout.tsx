@@ -3,7 +3,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHasModule } from "@/features/modules";
 import { useSmartClean } from "@/features/store";
-import { colors, sizes, spacing, typography } from "@/theme";
+import { colors, sizes, spacing, typography, useThemeVersion } from "@/theme";
 
 /**
  * The supervisor's app: field quality assurance.
@@ -23,6 +23,7 @@ import { colors, sizes, spacing, typography } from "@/theme";
  * decides which app you get; modules decide which of its tabs exist.
  */
 export default function SuperviseTabsLayout() {
+  useThemeVersion(); // re-render with the new colours when the theme changes
   const { currentUser, state } = useSmartClean();
   const insets = useSafeAreaInsets();
   // All three fail open before bootstrap lands - see useHasModule.

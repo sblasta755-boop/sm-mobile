@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useLocalSearchParams } from "expo-router";
-import { Alert, Linking, Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { Linking, Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { SvgXml } from "react-native-svg";
 import { Ionicons } from "@expo/vector-icons";
 import { Screen } from "@/components/Screen";
@@ -23,8 +23,9 @@ import {
   type PlatformOrganisation,
   type PlatformSite,
 } from "@/api/client";
-import { colors, radius, spacing, typography } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles } from "@/theme";
 import type { StatusTone } from "@/theme";
+import { appAlert } from "@/components/Dialog";
 
 const STATUS_TONE: Record<string, StatusTone> = {
   trialing: "info",
@@ -140,7 +141,7 @@ export default function PlatformOrganisationDetail() {
         : `https://www.google.com/maps/dir/?api=1&destination=${destination}&travelmode=driving`;
       await Linking.openURL(url);
     } catch {
-      Alert.alert("Couldn't open maps", "Please try again.");
+      appAlert("Couldn't open maps", "Please try again.");
     } finally {
       setOpeningDirections(null);
     }
@@ -156,7 +157,7 @@ export default function PlatformOrganisationDetail() {
       await action();
       await load();
     } catch (err) {
-      Alert.alert(failure, err instanceof Error ? err.message : "Please try again.");
+      appAlert(failure, err instanceof Error ? err.message : "Please try again.");
     } finally {
       setBusy(false);
     }
@@ -380,7 +381,7 @@ function Row({ label, value }: { label: string; value: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   siteList: {
     gap: spacing.sm,
   },
@@ -488,4 +489,4 @@ const styles = StyleSheet.create({
     fontSize: typography.small,
     fontWeight: "600",
   },
-});
+}));

@@ -15,7 +15,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { confirmPasswordResetOtp, requestPasswordResetOtp } from "@/api/client";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
-import { colors, radius, spacing, typography } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles } from "@/theme";
 
 // Two steps, both inside the app: request a 6-digit code by email, then
 // enter it alongside a new password. Unlike the web app's forgot-
@@ -277,7 +277,7 @@ export default function ForgotPassword() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   flex: {
     flex: 1,
     backgroundColor: colors.background,
@@ -402,4 +402,4 @@ const styles = StyleSheet.create({
     color: colors.mutedForeground,
     textAlign: "center",
   },
-});
+}));

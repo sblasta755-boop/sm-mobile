@@ -1,5 +1,5 @@
 import { StyleSheet, View } from "react-native";
-import { colors, radius } from "@/theme";
+import { colors, radius, themedStyles } from "@/theme";
 
 export function ProgressBar({ value }: { value: number }) {
   const pct = Math.max(0, Math.min(100, value));
@@ -10,7 +10,7 @@ export function ProgressBar({ value }: { value: number }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   track: {
     height: 8,
     borderRadius: radius.round,
@@ -22,4 +22,4 @@ const styles = StyleSheet.create({
     borderRadius: radius.round,
     backgroundColor: colors.primary,
   },
-});
+}));

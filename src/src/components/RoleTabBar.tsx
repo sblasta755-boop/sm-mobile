@@ -4,7 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHasCapability, useHasModule } from "@/features/modules";
 import { useSmartClean } from "@/features/store";
-import { colors, sizes, spacing, typography } from "@/theme";
+import { colors, sizes, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 
 /**
  * The bottom navigation, for screens that live outside any role's tab group.
@@ -23,6 +23,7 @@ import { colors, sizes, spacing, typography } from "@/theme";
 type Tab = { label: string; to: string; icon: keyof typeof Ionicons.glyphMap; primary?: boolean };
 
 export function RoleTabBar() {
+  useThemeVersion();
   const { currentUser, state } = useSmartClean();
   const insets = useSafeAreaInsets();
   const pathname = usePathname();
@@ -124,7 +125,7 @@ export function RoleTabBar() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   bar: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -150,4 +151,4 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 6 },
     elevation: 6,
   },
-});
+}));

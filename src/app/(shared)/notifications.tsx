@@ -1,71 +1,221 @@
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Animated, Easing, Pressable, StyleSheet, Text, View } from "react-native";
+import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Screen } from "@/components/Screen";
-import { Card } from "@/components/Card";
+import { toneColors, type DialogTone } from "@/components/Dialog";
 import { useSmartClean } from "@/features/store";
 import { markNotificationRead } from "@/api/client";
-import { colors, radius, spacing, typography } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles } from "@/theme";
 import type { Notification } from "@/types/smartclean";
 
-// Previously the profile menu's "Notifications" row was a no-op
-// (onPress={() => {}}) - this is the real screen it now pushes to. Mirrors
-// the web app's mobile.notifications.tsx: bootstrap already scopes
-// state.notifications to what this user can see (tenant-wide broadcasts,
-// or ones targeted at them), so this reads it directly rather than
-// hitting the paged desktop endpoint.
+// bootstrap already scopes state.notifications to what this user can see
+// (tenant-wide broadcasts, or ones targeted at them), so this reads it
+// directly rather than hitting the paged desktop endpoint.
+
+type Filter = "all" | "unread" | "important";
+const FILTERS: { value: Filter; label: string }[] = [
+  { value: "all", label: "All" },
+  { value: "unread", label: "Unread" },
+  { value: "important", label: "Important" },
+];
+
+const toneOf = (n: Notification): DialogTone =>
+  n.severity === "critical" ? "danger" : n.severity === "warning" ? "warning" : n.read ? "info" : "info";
+
 export default function NotificationsScreen() {
   const { state, dispatch } = useSmartClean();
-  const mine = state.notifications;
+  const [filter, setFilter] = useState<Filter>("all");
+  const all = state.notifications;
+  const unread = all.filter((n) => !n.read);
+
+  const visible = useMemo(
+    () =>
+      all.filter((n) =>
+        filter === "unread" ? !n.read : filter === "important" ? n.severity !== "info" : true,
+      ),
+    [all, filter],
+  );
+  const groups = useMemo(() => groupByDay(visible), [visible]);
 
   const markRead = (n: Notification) => {
     if (n.read || !state.accessToken) return;
     dispatch({ type: "MARK_NOTIFICATION_READ", id: n.id, all: false });
-    markNotificationRead(state.accessToken, n.id).catch(() => {
-      // Best-effort - the read state already flipped locally above; a
-      // failed network call here just means the next full sync/reload
-      // reconciles it, same tradeoff the web app's version makes.
-    });
+    // Best-effort: the read state already flipped locally; a failed call is
+    // reconciled by the next sync.
+    markNotificationRead(state.accessToken, n.id).catch(() => {});
   };
 
+  const open = (n: Notification) => {
+    markRead(n);
+    if (n.relatedId && n.kind.toLowerCase().includes("task")) {
+      router.push(`/tasks/${n.relatedId}` as never);
+    }
+  };
+
+  const markAll = () => {
+    const token = state.accessToken;
+    dispatch({ type: "MARK_NOTIFICATION_READ", id: "", all: true });
+    if (token) unread.forEach((n) => markNotificationRead(token, n.id).catch(() => {}));
+  };
+
+  let index = 0;
   return (
     <Screen title="Notifications">
-      {mine.length === 0 ? (
+      <View style={styles.summary}>
+        <View style={styles.summaryText}>
+          <Text style={styles.summaryTitle}>
+            {unread.length === 0 ? "You're all caught up" : `${unread.length} new`}
+          </Text>
+          <Text style={styles.summarySub}>
+            {unread.length === 0 ? "Nothing needs your attention." : "Tap one to open it."}
+          </Text>
+        </View>
+        {unread.length > 0 && (
+          <Pressable accessibilityRole="button" onPress={markAll} style={styles.markAll}>
+            <Ionicons name="checkmark-done" size={16} color={colors.primary} />
+            <Text style={styles.markAllText}>Mark all read</Text>
+          </Pressable>
+        )}
+      </View>
+
+      <View style={styles.chips}>
+        {FILTERS.map((f) => {
+          const selected = filter === f.value;
+          return (
+            <Pressable
+              key={f.value}
+              accessibilityRole="button"
+              accessibilityState={{ selected }}
+              onPress={() => setFilter(f.value)}
+              style={[styles.chip, selected && styles.chipSelected]}
+            >
+              <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{f.label}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      {visible.length === 0 ? (
         <View style={styles.empty}>
-          <Text style={styles.mutedSmall}>
-            Nothing yet - new task assignments and updates will show up here.
+          <View style={styles.emptyIcon}>
+            <Ionicons name="notifications-off-outline" size={30} color={colors.primary} />
+          </View>
+          <Text style={styles.emptyTitle}>
+            {filter === "all" ? "Nothing yet" : filter === "unread" ? "No unread notifications" : "Nothing important"}
+          </Text>
+          <Text style={styles.emptySub}>
+            New task assignments and updates will show up here as they happen.
           </Text>
         </View>
       ) : (
-        mine.map((n) => {
-          const iconColor =
-            n.severity === "critical" ? colors.destructive : n.severity === "warning" ? colors.warningForeground : colors.primary;
-          return (
-            <Pressable key={n.id} onPress={() => markRead(n)}>
-              <Card style={[styles.card, !n.read && styles.unreadCard]}>
-                <View style={styles.row}>
-                  <Ionicons name={iconFor(n)} size={16} color={iconColor} style={styles.icon} />
-                  <View style={styles.textCol}>
-                    <Text style={styles.text}>{n.text}</Text>
-                    <Text style={styles.time}>{timeAgo(n.createdAt)}</Text>
-                  </View>
-                  {!n.read && <View style={styles.dot} />}
-                </View>
-              </Card>
-            </Pressable>
-          );
-        })
+        groups.map((group) => (
+          <View key={group.label}>
+            <Text style={styles.groupLabel}>{group.label}</Text>
+            {group.items.map((n) => (
+              <NotificationCard key={n.id} n={n} order={index++} onPress={() => open(n)} />
+            ))}
+          </View>
+        ))
       )}
     </Screen>
   );
 }
 
+function NotificationCard({ n, order, onPress }: { n: Notification; order: number; onPress: () => void }) {
+  const tone = toneColors(toneOf(n));
+  const enter = useRef(new Animated.Value(0)).current;
+  const press = useRef(new Animated.Value(1)).current;
+
+  // Cards ease in one after another, capped so a long list does not drag.
+  useEffect(() => {
+    Animated.timing(enter, {
+      toValue: 1,
+      duration: 320,
+      delay: Math.min(order, 8) * 45,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [enter, order]);
+
+  const squeeze = (to: number) =>
+    Animated.spring(press, { toValue: to, useNativeDriver: true, speed: 40, bounciness: 6 }).start();
+
+  return (
+    <Animated.View
+      style={{
+        opacity: enter,
+        transform: [
+          { translateY: enter.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }) },
+          { scale: press },
+        ],
+      }}
+    >
+      <Pressable
+        accessibilityRole="button"
+        onPress={onPress}
+        onPressIn={() => squeeze(0.98)}
+        onPressOut={() => squeeze(1)}
+        style={[
+          styles.card,
+          { borderColor: n.read ? colors.border : tone.fg + "55" },
+          // Unread cards carry a wash of their tone; read ones settle back to a plain card.
+          { backgroundColor: n.read ? colors.card : tone.bg },
+        ]}
+      >
+        <View style={[styles.accent, { backgroundColor: n.read ? colors.border : tone.fg }]} />
+        <View style={[styles.glow, { backgroundColor: tone.fg, shadowColor: tone.fg }, n.read && styles.glowRead]}>
+          <View style={[styles.bubble, { backgroundColor: tone.bg, borderColor: tone.fg + "66" }]}>
+            <Ionicons name={iconFor(n)} size={20} color={tone.fg} />
+          </View>
+        </View>
+        <View style={styles.textCol}>
+          <Text style={[styles.text, !n.read && styles.textUnread]} numberOfLines={4}>
+            {n.text}
+          </Text>
+          <View style={styles.metaRow}>
+            <Ionicons name="time-outline" size={12} color={colors.mutedForeground} />
+            <Text style={styles.time}>{timeAgo(n.createdAt)}</Text>
+            {n.severity !== "info" && (
+              <View style={[styles.tag, { backgroundColor: tone.bg, borderColor: tone.fg + "55" }]}>
+                <Text style={[styles.tagText, { color: tone.fg }]}>
+                  {n.severity === "critical" ? "Urgent" : "Heads up"}
+                </Text>
+              </View>
+            )}
+          </View>
+        </View>
+        {!n.read && <View style={[styles.dot, { backgroundColor: tone.fg }]} />}
+      </Pressable>
+    </Animated.View>
+  );
+}
+
 function iconFor(n: Notification): keyof typeof Ionicons.glyphMap {
   const needle = n.kind.toLowerCase();
-  if (needle.includes("task")) return "checkbox-outline";
-  if (needle.includes("corrective") || needle.includes("incident")) return "alert-circle-outline";
-  if (needle.includes("user") || needle.includes("staff")) return "person-add-outline";
-  if (n.severity === "critical" || n.severity === "warning") return "warning-outline";
-  return "information-circle-outline";
+  if (n.severity === "critical") return "alert-circle";
+  if (needle.includes("task")) return "checkmark-circle";
+  if (needle.includes("corrective") || needle.includes("incident")) return "flag";
+  if (needle.includes("user") || needle.includes("staff")) return "person-add";
+  if (n.severity === "warning") return "warning";
+  return "information-circle";
+}
+
+function dayLabel(iso: string): string {
+  const d = new Date(iso);
+  const today = new Date();
+  const start = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const diff = Math.round((start(today) - start(d)) / 86_400_000);
+  if (diff <= 0) return "Today";
+  if (diff === 1) return "Yesterday";
+  return "Earlier";
+}
+
+export function groupByDay(items: Notification[]): { label: string; items: Notification[] }[] {
+  const order = ["Today", "Yesterday", "Earlier"];
+  const buckets = new Map<string, Notification[]>();
+  for (const n of items) buckets.set(dayLabel(n.createdAt), [...(buckets.get(dayLabel(n.createdAt)) ?? []), n]);
+  return order.filter((l) => buckets.has(l)).map((label) => ({ label, items: buckets.get(label)! }));
 }
 
 function timeAgo(iso: string): string {
@@ -75,53 +225,99 @@ function timeAgo(iso: string): string {
   if (minutes < 60) return `${minutes} min ago`;
   const hours = Math.round(minutes / 60);
   if (hours < 24) return `${hours}h ago`;
-  const days = Math.round(hours / 24);
-  return `${days}d ago`;
+  return `${Math.round(hours / 24)}d ago`;
 }
 
-const styles = StyleSheet.create({
-  empty: {
-    padding: spacing.lg,
-    alignItems: "center",
-  },
-  mutedSmall: {
-    fontSize: typography.small,
-    color: colors.mutedForeground,
-    textAlign: "center",
-  },
-  card: {
-    marginBottom: spacing.sm,
-  },
-  unreadCard: {
-    borderColor: colors.primary,
-    backgroundColor: colors.accent,
-  },
-  row: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: spacing.sm,
-  },
-  icon: {
-    marginTop: 2,
-  },
-  textCol: {
-    flex: 1,
-  },
-  text: {
-    fontSize: typography.body,
-    fontWeight: "500",
-    color: colors.foreground,
-  },
-  time: {
-    fontSize: typography.tiny,
-    color: colors.mutedForeground,
-    marginTop: 2,
-  },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: radius.round,
-    backgroundColor: colors.primary,
-    marginTop: 4,
-  },
-});
+const styles = themedStyles(() =>
+  StyleSheet.create({
+    summary: { flexDirection: "row", alignItems: "center", gap: spacing.md, marginBottom: spacing.sm },
+    summaryText: { flex: 1 },
+    summaryTitle: { fontSize: typography.h1, fontWeight: "700", color: colors.foreground },
+    summarySub: { fontSize: typography.small, color: colors.mutedForeground, marginTop: 2 },
+    markAll: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      borderRadius: radius.round,
+      backgroundColor: colors.accent,
+    },
+    markAllText: { fontSize: typography.small, fontWeight: "600", color: colors.primary },
+    chips: { flexDirection: "row", gap: spacing.sm, marginBottom: spacing.md },
+    chip: {
+      paddingHorizontal: spacing.md,
+      paddingVertical: 7,
+      borderRadius: radius.round,
+      backgroundColor: colors.secondary,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    chipSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
+    chipText: { fontSize: typography.small, fontWeight: "600", color: colors.mutedForeground },
+    chipTextSelected: { color: colors.primaryForeground },
+    groupLabel: {
+      fontSize: typography.tiny,
+      fontWeight: "700",
+      letterSpacing: 1,
+      textTransform: "uppercase",
+      color: colors.mutedForeground,
+      marginTop: spacing.sm,
+      marginBottom: spacing.sm,
+    },
+    card: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.md,
+      borderRadius: radius.xl,
+      borderWidth: 1,
+      paddingVertical: spacing.md,
+      paddingRight: spacing.md,
+      paddingLeft: spacing.lg,
+      marginBottom: spacing.sm,
+      overflow: "hidden",
+    },
+    accent: { position: "absolute", left: 0, top: 0, bottom: 0, width: 4 },
+    // The bubble sits on a faint halo of its own colour, like the reference.
+    glow: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      alignItems: "center",
+      justifyContent: "center",
+      opacity: 1,
+      shadowOpacity: 0.55,
+      shadowRadius: 10,
+      shadowOffset: { width: 0, height: 0 },
+      elevation: 4,
+    },
+    glowRead: { opacity: 0.55, shadowOpacity: 0, elevation: 0 },
+    bubble: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      borderWidth: 1,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    textCol: { flex: 1, gap: 6 },
+    text: { fontSize: typography.body, color: colors.mutedForeground, lineHeight: 20 },
+    textUnread: { color: colors.foreground, fontWeight: "600" },
+    metaRow: { flexDirection: "row", alignItems: "center", gap: 5 },
+    time: { fontSize: typography.small, color: colors.mutedForeground },
+    tag: { marginLeft: spacing.xs, paddingHorizontal: 8, paddingVertical: 2, borderRadius: radius.round, borderWidth: 1 },
+    tagText: { fontSize: typography.tiny, fontWeight: "700" },
+    dot: { width: 9, height: 9, borderRadius: 5 },
+    empty: { alignItems: "center", paddingVertical: spacing.xxl, gap: spacing.sm },
+    emptyIcon: {
+      width: 68,
+      height: 68,
+      borderRadius: 34,
+      backgroundColor: colors.accent,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    emptyTitle: { fontSize: typography.h2, fontWeight: "700", color: colors.foreground },
+    emptySub: { fontSize: typography.body, color: colors.mutedForeground, textAlign: "center", maxWidth: 260 },
+  }),
+);

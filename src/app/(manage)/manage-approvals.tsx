@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Alert, StyleSheet, Text, TextInput, View } from "react-native";
+import { StyleSheet, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Screen } from "@/components/Screen";
 import { Card } from "@/components/Card";
@@ -11,7 +11,8 @@ import {
   rejectStaffOnboarding,
   type StaffGrant,
 } from "@/api/client";
-import { colors, radius, spacing, typography } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles } from "@/theme";
+import { appAlert } from "@/components/Dialog";
 
 // The manager is expected to be standing with the new starter, so this
 // polls rather than waiting for a manual refresh.
@@ -68,7 +69,7 @@ export default function ManageApprovals() {
       await approveStaffOnboarding(state.accessToken, grant.id);
       await load();
     } catch (err) {
-      Alert.alert("Could not approve", err instanceof Error ? err.message : "Try again.");
+      appAlert("Could not approve", err instanceof Error ? err.message : "Try again.");
     } finally {
       setBusyId(null);
     }
@@ -83,7 +84,7 @@ export default function ManageApprovals() {
       setReason("");
       await load();
     } catch (err) {
-      Alert.alert("Could not reject", err instanceof Error ? err.message : "Try again.");
+      appAlert("Could not reject", err instanceof Error ? err.message : "Try again.");
     } finally {
       setBusyId(null);
     }
@@ -190,7 +191,7 @@ export default function ManageApprovals() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   card: {
     marginBottom: spacing.md,
     gap: spacing.xs,
@@ -279,4 +280,4 @@ const styles = StyleSheet.create({
     fontSize: typography.small,
     fontWeight: "600",
   },
-});
+}));

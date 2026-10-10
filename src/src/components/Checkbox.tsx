@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { colors, radius } from "@/theme";
+import { colors, radius, themedStyles } from "@/theme";
 
 export function Checkbox({
   checked,
@@ -29,7 +29,7 @@ export function Checkbox({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   box: {
     width: 24,
     height: 24,
@@ -47,4 +47,4 @@ const styles = StyleSheet.create({
   boxDisabled: {
     opacity: 0.5,
   },
-});
+}));

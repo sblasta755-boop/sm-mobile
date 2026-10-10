@@ -8,7 +8,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { useSmartClean } from "@/features/store";
 import { isSameDay } from "@/components/DateStrip";
 import { toneForTask, humanStatus } from "@/domain/status";
-import { colors, radius, spacing, typography } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles, status } from "@/theme";
 
 // LEGACY SCREEN, NOW READ FROM REAL TASKS - superseded by tagged Tasks
 // (see the "Hourly compliance" tab on the web app's /tasks and
@@ -205,12 +205,12 @@ export default function HourlyComplianceScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   banner: {
     borderWidth: 1,
     // Same info-tone border as StatusBadge's own "info" pill (see
     // theme/status.ts) - colors.ts has no dedicated infoBorder token.
-    borderColor: "#abcbed",
+    borderColor: status.info.border,
     backgroundColor: colors.infoSoft,
     borderRadius: radius.md,
     padding: spacing.sm,
@@ -286,4 +286,4 @@ const styles = StyleSheet.create({
     fontSize: typography.small,
     color: colors.mutedForeground,
   },
-});
+}));

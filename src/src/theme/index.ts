@@ -5,3 +5,4 @@ export * from "./radius";
 export * from "./shadows";
 export * from "./sizes";
 export * from "./status";
+export * from "./themeStore";

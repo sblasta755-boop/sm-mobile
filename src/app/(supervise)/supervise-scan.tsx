@@ -21,7 +21,7 @@ import {
 import { reportBatteryOnce } from "@/features/deviceHealth";
 import { getCurrentCoords } from "@/services/geolocation";
 import { useTenantBranding } from "@/services/branding";
-import { colors, radius, spacing, typography } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles, status } from "@/theme";
 
 // Mirrors the geofence rejection detail shape from app/(app)/scan.tsx -
 // see that file's own comment for where the backend attaches this.
@@ -479,7 +479,7 @@ function ChecklistLine({ icon, text }: { icon: keyof typeof Ionicons.glyphMap; t
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   sitePickerTitle: {
     fontSize: typography.body,
     fontWeight: "700",
@@ -591,11 +591,11 @@ const styles = StyleSheet.create({
   },
   resultOk: {
     backgroundColor: colors.successSoft,
-    borderColor: "#a8ddc5",
+    borderColor: status.success.border,
   },
   resultBad: {
     backgroundColor: colors.destructiveSoft,
-    borderColor: "#f4aaa4",
+    borderColor: status.destructive.border,
   },
   resultHeader: {
     flexDirection: "row",
@@ -652,7 +652,7 @@ const styles = StyleSheet.create({
     maxWidth: 360,
     borderRadius: radius.xl,
     borderWidth: 1,
-    borderColor: "#a8ddc5",
+    borderColor: status.success.border,
     backgroundColor: colors.successSoft,
     padding: spacing.xl,
     alignItems: "center",
@@ -714,4 +714,4 @@ const styles = StyleSheet.create({
     fontSize: typography.small,
     color: colors.mutedForeground,
   },
-});
+}));

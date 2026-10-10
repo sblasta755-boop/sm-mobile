@@ -8,7 +8,7 @@ import { SelectField } from "@/components/SelectField";
 import { useCanManageSiteLayout } from "@/features/roles";
 import { useHasModule } from "@/features/modules";
 import { useSmartClean } from "@/features/store";
-import { colors, radius, spacing, typography } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles } from "@/theme";
 
 /**
  * Entry point for the mobile site-layout flows: photo-of-a-paper-plan
@@ -149,7 +149,7 @@ function Row({ icon, label, onPress }: { icon: keyof typeof Ionicons.glyphMap; l
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   emptyTitle: {
     marginTop: spacing.sm,
     fontSize: typography.h2,
@@ -202,4 +202,4 @@ const styles = StyleSheet.create({
     color: colors.mutedForeground,
     textAlign: "center",
   },
-});
+}));

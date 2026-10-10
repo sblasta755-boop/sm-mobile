@@ -18,7 +18,7 @@ import { resolveBranding, type ResolvedBranding } from "@/services/branding";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
 import { Ionicons } from "@expo/vector-icons";
-import { colors, radius, spacing, typography } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles } from "@/theme";
 
 export default function Login() {
   const { signIn } = useSmartClean();
@@ -242,7 +242,7 @@ export default function Login() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   flex: {
     flex: 1,
     backgroundColor: colors.background,
@@ -449,4 +449,4 @@ const styles = StyleSheet.create({
     width: 20,
     height: 17,
   },
-});
+}));

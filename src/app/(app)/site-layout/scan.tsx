@@ -17,7 +17,7 @@ import {
   type RoomScanResult,
   type RoomScanTrackingState,
 } from "room-scan";
-import { colors, radius, spacing, typography } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles } from "@/theme";
 
 /**
  * True AR room scanning - Apple RoomPlan on iOS (16+, A12+ chip), a
@@ -427,7 +427,7 @@ function ScanProgressPanel({ progress }: { progress: RoomScanProgress | null }) 
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   emptyTitle: {
     marginTop: spacing.sm,
     fontSize: typography.h2,
@@ -512,4 +512,4 @@ const styles = StyleSheet.create({
     fontSize: typography.small,
     color: colors.destructive,
   },
-});
+}));

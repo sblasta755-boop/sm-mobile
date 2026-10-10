@@ -3,6 +3,8 @@ import * as NativeSplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { SmartCleanProvider } from "@/features/store";
+import { ThemeProvider, useTheme } from "@/theme";
+import { DialogHost } from "@/components/Dialog";
 import { usePushRegistration } from "@/features/pushNotifications";
 import { useDeviceHealthReporting } from "@/features/deviceHealth";
 
@@ -16,11 +18,14 @@ NativeSplashScreen.preventAutoHideAsync().catch(() => {});
 export default function RootLayout() {
   return (
     <SafeAreaProvider>
-      <SmartCleanProvider>
-        <PushNotificationsBridge />
-        <StatusBar style="dark" />
-        <Stack screenOptions={{ headerShown: false }} />
-      </SmartCleanProvider>
+      <ThemeProvider>
+        <SmartCleanProvider>
+          <PushNotificationsBridge />
+          <ThemedStatusBar />
+          <Stack screenOptions={{ headerShown: false }} />
+          <DialogHost />
+        </SmartCleanProvider>
+      </ThemeProvider>
     </SafeAreaProvider>
   );
 }
@@ -32,4 +37,10 @@ function PushNotificationsBridge() {
   usePushRegistration();
   useDeviceHealthReporting();
   return null;
+}
+
+// Light text on a dark app and vice versa.
+function ThemedStatusBar() {
+  const { theme } = useTheme();
+  return <StatusBar style={theme === "dark" ? "light" : "dark"} />;
 }

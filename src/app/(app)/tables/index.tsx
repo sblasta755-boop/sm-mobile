@@ -10,7 +10,7 @@ import { attendTableSession, claimTableSession, listTableSessions } from "@/api/
 import { riskLabel, sortByRisk } from "@/features/tableRisk";
 import { Button } from "@/components/Button";
 import type { TableSession } from "@/types/smartclean";
-import { colors, radius, spacing, typography } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles } from "@/theme";
 
 // How often to re-fetch the table grid while this screen is open. Push
 // SHOULD tell the waiter about a new request the moment it lands
@@ -209,7 +209,7 @@ function SessionRow({ session, onAttend }: { session: TableSession; onAttend?: (
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   claimCard: {
     marginBottom: spacing.lg,
     gap: spacing.xs,
@@ -300,4 +300,4 @@ const styles = StyleSheet.create({
     color: colors.warning,
     fontWeight: "600",
   },
-});
+}));

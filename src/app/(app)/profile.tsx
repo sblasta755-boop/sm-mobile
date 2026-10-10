@@ -9,12 +9,13 @@ import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { StatusBadge } from "@/components/StatusBadge";
 import { BrokenGlassIcon } from "@/components/BrokenGlassIcon";
+import { AppearanceRow, ReportsRow } from "@/components/ProfilePreferences";
 import { BiometricLockRow } from "@/components/BiometricLockRow";
 import { useSmartClean } from "@/features/store";
 import { useCanManageSiteLayout } from "@/features/roles";
 import { fileUrl, getMyRatingSummary, toUserRecord, updateUser, uploadImage } from "@/api/client";
 import type { TableRatingSummary } from "@/types/smartclean";
-import { colors, radius, spacing, typography } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles } from "@/theme";
 import { APP_VERSION } from "@/constants/version";
 
 export default function ProfileScreen() {
@@ -171,6 +172,8 @@ export default function ProfileScreen() {
             enrolled - see BiometricLockRow. */}
         <Card>
           <BiometricLockRow />
+          <ReportsRow />
+          <AppearanceRow />
         </Card>
       </View>
 
@@ -238,7 +241,7 @@ function Row({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   profileCard: {
     flexDirection: "row",
     alignItems: "center",
@@ -373,4 +376,4 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: colors.mutedForeground,
   },
-});
+}));

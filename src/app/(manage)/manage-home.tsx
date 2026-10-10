@@ -7,7 +7,8 @@ import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useSmartClean } from "@/features/store";
-import { colors, spacing, typography } from "@/theme";
+import { useHasModule } from "@/features/modules";
+import { colors, spacing, typography, themedStyles } from "@/theme";
 
 /**
  * What a manager needs on opening the app: is anything wrong at my
@@ -21,6 +22,7 @@ import { colors, spacing, typography } from "@/theme";
  */
 export default function ManageHome() {
   const { state, currentUser } = useSmartClean();
+  const wayfindingOn = useHasModule("wayfinding");
 
   const mySites = useMemo(() => {
     // org_admin and operations_manager are tenant-wide and carry no
@@ -74,6 +76,25 @@ export default function ManageHome() {
       >
         Management report
       </Button>
+
+      {wayfindingOn && (
+        <>
+        <Button
+          variant="outline"
+          icon={<Ionicons name="compass-outline" size={16} color={colors.foreground} />}
+          onPress={() => router.push("/install-beacon" as never)}
+        >
+          Wayfinding signs
+        </Button>
+        <Button
+          variant="outline"
+          icon={<Ionicons name="walk-outline" size={16} color={colors.foreground} />}
+          onPress={() => router.push("/patrol-walk" as never)}
+        >
+          Walk a path
+        </Button>
+        </>
+      )}
 
       <View style={styles.tiles}>
         <Tile label="Open tasks" value={openTasks.length} />
@@ -199,7 +220,7 @@ function Row({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   flex: { flex: 1 },
   tiles: {
     flexDirection: "row",
@@ -310,4 +331,4 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: colors.foreground,
   },
-});
+}));

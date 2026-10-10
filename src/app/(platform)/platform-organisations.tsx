@@ -7,7 +7,7 @@ import { Card } from "@/components/Card";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useSmartClean } from "@/features/store";
 import { listPlatformOrganisations, type PlatformOrganisation } from "@/api/client";
-import { colors, radius, spacing, typography } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles } from "@/theme";
 import type { StatusTone } from "@/theme";
 
 // Mirrors the web console's STATUS_TONE. past_due is a warning rather
@@ -160,7 +160,7 @@ export default function PlatformOrganisations() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   searchRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -223,4 +223,4 @@ const styles = StyleSheet.create({
     fontSize: typography.small,
     fontWeight: "600",
   },
-});
+}));

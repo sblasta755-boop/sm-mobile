@@ -3,7 +3,8 @@ import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSmartClean } from "@/features/store";
 import { Button } from "@/components/Button";
-import { colors, radius, spacing, typography } from "@/theme";
+import { AppearanceRow } from "@/components/ProfilePreferences";
+import { colors, radius, spacing, typography, themedStyles } from "@/theme";
 
 export function ProfileMenuSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const { state, currentUser, signOut } = useSmartClean();
@@ -50,6 +51,8 @@ export function ProfileMenuSheet({ visible, onClose }: { visible: boolean; onClo
           </View>
         </View>
 
+        <AppearanceRow />
+
         <Button variant="outline" onPress={handleSignOut} style={styles.signOut}>
           Sign out
         </Button>
@@ -58,7 +61,7 @@ export function ProfileMenuSheet({ visible, onClose }: { visible: boolean; onClo
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   backdrop: {
     flex: 1,
     backgroundColor: colors.overlay,
@@ -131,4 +134,4 @@ const styles = StyleSheet.create({
   signOut: {
     marginTop: spacing.sm,
   },
-});
+}));
