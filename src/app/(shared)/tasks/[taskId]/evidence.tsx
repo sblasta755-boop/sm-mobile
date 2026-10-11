@@ -51,7 +51,7 @@ export default function EvidenceScreen() {
     );
   }
 
-  // Same gate as the task detail screen (see tasks/[taskId]/index.tsx) —
+  // Same gate as the task detail screen (see tasks/[taskId]/index.tsx) -
   // reached directly here if the app was already on this screen when the
   // task's clockedIn flipped false (e.g. a background clock-out), or via
   // deep link. The backend hard-blocks add_evidence regardless; this just
@@ -82,7 +82,7 @@ export default function EvidenceScreen() {
   }
 
   // Same "one task in progress at a time" gate as the task detail screen
-  // (see tasks/[taskId]/index.tsx) — the backend hard-blocks add_evidence
+  // (see tasks/[taskId]/index.tsx) - the backend hard-blocks add_evidence
   // regardless (TaskController._assert_no_other_task_in_progress); this
   // just stops a doomed camera session before it starts.
   const otherTaskInProgress =

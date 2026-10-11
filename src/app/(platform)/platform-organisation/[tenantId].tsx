@@ -211,7 +211,7 @@ export default function PlatformOrganisationDetail() {
               : "Unlimited"
           }
         />
-        <Row label="Billing email" value={organisation?.subscription?.billingEmail ?? "—"} />
+        <Row label="Billing email" value={organisation?.subscription?.billingEmail ?? "-"} />
       </Card>
 
       {grant && (
@@ -234,7 +234,7 @@ export default function PlatformOrganisationDetail() {
             <View style={styles.qrWrap}>
               <SvgXml xml={qrSvg} width="100%" height={240} />
               <Text style={styles.matchLabel}>They should say</Text>
-              <Text style={styles.matchWord}>{grant.matchWord ?? "—"}</Text>
+              <Text style={styles.matchWord}>{grant.matchWord ?? "-"}</Text>
             </View>
           )}
 

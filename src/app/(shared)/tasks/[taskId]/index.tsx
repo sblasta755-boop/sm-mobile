@@ -135,7 +135,7 @@ export default function TaskDetailScreen() {
         value: typeof value === "string" ? value : undefined,
       });
     } catch {
-      // best-effort — local optimistic update stands; next refresh will reconcile
+      // best-effort - local optimistic update stands; next refresh will reconcile
     }
   }
 
@@ -164,7 +164,7 @@ export default function TaskDetailScreen() {
   // rejects every write this screen could attempt (checklist/evidence/
   // submit all require assigneeId === this user), so this is a
   // read-only "here's what's going on" screen instead of letting them
-  // tap around into API errors — mirrors the web app's
+  // tap around into API errors - mirrors the web app's
   // mobile.tasks.$taskId.tsx.
   const isUnclaimedCandidate =
     task.isHourlyCompliance &&
@@ -225,7 +225,7 @@ export default function TaskDetailScreen() {
     );
   }
 
-  // Blocks the whole screen, not just Submit — matches the backend's own
+  // Blocks the whole screen, not just Submit - matches the backend's own
   // hard enforcement (TaskController._assert_clocked_in) and the web
   // app's mobile.tasks.$taskId.tsx, and README.md's stated order: clock
   // in (Attendance) is step 1, task work is step 2.
@@ -334,7 +334,7 @@ export default function TaskDetailScreen() {
             <Checkbox
               checked={Boolean(item.done)}
               // photo_required auto-ticks itself once both before/after
-              // photos exist (see the backend's add_evidence) — it's
+              // photos exist (see the backend's add_evidence) - it's
               // evidence-driven, not something to check by hand.
               disabled={item.type === "photo_required" || !checklistUnlocked}
               onChange={(value) => toggleCheck(item.id, value)}
@@ -537,7 +537,7 @@ export default function TaskDetailScreen() {
               <Ionicons name="camera-outline" size={18} color={colors.primary} />
               <View style={styles.beforePromptText}>
                 <Text style={styles.beforePromptTitle}>
-                  {task.requiresBeforeAfter ? "Checklist done — take an After photo" : "Take your Evidence photo"}
+                  {task.requiresBeforeAfter ? "Checklist done - take an After photo" : "Take your Evidence photo"}
                 </Text>
                 <Text style={styles.mutedSmall}>
                   {task.requiresBeforeAfter
@@ -613,7 +613,7 @@ export default function TaskDetailScreen() {
         <View style={styles.infoBox}>
           <Ionicons name="information-circle-outline" size={14} color={colors.info} />
           <Text style={styles.infoLine}>
-            Already submitted — this task is{" "}
+            Already submitted - this task is{" "}
             {task.status === "submitted" || task.status === "resubmitted"
               ? "awaiting supervisor inspection"
               : task.isSupervisorTask && task.status === "approved"

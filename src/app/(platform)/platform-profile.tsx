@@ -38,7 +38,7 @@ export default function PlatformProfile() {
           <Text style={styles.avatarText}>{currentUser?.initials ?? "?"}</Text>
         </View>
         <View style={styles.identityInfo}>
-          <Text style={styles.name}>{currentUser?.name ?? "—"}</Text>
+          <Text style={styles.name}>{currentUser?.name ?? "-"}</Text>
           <Text style={styles.role}>Šoma360 operator</Text>
           {currentUser?.email && <Text style={styles.muted}>{currentUser.email}</Text>}
         </View>

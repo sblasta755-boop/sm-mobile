@@ -22,17 +22,17 @@ function escapeHtml(value: string): string {
 }
 
 function formatDate(iso: string | undefined): string {
-  if (!iso) return "—";
+  if (!iso) return "-";
   return new Date(iso).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" });
 }
 
 function formatMonthYear(iso: string | undefined): string {
-  if (!iso) return "—";
+  if (!iso) return "-";
   return new Date(iso).toLocaleDateString("en-ZA", { month: "long", year: "numeric" });
 }
 
 function formatHours(minutes: number | undefined): string {
-  if (!minutes) return "—";
+  if (!minutes) return "-";
   const hours = Math.floor(minutes / 60);
   const mins = minutes % 60;
   return mins ? `${hours}h ${mins}m` : `${hours}h`;
@@ -270,7 +270,7 @@ function taskSection(tasks: Task[]): string {
         <td>${escapeHtml(t.title)}</td>
         <td>${escapeHtml(t.locationName)}</td>
         <td>${formatDate(t.approvedAt ?? t.submittedAt ?? t.scheduledAt)}</td>
-        <td>${t.score != null ? t.score : "—"}</td>
+        <td>${t.score != null ? t.score : "-"}</td>
         <td>${statusBadge(t.status, taskToneFor(t.status))}</td>
       </tr>`,
     )
@@ -301,7 +301,7 @@ function inspectionSection(inspections: Inspection[]): string {
     .map(
       (i) => `<tr>
         <td>${formatDate(i.decidedAt ?? i.createdAt)}</td>
-        <td>${i.score != null ? statusBadge(String(i.score), inspectionToneFor(i.score)) : "—"}</td>
+        <td>${i.score != null ? statusBadge(String(i.score), inspectionToneFor(i.score)) : "-"}</td>
         <td>${escapeHtml(i.status.replace(/_/g, " "))}</td>
         <td>${i.comments ? `<span class="comment">"${escapeHtml(i.comments)}"</span>` : ""}</td>
       </tr>`,
@@ -358,8 +358,8 @@ function attendanceSection(days: AttendanceDay[], totalMinutes: number): string 
     .map(
       (d) => `<tr>
         <td>${formatDate(d.workDate)}</td>
-        <td>${d.clockInAt ? new Date(d.clockInAt).toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit" }) : "—"}</td>
-        <td>${d.clockOutAt ? new Date(d.clockOutAt).toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit" }) : "—"}</td>
+        <td>${d.clockInAt ? new Date(d.clockInAt).toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit" }) : "-"}</td>
+        <td>${d.clockOutAt ? new Date(d.clockOutAt).toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit" }) : "-"}</td>
         <td>${formatHours(d.workedMinutes)}</td>
         <td>${d.exceptions.length > 0 ? statusBadge(d.exceptions.join(", "), "warn") : ""}</td>
       </tr>`,

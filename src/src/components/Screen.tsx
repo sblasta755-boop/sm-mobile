@@ -140,7 +140,7 @@ export function Screen({
 
       {state.connectivity === "offline" && (
         <View style={styles.offlineBanner}>
-          <Text style={styles.offlineText}>Offline mode — changes will sync when reconnected.</Text>
+          <Text style={styles.offlineText}>Offline mode - changes will sync when reconnected.</Text>
         </View>
       )}
 

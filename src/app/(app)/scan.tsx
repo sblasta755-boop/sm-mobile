@@ -150,7 +150,7 @@ export default function ScanScreen() {
       if (!state.accessToken) return;
       setScanning(true);
       try {
-      // Fetched once per scan and reused for every call below — the
+      // Fetched once per scan and reused for every call below - the
       // backend rejects a geofenced scan outright when this is null (see
       // evaluate_geofence), so a denied/unavailable location fails the
       // scan rather than silently proceeding unverified.
@@ -188,7 +188,7 @@ export default function ScanScreen() {
 
       if (resolved.kind === "site") {
         const site = resolved.site as { id: string; name: string };
-        // Re-scanning the site QR is also how you clock out — mirrors
+        // Re-scanning the site QR is also how you clock out - mirrors
         // clocking in: both require the same physical presence proof,
         // rather than clock-out trusting a stored site code with no
         // fresh verification. Which one happens depends on whether this
@@ -656,7 +656,7 @@ export default function ScanScreen() {
                 </Text>
               )}
               <View style={styles.checklist}>
-                <ChecklistLine icon="shield-checkmark" text={`Identity verified — ${currentUser?.name}`} />
+                <ChecklistLine icon="shield-checkmark" text={`Identity verified - ${currentUser?.name}`} />
                 <ChecklistLine
                   icon="time-outline"
                   text={`Timestamp ${new Date().toLocaleTimeString("en-ZA")}`}

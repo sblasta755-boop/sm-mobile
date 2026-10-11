@@ -370,7 +370,7 @@ export default function SuperviseScan() {
                 </Text>
               )}
               <View style={styles.checklist}>
-                <ChecklistLine icon="shield-checkmark" text={`Identity verified — ${currentUser?.name}`} />
+                <ChecklistLine icon="shield-checkmark" text={`Identity verified - ${currentUser?.name}`} />
                 <ChecklistLine
                   icon="time-outline"
                   text={`Timestamp ${new Date().toLocaleTimeString("en-ZA")}`}

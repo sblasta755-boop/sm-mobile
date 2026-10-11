@@ -171,7 +171,7 @@ export default function ManageHome() {
           <View style={styles.flex}>
             <Text style={styles.ctaTitle}>Add a team member</Text>
             <Text style={styles.muted}>
-              Create their account and show them a QR code to scan — no email needed.
+              Create their account and show them a QR code to scan - no email needed.
             </Text>
           </View>
           <Ionicons name="arrow-forward" size={16} color={colors.foreground} />

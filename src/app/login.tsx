@@ -23,7 +23,7 @@ import { colors, radius, spacing, typography, themedStyles } from "@/theme";
 export default function Login() {
   const { signIn } = useSmartClean();
   const insets = useSafeAreaInsets();
-  // Fetched unauthenticated — nobody's signed in yet, so state.tenant
+  // Fetched unauthenticated - nobody's signed in yet, so state.tenant
   // (only populated by bootstrap after sign-in) isn't available here.
   const [branding, setBranding] = useState<ResolvedBranding>(() => resolveBranding(undefined));
 
@@ -34,7 +34,7 @@ export default function Login() {
         if (!cancelled) setBranding(resolveBranding(tenant.branding));
       })
       .catch(() => {
-        // Best-effort — the login screen still works with default branding.
+        // Best-effort - the login screen still works with default branding.
       });
     return () => {
       cancelled = true;

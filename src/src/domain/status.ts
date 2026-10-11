@@ -55,11 +55,11 @@ export function toneForCA(status: CAStatus): StatusTone {
   }
 }
 
-// Mirrors the backend's TaskController._SUBMITTABLE_STATUSES — once a
+// Mirrors the backend's TaskController._SUBMITTABLE_STATUSES - once a
 // task has actually been submitted, it can't be submitted again until a
 // supervisor sends it back (rework_required). Previously nothing here
 // checked task.status at all, so Submit stayed enabled for as long as the
-// checklist/evidence/QR conditions were satisfied — a second tap (or a
+// checklist/evidence/QR conditions were satisfied - a second tap (or a
 // retry after a slow request) silently created a duplicate Inspection row
 // for the same task on the backend, showing up as a phantom entry in the
 // supervisor's "Recent inspections" alongside the real one.
@@ -124,7 +124,7 @@ export function taskSubmissionBlocked(
 /**
  * The gamified task-progression stage: scan the room QR, take the Before
  * photo, work through the checklist, then take After/Issue at the end.
- * Each stage only unlocks once the one before it is satisfied — this is
+ * Each stage only unlocks once the one before it is satisfied - this is
  * UI-level gating (nothing here is re-checked server-side beyond the
  * existing final-submission checks in _submission_issues on the backend,
  * same as the pre-existing qrVerified gate this extends), so it shapes
@@ -141,21 +141,21 @@ export function taskStage(task: {
 }): TaskStage {
   if (!hasStarted(task)) return "scan";
   // The Before-photo gate only applies to a task that actually wants a
-  // before/after pair (requiresBeforeAfter — the normal cleaning-task
+  // before/after pair (requiresBeforeAfter - the normal cleaning-task
   // shape). An investigation task (see IncidentController.
-  // assign_investigation) has no such concept — one plain "take a photo
-  // of what you found" item, no categorisation — so it skips straight to
+  // assign_investigation) has no such concept - one plain "take a photo
+  // of what you found" item, no categorisation - so it skips straight to
   // "working" instead of getting stuck waiting for a "Before" photo the
   // task was never designed to ask for. Mirrors the web app's own
-  // taskStage.ts — keep both in sync.
+  // taskStage.ts - keep both in sync.
   // When photo items own their photos, Before / After belong to each item and
   // are taken as that item is worked, so there is no task-level Before gate.
   const itemOwnedPhotos = task.checklist.some((item) => item.type === "photo_required" && !!item.photoCount);
   if (task.requiresBeforeAfter && !itemOwnedPhotos && !task.evidence.some((e) => e.kind === "before")) return "before";
-  // "photo_required" items don't count toward this gate — they can only
+  // "photo_required" items don't count toward this gate - they can only
   // ever become done by the backend auto-ticking them once the task's
   // own evidence bar is met (before+after for a requiresBeforeAfter
-  // task, any one photo otherwise — see TaskController.add_evidence), so
+  // task, any one photo otherwise - see TaskController.add_evidence), so
   // requiring them here alongside gating After's capture button on this
   // same stage was a deadlock: the checklist could never "complete"
   // without an After photo, and the After button could never unlock
@@ -169,7 +169,7 @@ export function taskStage(task: {
   return "finish";
 }
 
-/** Whether the checklist (checkboxes/notes) should be interactive yet —
+/** Whether the checklist (checkboxes/notes) should be interactive yet -
  * true from the "working" stage onward, i.e. once the Before photo is in. */
 export function isChecklistUnlocked(stage: TaskStage): boolean {
   return stage === "working" || stage === "finish";

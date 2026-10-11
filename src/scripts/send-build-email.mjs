@@ -53,7 +53,7 @@ const subject = `Šoma360 ${APP_VERSION ? `v${APP_VERSION} ` : ""}build ${VERSIO
 const rows = [
   ["Version", APP_VERSION && `${APP_VERSION} (build ${VERSION_CODE})`],
   ["Branch", BRANCH],
-  ["Commit", COMMIT && `${COMMIT.slice(0, 7)}${COMMIT_MESSAGE ? ` — ${COMMIT_MESSAGE.split("\n")[0]}` : ""}`],
+  ["Commit", COMMIT && `${COMMIT.slice(0, 7)}${COMMIT_MESSAGE ? ` - ${COMMIT_MESSAGE.split("\n")[0]}` : ""}`],
   ["File", `${APK_NAME}${APK_SIZE_MB ? ` (${APK_SIZE_MB} MB)` : ""}`],
   ["Push notifications", PUSH_ENABLED === "true" ? "Enabled in this build" : "Not enabled in this build (no Firebase config)"],
 ].filter(([, v]) => v);

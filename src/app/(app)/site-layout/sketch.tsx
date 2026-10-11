@@ -94,7 +94,7 @@ export default function SketchScreen() {
   }
 
   return (
-    <Screen title={`Sketch — ${floor.name}`}>
+    <Screen title={`Sketch - ${floor.name}`}>
       {rooms.length > 1 && (
         <SelectField
           label="Room"

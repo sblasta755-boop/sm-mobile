@@ -117,7 +117,7 @@ export default function PlatformApprovals() {
 
             <View style={styles.matchBlock}>
               <Text style={styles.matchLabel}>They should say</Text>
-              <Text style={styles.matchWord}>{grant.matchWord ?? "—"}</Text>
+              <Text style={styles.matchWord}>{grant.matchWord ?? "-"}</Text>
             </View>
 
             <View style={styles.metaRow}>
@@ -145,7 +145,7 @@ export default function PlatformApprovals() {
                   style={styles.input}
                   value={reason}
                   onChangeText={setReason}
-                  placeholder="Optional — e.g. couldn't verify the caller"
+                  placeholder="Optional - e.g. couldn't verify the caller"
                   placeholderTextColor={colors.mutedForeground}
                   multiline
                 />

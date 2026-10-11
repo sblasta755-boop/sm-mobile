@@ -213,7 +213,7 @@ export default function ScanRoomScreen() {
   }
 
   return (
-    <Screen title={`Scan — ${floor.name}`}>
+    <Screen title={`Scan - ${floor.name}`}>
       {!active && (
         <>
           {rooms.length > 1 && (
@@ -226,7 +226,7 @@ export default function ScanRoomScreen() {
           )}
           <Text style={styles.hint}>
             Walk slowly around {room?.name ?? "the room"}&apos;s perimeter, keeping every wall in
-            view. The scan tracks walls as it finds them — tap Done once you&apos;ve gone all the
+            view. The scan tracks walls as it finds them - tap Done once you&apos;ve gone all the
             way around.
           </Text>
           <Button
@@ -327,11 +327,11 @@ export default function ScanRoomScreen() {
  * to DO, not just what is wrong. */
 const TRACKING_HINTS: Record<RoomScanTrackingState, { label: string; tone: "ok" | "warn" }> = {
   tracking: { label: "Tracking", tone: "ok" },
-  initializing: { label: "Starting up — move the phone slowly", tone: "warn" },
-  excessive_motion: { label: "Slow down — you're moving too fast", tone: "warn" },
-  insufficient_light: { label: "Too dark — turn on more light", tone: "warn" },
+  initializing: { label: "Starting up - move the phone slowly", tone: "warn" },
+  excessive_motion: { label: "Slow down - you're moving too fast", tone: "warn" },
+  insufficient_light: { label: "Too dark - turn on more light", tone: "warn" },
   insufficient_features: { label: "Point at a wall with more detail", tone: "warn" },
-  paused: { label: "Tracking paused — hold steady", tone: "warn" },
+  paused: { label: "Tracking paused - hold steady", tone: "warn" },
 };
 
 /**
@@ -351,15 +351,15 @@ function coachingFor(progress: RoomScanProgress | null): string {
 
   if (progress.wallCount === 0) {
     return progress.otherSurfaceCount > 0
-      ? "Surfaces detected, but no wall yet — aim at where the wall meets the floor or a corner."
+      ? "Surfaces detected, but no wall yet - aim at where the wall meets the floor or a corner."
       : "Move the phone slowly side to side, and aim where the wall meets the floor.";
   }
 
   if (progress.wallCount < 3) {
-    return "Good — now turn and walk to the next wall, keeping it in view.";
+    return "Good - now turn and walk to the next wall, keeping it in view.";
   }
 
-  return "Enough walls for a shape — keep going for a better fit, then tap Done.";
+  return "Enough walls for a shape - keep going for a better fit, then tap Done.";
 }
 
 /**

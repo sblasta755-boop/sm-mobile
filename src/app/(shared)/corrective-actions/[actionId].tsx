@@ -40,7 +40,7 @@ export default function CorrectiveActionDetailScreen() {
       await refreshBackendData();
       router.push(homePath as never);
     } catch {
-      // best-effort — UI stays on this screen so the cleaner can retry
+      // best-effort - UI stays on this screen so the cleaner can retry
     }
   }
 

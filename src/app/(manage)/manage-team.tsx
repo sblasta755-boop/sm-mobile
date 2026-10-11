@@ -149,7 +149,7 @@ export default function ManageTeam() {
               <>
                 <Text style={styles.muted}>
                   {grant.status === "scanned"
-                    ? "They've scanned — approve it in the Approvals tab."
+                    ? "They've scanned - approve it in the Approvals tab."
                     : grant.status === "rejected"
                       ? (grant.rejectedReason ?? "The last attempt was rejected.")
                       : grant.isLive
@@ -161,7 +161,7 @@ export default function ManageTeam() {
                   <View style={styles.qrWrap}>
                     <SvgXml xml={qrSvg} width="100%" height={230} />
                     <Text style={styles.matchLabel}>They should say</Text>
-                    <Text style={styles.matchWord}>{grant.matchWord ?? "—"}</Text>
+                    <Text style={styles.matchWord}>{grant.matchWord ?? "-"}</Text>
                   </View>
                 )}
 

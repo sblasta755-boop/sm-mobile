@@ -77,10 +77,10 @@ export default function PlatformDashboard() {
       )}
 
       <View style={styles.tiles}>
-        <Tile label="Organisations" value={summary?.totalOrganisations ?? "—"} />
-        <Tile label="Active users" value={summary?.totalActiveUsers ?? "—"} />
-        <Tile label="Signups, 30d" value={summary ? signups : "—"} />
-        <Tile label="On a paid plan" value={summary ? paidCount : "—"} />
+        <Tile label="Organisations" value={summary?.totalOrganisations ?? "-"} />
+        <Tile label="Active users" value={summary?.totalActiveUsers ?? "-"} />
+        <Tile label="Signups, 30d" value={summary ? signups : "-"} />
+        <Tile label="On a paid plan" value={summary ? paidCount : "-"} />
       </View>
 
       <Card style={styles.section}>

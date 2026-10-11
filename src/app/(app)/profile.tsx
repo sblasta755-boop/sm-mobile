@@ -75,7 +75,7 @@ export default function ProfileScreen() {
       await updateUser(state.accessToken, currentUser.id, toUserRecord(currentUser, { profilePhotoDataUrl: photoUrl }));
       dispatch({ type: "UPDATE_USER", userId: currentUser.id, patch: { profilePhotoDataUrl: photoUrl } });
     } catch {
-      // best-effort — leave existing photo unchanged
+      // best-effort - leave existing photo unchanged
     } finally {
       setUploadingPhoto(false);
     }
@@ -130,7 +130,7 @@ export default function ProfileScreen() {
           <Stat label="Tasks" value={`${done}/${myTasks.length}`} />
           <Stat
             label="Clock-in"
-            value={clocked ? new Date(clocked).toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit" }) : "—"}
+            value={clocked ? new Date(clocked).toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit" }) : "-"}
           />
         </View>
       </Card>
@@ -147,7 +147,7 @@ export default function ProfileScreen() {
           <View style={styles.statsRow}>
             <Stat
               label={ratingSummary?.ratingCount ? `From ${ratingSummary.ratingCount} rating${ratingSummary.ratingCount === 1 ? "" : "s"}` : "No ratings yet"}
-              value={ratingSummary?.averageRating != null ? `${ratingSummary.averageRating.toFixed(1)} ★` : "—"}
+              value={ratingSummary?.averageRating != null ? `${ratingSummary.averageRating.toFixed(1)} ★` : "-"}
             />
           </View>
         </Card>
@@ -179,11 +179,11 @@ export default function ProfileScreen() {
 
       <View style={styles.bottomActions}>
         {/* Clocking out re-scans the site QR the same way clocking in
-            does — see scan.tsx, which clocks in or out depending on
+            does - see scan.tsx, which clocks in or out depending on
             whether the user is already clocked in. Previously this
             button called clockOut() directly with an empty qrValue,
             which the backend always rejected (it requires a real,
-            matching site code) — clock-out silently never worked. */}
+            matching site code) - clock-out silently never worked. */}
         <Button variant="outline" icon={<Ionicons name="time-outline" size={16} color={colors.foreground} />} onPress={() => router.push("/scan")}>
           {clocked ? "Clock out" : "Clock in"}
         </Button>

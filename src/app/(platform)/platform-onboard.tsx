@@ -124,7 +124,7 @@ export default function PlatformOnboard() {
             keyboardType="email-address"
           />
           <Text style={styles.hint}>
-            Must be unused across the whole platform — it&apos;s what they sign in with.
+            Must be unused across the whole platform - it&apos;s what they sign in with.
           </Text>
 
           <View style={styles.field}>
@@ -172,7 +172,7 @@ export default function PlatformOnboard() {
           <Text style={styles.createdTitle}>{created.name} is ready</Text>
           <Text style={styles.muted}>
             No invite email was sent. Show the code when you have their administrator on
-            the phone — it stays scannable for 15 minutes from the moment you tap below.
+            the phone - it stays scannable for 15 minutes from the moment you tap below.
           </Text>
           <Button onPress={reveal} loading={busy}>
             Show the QR code
@@ -189,10 +189,10 @@ export default function PlatformOnboard() {
 
           <Card style={styles.matchCard}>
             <Text style={styles.label}>Check this word with them</Text>
-            <Text style={styles.matchWord}>{grant.matchWord ?? "—"}</Text>
+            <Text style={styles.matchWord}>{grant.matchWord ?? "-"}</Text>
             <Text style={styles.muted}>
               After they scan, the Approvals tab will show a word. Only approve if it
-              matches what they read back to you — that&apos;s what stops a forwarded
+              matches what they read back to you - that&apos;s what stops a forwarded
               screenshot from working.
             </Text>
           </Card>

@@ -117,7 +117,7 @@ export async function refreshSession(refreshToken: string): Promise<BackendSessi
     { method: "POST", body: JSON.stringify({ refreshToken }) },
   );
   // The backend rotates the refresh token on every use (one-time-use
-  // family, see AuthController.refresh) — the old one is now invalid, so
+  // family, see AuthController.refresh) - the old one is now invalid, so
   // the caller must persist auth.refreshToken, not keep reusing the one
   // passed in here.
   return {
@@ -129,12 +129,12 @@ export async function refreshSession(refreshToken: string): Promise<BackendSessi
 
 // Every request() call below takes an explicit accessToken rather than
 // reading from shared state, so a 401 can't refresh itself in isolation
-// — it needs the current refresh token and somewhere to persist the
+// - it needs the current refresh token and somewhere to persist the
 // rotated session it gets back. SmartCleanProvider registers those once
 // via setSessionHandlers() on mount; request() uses them to transparently
 // refresh-and-retry once on a 401 instead of surfacing "Backend 401" to
 // whichever screen happened to be mid-action. Previously there was no
-// refresh call anywhere in the app — POST /auth/refresh existed and
+// refresh call anywhere in the app - POST /auth/refresh existed and
 // worked on the backend, but every access-token expiry (well within a
 // typical shift, given the token's short TTL) just failed every
 // subsequent API call with no recovery and no clear signal to re-login.
@@ -159,7 +159,7 @@ let refreshInFlight: Promise<string | null> | null = null;
  * 401s (several screens' requests failing around the same moment) only
  * triggers a single /auth/refresh call. Returns the new access token, or
  * null if there was nothing to refresh with or the refresh itself
- * failed — callers fall back to surfacing the original 401 in that case. */
+ * failed - callers fall back to surfacing the original 401 in that case. */
 async function refreshAccessToken(): Promise<string | null> {
   if (refreshInFlight) return refreshInFlight;
   refreshInFlight = (async () => {
@@ -637,7 +637,7 @@ export function acknowledgeTableRequest(
 
 // ---- Tenant / branding ----
 
-/** Unauthenticated — for the login/splash screens, which need this
+/** Unauthenticated - for the login/splash screens, which need this
  * deployment's branding before anyone has signed in. See the backend's
  * TenantController.get_public_branding. */
 export function getPublicTenantBranding() {
@@ -690,12 +690,12 @@ export function toUserRecord(user: DemoUser, overrides: Record<string, unknown> 
     displayName: user.name,
     email: user.email ?? `${user.id}@smartclean.local`,
     role: user.role,
-    // Must match the backend's exact status string (case-sensitive — see
+    // Must match the backend's exact status string (case-sensitive - see
     // UserController.update_user's self-service check, and
     // AuthController.login, which both compare against "Active" exactly).
     // This was "active" (lowercase) until now, which meant every
-    // self-service update from this app — including the profile photo
-    // upload above — silently 403'd: is_self_service compares
+    // self-service update from this app - including the profile photo
+    // upload above - silently 403'd: is_self_service compares
     // str(record["status"]) != target.status, and "active" != "Active"
     // unconditionally.
     status: "Active",

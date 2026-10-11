@@ -222,7 +222,7 @@ export interface Task {
   qrVerified?: boolean;
   /** How the task was started: "qr", "manual", or absent before it starts. */
   startMethod?: "qr" | "manual" | null;
-  // Whether the assignee is currently clocked in — undefined when the
+  // Whether the assignee is currently clocked in - undefined when the
   // backend didn't compute this for the response. Gates the whole task
   // screen (checklist + evidence), matching the web app.
   clockedIn?: boolean;
@@ -338,7 +338,7 @@ export interface Site {
   geofenceRadius: number;
   supervisorId: string;
   active: boolean;
-  // This site's own branding — takes priority over the tenant-wide
+  // This site's own branding - takes priority over the tenant-wide
   // default (Tenant.branding) whenever a field here is set. See
   // resolveBranding.
   branding: TenantBranding;
@@ -378,7 +378,7 @@ export interface SiteSpaceProfile {
 }
 
 export interface TenantBranding {
-  // All optional — an unset field means "use the app default" (Šoma360
+  // All optional - an unset field means "use the app default" (Šoma360
   // name/mark/blue), not "render nothing". See useTenantBranding.
   displayName?: string;
   logoUrl?: string;

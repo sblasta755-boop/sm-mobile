@@ -21,7 +21,7 @@ export interface DeviceCoords {
 
 /**
  * "Where is this device right now" for every geofenced action (QR scan,
- * clock-in/out) — resolves to null rather than throwing when permission
+ * clock-in/out) - resolves to null rather than throwing when permission
  * is denied/unavailable, since the backend already treats missing
  * coordinates as its own rejection reason (see
  * app.controllers.common.evaluate_geofence) with a clearer message than

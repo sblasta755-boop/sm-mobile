@@ -3,7 +3,7 @@ import { useSmartClean } from "@/features/store";
 import { fileUrl } from "@/api/client";
 import type { TenantBranding } from "@/types/smartclean";
 
-// The app's own identity — every screen falls back to this whenever
+// The app's own identity - every screen falls back to this whenever
 // neither a site nor the tenant has set their own branding yet, rather
 // than rendering a blank name/logo/color. See useTenantBranding.
 export const DEFAULT_BRAND_NAME = "Šoma360";
@@ -25,7 +25,7 @@ function initialsFor(name: string): string {
 }
 
 /** Resolves branding fields into ready-to-render values, falling back to
- * the app defaults field-by-field — a tenant/site that only set a logo
+ * the app defaults field-by-field - a tenant/site that only set a logo
  * still gets the default name/color, not blanks. */
 export function resolveBranding(branding: TenantBranding | undefined): ResolvedBranding {
   const name = branding?.displayName?.trim() || DEFAULT_BRAND_NAME;
@@ -53,7 +53,7 @@ function mergeBranding(
  * default. Every mobile user is a cleaner or supervisor working at one
  * site, so unlike the web app's useTenantBranding this doesn't need to
  * special-case operations_manager/org_admin (mobile has no setup
- * screens for them to use anyway — branding is read-only here). */
+ * screens for them to use anyway - branding is read-only here). */
 export function useTenantBranding(): ResolvedBranding {
   const { state, currentUser } = useSmartClean();
   return useMemo(() => {

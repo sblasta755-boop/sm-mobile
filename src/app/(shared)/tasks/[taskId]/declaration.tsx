@@ -89,7 +89,7 @@ export default function DeclarationScreen() {
           </Text>
           <Text style={styles.summaryLine}>Evidence: {task.evidence.length} items captured</Text>
           <Text style={styles.summaryLine}>
-            Started: {task.startedAt ? new Date(task.startedAt).toLocaleTimeString("en-ZA") : "—"}
+            Started: {task.startedAt ? new Date(task.startedAt).toLocaleTimeString("en-ZA") : "-"}
           </Text>
           {task.qrVerified && <VerifiedBadge label="QR + geofence verified" />}
           {!task.qrVerified && task.startMethod === "manual" && <StatusBadge tone="neutral" label="Started manually" />}

@@ -109,10 +109,10 @@ export default function ManageAddStaff() {
 
         <Card style={styles.matchCard}>
           <Text style={styles.label}>They should read this back to you</Text>
-          <Text style={styles.matchWord}>{grant.matchWord ?? "—"}</Text>
+          <Text style={styles.matchWord}>{grant.matchWord ?? "-"}</Text>
           <Text style={styles.muted}>
             Once they scan, this appears in Approvals. Only approve if the word matches
-            — that&apos;s what stops a photographed code being used by someone else.
+            - that&apos;s what stops a photographed code being used by someone else.
           </Text>
         </Card>
 

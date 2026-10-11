@@ -94,7 +94,7 @@ export default function OnboardWaiting() {
           </Text>
           <Text style={styles.muted}>
             {rejectedReason ??
-              "Nothing has been lost — your organisation is still set up. Your Šoma360 contact can issue a fresh code whenever you're ready."}
+              "Nothing has been lost - your organisation is still set up. Your Šoma360 contact can issue a fresh code whenever you're ready."}
           </Text>
           <Button onPress={() => router.replace("/onboard-scan")}>Scan a new code</Button>
           <Button variant="ghost" onPress={() => router.replace("/login")}>

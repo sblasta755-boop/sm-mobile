@@ -184,12 +184,12 @@ function bootstrapState(bootstrap: BackendBootstrap): Partial<State> {
     correctiveActions: bootstrap.correctiveActions ?? [],
     incidents: bootstrap.incidents ?? [],
     notifications: bootstrap.notifications ?? [],
-    // Previously never sourced from the backend — state.attendance only
+    // Previously never sourced from the backend - state.attendance only
     // changed via local-only CLOCK_IN/CLOCK_OUT reducer actions that
     // nothing dispatched (the scan screen only calls clockIn() +
     // refreshBackendData()), so a real clock-in never showed up as
     // "Clocked in" on Home. Now backed by AttendanceController.today_status
-    // via bootstrap.attendance — same fix already applied on web.
+    // via bootstrap.attendance - same fix already applied on web.
     attendance: bootstrap.attendance ?? {},
     turnovers: bootstrap.turnovers ?? [],
     stock: bootstrap.stock ?? [],
@@ -246,7 +246,7 @@ function reducer(state: State, action: Action): State {
       return { ...state, hasSeenWelcome: true };
     case "SET_SESSION":
       // From request()'s transparent refresh-and-retry in api/client.ts
-      // — only the tokens change here, not bootstrap data, since a
+      // - only the tokens change here, not bootstrap data, since a
       // background refresh happens mid-action on whatever screen the
       // user is already on.
       return {
@@ -354,7 +354,7 @@ export function SmartCleanProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, undefined, initial);
 
   // api/client.ts's request() calls these on a 401 to transparently
-  // refresh-and-retry — registered once below via a ref rather than
+  // refresh-and-retry - registered once below via a ref rather than
   // closing over `state` directly, since client.ts's module-level
   // handlers are set once but need the *current* refresh token, not
   // whatever it was at registration time.
@@ -362,12 +362,12 @@ export function SmartCleanProvider({ children }: { children: ReactNode }) {
   stateRef.current = state;
 
   // Tracks whether this mount has already fetched fresh backend data
-  // once — either via the restore-on-mount effect below, or because
+  // once - either via the restore-on-mount effect below, or because
   // signIn() already delivered a fresh bootstrap directly. Mirrors the
   // fix already applied to the web app's store.tsx for the exact same
   // bug: gating the restore-fetch on `state.users.length === 0` looks
   // right for a brand-new session, but a *returning* session's
-  // AsyncStorage snapshot almost always has non-empty `users` already —
+  // AsyncStorage snapshot almost always has non-empty `users` already -
   // so that guard skipped the refetch entirely and every restored
   // field (tasks, corrective actions, incidents, attendance) kept
   // showing whatever was true when the app was last closed, with
@@ -388,14 +388,14 @@ export function SmartCleanProvider({ children }: { children: ReactNode }) {
         });
       },
       onRefreshFailed: () => {
-        // The refresh token itself is invalid/expired too — nothing left
+        // The refresh token itself is invalid/expired too - nothing left
         // to try. Clear the session so the user gets a clean re-login
         // prompt instead of every subsequent request silently 401ing.
         void SecureSessionService.clear();
         dispatch({ type: "SIGN_OUT" });
       },
       onSubscriptionBlocked: () => {
-        // A 402 means this app's idea of the plan is out of date — a tier
+        // A 402 means this app's idea of the plan is out of date - a tier
         // changed, or the subscription lapsed, since the last bootstrap.
         // Refetch so the tab bar and screens match what the server will
         // actually serve.
@@ -432,7 +432,7 @@ export function SmartCleanProvider({ children }: { children: ReactNode }) {
     try {
       const { session, bootstrap, mustChangePassword, hasSeenWelcome } = await loginToBackend(username, password);
       await SecureSessionService.set(session);
-      // SET_AUTH below already carries a fresh bootstrap — mark the
+      // SET_AUTH below already carries a fresh bootstrap - mark the
       // restore-on-mount effect as satisfied so it doesn't immediately
       // fire a second, redundant refreshBackendData() once accessToken
       // transitions from null to set.
@@ -488,7 +488,7 @@ export function SmartCleanProvider({ children }: { children: ReactNode }) {
       try {
         await logoutFromBackend(accessToken, refreshToken);
       } catch {
-        // best-effort — local session is already cleared
+        // best-effort - local session is already cleared
       }
     }
   };
@@ -502,7 +502,7 @@ export function SmartCleanProvider({ children }: { children: ReactNode }) {
     try {
       await markWelcomeSeenOnBackend(state.accessToken);
     } catch {
-      // best-effort — worst case the next session sees the screen once more
+      // best-effort - worst case the next session sees the screen once more
     }
   };
 

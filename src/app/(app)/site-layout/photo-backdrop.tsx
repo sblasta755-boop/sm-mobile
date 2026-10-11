@@ -125,7 +125,7 @@ export default function PhotoBackdropScreen() {
   }
 
   return (
-    <Screen title={`Photo backdrop — ${floor.name}`}>
+    <Screen title={`Photo backdrop - ${floor.name}`}>
       <Text style={styles.hint}>
         Take a photo of an existing floor plan, or pick one from your library. It becomes the
         backdrop rooms are arranged on when positioning is done from the web console.

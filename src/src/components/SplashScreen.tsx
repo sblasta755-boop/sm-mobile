@@ -9,7 +9,7 @@ import { colors, radius, spacing, typography, themedStyles } from "@/theme";
  * way to the login/home redirect.
  *
  * Every animation here runs on the native driver (transform/opacity only),
- * so a busy JS thread restoring the session can't make it stutter — which
+ * so a busy JS thread restoring the session can't make it stutter - which
  * is the whole point, since this screen only exists while that work runs.
  */
 
@@ -51,8 +51,8 @@ export function SplashScreen() {
   }, []);
 
   useEffect(() => {
-    // The entrance runs either way — it's what makes the handoff from the
-    // native splash feel continuous — just instantly when motion is reduced.
+    // The entrance runs either way - it's what makes the handoff from the
+    // native splash feel continuous - just instantly when motion is reduced.
     const entrance = Animated.sequence([
       Animated.parallel([
         Animated.spring(logoScale, {

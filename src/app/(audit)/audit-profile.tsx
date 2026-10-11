@@ -44,7 +44,7 @@ export default function AuditProfile() {
           <Text style={styles.avatarText}>{currentUser?.initials ?? "?"}</Text>
         </View>
         <View style={styles.identityInfo}>
-          <Text style={styles.name}>{currentUser?.name ?? "—"}</Text>
+          <Text style={styles.name}>{currentUser?.name ?? "-"}</Text>
           <Text style={styles.role}>Client auditor</Text>
           {currentUser?.email && <Text style={styles.muted}>{currentUser.email}</Text>}
         </View>

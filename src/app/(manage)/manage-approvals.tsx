@@ -22,7 +22,7 @@ const POLL_MS = 5_000;
  * Staff scans waiting on a decision.
  *
  * The same screen as the platform console's approvals, for a different
- * audience — and the same security control: the QR alone does not sign
+ * audience - and the same security control: the QR alone does not sign
  * anyone in, it raises a request here. The match word is the whole
  * point, so it gets the most prominent treatment on the card.
  *
@@ -119,7 +119,7 @@ export default function ManageApprovals() {
 
             <View style={styles.matchBlock}>
               <Text style={styles.matchLabel}>They should say</Text>
-              <Text style={styles.matchWord}>{grant.matchWord ?? "—"}</Text>
+              <Text style={styles.matchWord}>{grant.matchWord ?? "-"}</Text>
             </View>
 
             <View style={styles.metaRow}>

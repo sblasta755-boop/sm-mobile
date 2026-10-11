@@ -75,7 +75,7 @@ export default function AuditHome() {
       <Card style={styles.rateCard}>
         <Text style={styles.rateLabel}>Task completion</Text>
         <Text style={styles.rateValue}>
-          {completionRate === null ? "—" : `${completionRate}%`}
+          {completionRate === null ? "-" : `${completionRate}%`}
         </Text>
         <Text style={styles.muted}>
           {completionRate === null
