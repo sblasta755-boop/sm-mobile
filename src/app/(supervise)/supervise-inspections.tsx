@@ -5,9 +5,15 @@ import { Ionicons } from "@expo/vector-icons";
 import { Screen } from "@/components/Screen";
 import { Card } from "@/components/Card";
 import { StatusBadge } from "@/components/StatusBadge";
+import { TaskSearchBar } from "@/components/TaskSearchBar";
+import { Button } from "@/components/Button";
+import { DateStrip, startOfDay } from "@/components/DateStrip";
+import { SelectField } from "@/components/SelectField";
 import { useSmartClean } from "@/features/store";
 import { toneForTask, humanStatus } from "@/domain/status";
 import { taskDestination } from "@/domain/inspections";
+import { matchesInspectionFilters } from "@/domain/inspectionFilters";
+import { filterTasks, filtersActive, NO_FILTERS, type TaskFilters } from "@/domain/taskBoard";
 import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 import type { TaskStatus } from "@/types/smartclean";
 
@@ -31,20 +37,71 @@ export default function SuperviseInspections() {
   useThemeVersion(); // re-render with the new colours when the theme changes
   const { state, currentUser } = useSmartClean();
   const [activeGroup, setActiveGroup] = useState(GROUPS[0].label);
+  const [filters, setFilters] = useState<TaskFilters>(NO_FILTERS);
+  // Narrow to one cleaner and/or the day the work was submitted.
+  const [cleanerId, setCleanerId] = useState<string | null>(null);
+  const [day, setDay] = useState<Date | null>(null);
+  const moreFilters = !!cleanerId || !!day;
+  const nameOf = (id: string) => state.users.find((user) => user.id === id)?.name ?? "";
 
-  const groups = useMemo(
-    () =>
-      GROUPS.map((group) => ({
-        ...group,
-        items: state.tasks.filter((task) => group.statuses.includes(task.status)),
-      })),
-    [state.tasks],
-  );
+  // Search and filters apply to every tab, so the counts show what matches.
+  const groups = useMemo(() => {
+    const matching = filterTasks(
+      state.tasks.filter(
+        (task) => !task.isHourlyCompliance && matchesInspectionFilters(task, cleanerId, day),
+      ),
+      filters,
+      (task) => nameOf(task.assigneeId),
+    );
+    return GROUPS.map((group) => ({
+      ...group,
+      items: matching.filter((task) => group.statuses.includes(task.status)),
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.tasks, filters, state.users, cleanerId, day]);
+
+  // Only people who actually have work to inspect are offered.
+  const cleaners = useMemo(() => {
+    const ids = new Set(state.tasks.filter((t) => !t.isHourlyCompliance).map((t) => t.assigneeId));
+    return state.users.filter((u) => ids.has(u.id)).sort((a, b) => a.name.localeCompare(b.name));
+  }, [state.tasks, state.users]);
 
   const active = groups.find((group) => group.label === activeGroup) ?? groups[0];
 
   return (
     <Screen title="Inspections">
+      <View style={styles.topRow}>
+        <Button
+          variant="outline"
+          fullWidth={false}
+          icon={<Ionicons name="albums-outline" size={16} color={colors.foreground} />}
+          onPress={() => router.push("/kanban")}
+        >
+          Board view
+        </Button>
+      </View>
+      <TaskSearchBar filters={filters} onChange={setFilters} placeholder="Search inspections" />
+      <View style={styles.more}>
+        <SelectField
+          label="Cleaner"
+          value={cleaners.find((u) => u.id === cleanerId)?.name ?? "All cleaners"}
+          options={["All cleaners", ...cleaners.map((u) => u.name)]}
+          onChange={(name) => setCleanerId(cleaners.find((u) => u.name === name)?.id ?? null)}
+        />
+        {day ? (
+          <View style={styles.dayBox}>
+            <DateStrip today={startOfDay(new Date())} selectedDate={day} onSelect={setDay} />
+            <Pressable accessibilityRole="button" onPress={() => setDay(null)}>
+              <Text style={styles.clear}>Any date</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <Pressable accessibilityRole="button" style={styles.dateButton} onPress={() => setDay(startOfDay(new Date()))}>
+            <Ionicons name="calendar-outline" size={16} color={colors.primary} />
+            <Text style={styles.dateButtonText}>Pick a submitted date</Text>
+          </Pressable>
+        )}
+      </View>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -77,7 +134,23 @@ export default function SuperviseInspections() {
       {active.items.length === 0 ? (
         <Card style={styles.emptyCard}>
           <Ionicons name="checkmark-done" size={24} color={colors.success} />
-          <Text style={styles.muted}>Nothing in &ldquo;{active.label}&rdquo;.</Text>
+          <Text style={styles.muted}>
+            {filtersActive(filters) || moreFilters
+              ? `No matches in “${active.label}”.`
+              : `Nothing in “${active.label}”.`}
+          </Text>
+          {(filtersActive(filters) || moreFilters) && (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => {
+                setFilters(NO_FILTERS);
+                setCleanerId(null);
+                setDay(null);
+              }}
+            >
+              <Text style={styles.clear}>Clear search and filters</Text>
+            </Pressable>
+          )}
         </Card>
       ) : (
         active.items.map((task) => (
@@ -91,8 +164,9 @@ export default function SuperviseInspections() {
                   {task.title}
                 </Text>
                 <Text style={styles.muted} numberOfLines={1}>
-                  {task.locationName}
-                  {task.dueTime ? ` • Due ${task.dueTime}` : ""}
+                  {task.locationName ?? "Whole site"}
+                  {nameOf(task.assigneeId) ? ` \u2022 ${nameOf(task.assigneeId)}` : ""}
+                  {task.dueTime ? ` \u2022 Due ${task.dueTime}` : ""}
                 </Text>
               </View>
               <StatusBadge tone={toneForTask(task.status)} label={humanStatus(task.status)} />
@@ -105,6 +179,12 @@ export default function SuperviseInspections() {
 }
 
 const styles = themedStyles(() => StyleSheet.create({
+  more: { gap: spacing.sm, marginBottom: spacing.md },
+  dayBox: { alignItems: "center", gap: spacing.xs },
+  dateButton: { flexDirection: "row", alignItems: "center", gap: spacing.sm, alignSelf: "flex-start", paddingVertical: spacing.xs },
+  dateButtonText: { fontSize: typography.small, fontWeight: "600", color: colors.primary },
+  topRow: { alignItems: "flex-end", marginBottom: spacing.sm },
+  clear: { fontSize: typography.small, fontWeight: "600", color: colors.primary, marginTop: spacing.xs },
   tabsRow: {
     marginBottom: spacing.md,
     flexGrow: 0,

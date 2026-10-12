@@ -114,10 +114,13 @@ export function isSameDay(a: Date, b: Date) {
 }
 
 const styles = themedStyles(() => StyleSheet.create({
+  // Full width, so the arrows sit at the edges and the days share what is left.
+  // Shrink-wrapped, the row let the right arrow overlap the last date.
   wrap: {
-    alignItems: "center",
+    alignSelf: "stretch",
   },
   labelWrap: {
+    alignSelf: "center",
     alignItems: "center",
     marginBottom: spacing.sm,
   },
@@ -133,10 +136,10 @@ const styles = themedStyles(() => StyleSheet.create({
   row: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 2,
+    gap: spacing.xs,
   },
   arrow: {
-    width: 24,
+    width: 28,
     height: 32,
     alignItems: "center",
     justifyContent: "center",
