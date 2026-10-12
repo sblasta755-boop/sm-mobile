@@ -22,67 +22,68 @@ export function DateStrip({
 
   return (
     <View style={styles.wrap}>
-      <View style={styles.labelWrap}>
-        <Text style={styles.label} numberOfLines={1}>
-          {selectedLabel}
-        </Text>
-        <Text style={styles.subLabel}>{selectedSubLabel}</Text>
-      </View>
-
-      <View style={styles.row}>
+      {/* The arrows flank the date, not the seven days: in the header this strip
+          sits between the back and profile buttons, where there is no room for
+          seven dates and two arrows on one line. */}
+      <View style={styles.labelRow}>
         <Pressable
-          accessibilityLabel="Previous dates"
+          accessibilityLabel="Previous day"
           onPress={() => onSelect(addDays(selectedDate, -1))}
           style={styles.arrow}
           hitSlop={8}
         >
-          <Ionicons name="chevron-back" size={16} color={colors.mutedForeground} />
+          <Ionicons name="chevron-back" size={18} color={colors.mutedForeground} />
         </Pressable>
-
-        <View style={styles.days}>
-          {weekDays.map((date) => {
-            const isSelected = isSameDay(date, selectedDate);
-            const isToday = isSameDay(date, today);
-            return (
-              <Pressable
-                key={date.toISOString()}
-                onPress={() => onSelect(date)}
-                style={styles.day}
-                accessibilityState={{ selected: isSelected }}
-              >
-                <Text style={styles.dayLetter}>
-                  {date.toLocaleDateString("en-ZA", { weekday: "short" }).slice(0, 1)}
-                </Text>
-                <View
-                  style={[
-                    styles.dayNumber,
-                    isSelected && styles.dayNumberSelected,
-                    !isSelected && isToday && styles.dayNumberToday,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.dayNumberText,
-                      isSelected && styles.dayNumberTextSelected,
-                      !isSelected && isToday && styles.dayNumberTextToday,
-                    ]}
-                  >
-                    {date.getDate()}
-                  </Text>
-                </View>
-              </Pressable>
-            );
-          })}
+        <View style={styles.labelWrap}>
+          <Text style={styles.label} numberOfLines={1}>
+            {selectedLabel}
+          </Text>
+          <Text style={styles.subLabel}>{selectedSubLabel}</Text>
         </View>
-
         <Pressable
-          accessibilityLabel="Next dates"
+          accessibilityLabel="Next day"
           onPress={() => onSelect(addDays(selectedDate, 1))}
           style={styles.arrow}
           hitSlop={8}
         >
-          <Ionicons name="chevron-forward" size={16} color={colors.mutedForeground} />
+          <Ionicons name="chevron-forward" size={18} color={colors.mutedForeground} />
         </Pressable>
+      </View>
+
+      <View style={styles.days}>
+        {weekDays.map((date) => {
+          const isSelected = isSameDay(date, selectedDate);
+          const isToday = isSameDay(date, today);
+          return (
+            <Pressable
+              key={date.toISOString()}
+              onPress={() => onSelect(date)}
+              style={styles.day}
+              accessibilityState={{ selected: isSelected }}
+            >
+              <Text style={styles.dayLetter}>
+                {date.toLocaleDateString("en-ZA", { weekday: "short" }).slice(0, 1)}
+              </Text>
+              <View
+                style={[
+                  styles.dayNumber,
+                  isSelected && styles.dayNumberSelected,
+                  !isSelected && isToday && styles.dayNumberToday,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.dayNumberText,
+                    isSelected && styles.dayNumberTextSelected,
+                    !isSelected && isToday && styles.dayNumberTextToday,
+                  ]}
+                >
+                  {date.getDate()}
+                </Text>
+              </View>
+            </Pressable>
+          );
+        })}
       </View>
     </View>
   );
@@ -114,15 +115,19 @@ export function isSameDay(a: Date, b: Date) {
 }
 
 const styles = themedStyles(() => StyleSheet.create({
-  // Full width, so the arrows sit at the edges and the days share what is left.
-  // Shrink-wrapped, the row let the right arrow overlap the last date.
   wrap: {
     alignSelf: "stretch",
   },
-  labelWrap: {
-    alignSelf: "center",
+  labelRow: {
+    flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
     marginBottom: spacing.sm,
+  },
+  labelWrap: {
+    alignItems: "center",
+    flexShrink: 1,
   },
   label: {
     fontSize: typography.h2,
@@ -133,27 +138,21 @@ const styles = themedStyles(() => StyleSheet.create({
     fontSize: typography.tiny,
     color: colors.mutedForeground,
   },
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.xs,
-  },
   arrow: {
     width: 28,
     height: 32,
     alignItems: "center",
     justifyContent: "center",
   },
+  // Seven equal cells that share whatever width there is, so nothing can overflow.
   days: {
-    flex: 1,
     flexDirection: "row",
-    justifyContent: "space-between",
   },
   day: {
+    flex: 1,
     alignItems: "center",
     gap: 4,
     paddingVertical: 4,
-    minWidth: 28,
   },
   dayLetter: {
     fontSize: 11,
@@ -161,8 +160,8 @@ const styles = themedStyles(() => StyleSheet.create({
     color: colors.mutedForeground,
   },
   dayNumber: {
-    width: 28,
-    height: 28,
+    width: 26,
+    height: 26,
     borderRadius: radius.round,
     alignItems: "center",
     justifyContent: "center",
