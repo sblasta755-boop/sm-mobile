@@ -5,7 +5,7 @@ import { Card } from "@/components/Card";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useSmartClean } from "@/features/store";
 import { getPlatformSummary, type PlatformSummary } from "@/api/client";
-import { colors, spacing, typography, themedStyles } from "@/theme";
+import { colors, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 
 // Plain-language gloss for the audit action slugs the activity feed
 // surfaces. Mirrors ACTIVITY_VERB in the web console's
@@ -36,6 +36,7 @@ function timeAgo(iso: string): string {
 }
 
 export default function PlatformDashboard() {
+  useThemeVersion(); // re-render with the new colours when the theme changes
   const { state } = useSmartClean();
   const [summary, setSummary] = useState<PlatformSummary | null>(null);
   const [loading, setLoading] = useState(true);

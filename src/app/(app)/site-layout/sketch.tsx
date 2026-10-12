@@ -8,7 +8,7 @@ import { SelectField } from "@/components/SelectField";
 import { RoomSketchCanvas, type RoomSketchResult } from "@/components/RoomSketchCanvas";
 import { useSmartClean } from "@/features/store";
 import { updateLocationPosition } from "@/api/client";
-import { colors, spacing, typography, themedStyles } from "@/theme";
+import { colors, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 
 const MODES = ["Box", "Polygon"] as const;
 
@@ -24,6 +24,7 @@ const MODES = ["Box", "Polygon"] as const;
  * never touched by this flow.
  */
 export default function SketchScreen() {
+  useThemeVersion(); // re-render with the new colours when the theme changes
   const { siteId, floorId } = useLocalSearchParams<{ siteId: string; floorId: string }>();
   const { state, refreshBackendData } = useSmartClean();
   const site = state.sites.find((s) => s.id === siteId);

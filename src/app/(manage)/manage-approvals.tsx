@@ -11,7 +11,7 @@ import {
   rejectStaffOnboarding,
   type StaffGrant,
 } from "@/api/client";
-import { colors, radius, spacing, typography, themedStyles } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 import { appAlert } from "@/components/Dialog";
 
 // The manager is expected to be standing with the new starter, so this
@@ -31,6 +31,7 @@ const POLL_MS = 5_000;
  * screen renders whatever it is given.
  */
 export default function ManageApprovals() {
+  useThemeVersion(); // re-render with the new colours when the theme changes
   const { state } = useSmartClean();
   const [pending, setPending] = useState<StaffGrant[]>([]);
   const [loading, setLoading] = useState(true);

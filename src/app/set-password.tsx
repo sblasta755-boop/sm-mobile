@@ -16,7 +16,7 @@ import { useSmartClean } from "@/features/store";
 import { setInitialPassword } from "@/api/client";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
-import { colors, radius, spacing, typography, themedStyles } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 
 /**
  * The first thing a QR-onboarded administrator sees.
@@ -35,6 +35,7 @@ import { colors, radius, spacing, typography, themedStyles } from "@/theme";
  * the app is a worse outcome than one that has to finish or leave.
  */
 export default function SetPassword() {
+  useThemeVersion(); // re-render with the new colours when the theme changes
   const { state, currentUser, dispatch, signOut } = useSmartClean();
   const insets = useSafeAreaInsets();
   const [password, setPassword] = useState("");

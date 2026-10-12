@@ -8,7 +8,7 @@ import { SelectField } from "@/components/SelectField";
 import { useCanManageSiteLayout } from "@/features/roles";
 import { useHasModule } from "@/features/modules";
 import { useSmartClean } from "@/features/store";
-import { colors, radius, spacing, typography, themedStyles } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 
 /**
  * Entry point for the mobile site-layout flows: photo-of-a-paper-plan
@@ -23,6 +23,7 @@ import { colors, radius, spacing, typography, themedStyles } from "@/theme";
  * during a cold start - the server enforces either way.
  */
 export default function SiteLayoutIndexScreen() {
+  useThemeVersion(); // re-render with the new colours when the theme changes
   const { state } = useSmartClean();
   const canManage = useCanManageSiteLayout();
   const hasSiteLayout = useHasModule("site_layout");

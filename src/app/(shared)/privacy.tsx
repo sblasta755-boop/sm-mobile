@@ -1,7 +1,7 @@
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { Screen } from "@/components/Screen";
 import { Card } from "@/components/Card";
-import { colors, spacing, typography, themedStyles } from "@/theme";
+import { colors, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 
 // Previously the profile menu's "Privacy & POPIA notice" row was a no-op
 // (onPress={() => {}}) - this is the real screen it now pushes to. Text
@@ -13,6 +13,7 @@ const PRIVACY_NOTICE_PARAGRAPHS = [
 ];
 
 export default function PrivacyScreen() {
+  useThemeVersion(); // re-render with the new colours when the theme changes
   return (
     <Screen title="Privacy & POPIA notice" scroll={false}>
       <ScrollView contentContainerStyle={styles.content}>

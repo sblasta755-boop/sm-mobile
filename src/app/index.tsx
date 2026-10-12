@@ -3,6 +3,7 @@ import { Redirect } from "expo-router";
 import * as NativeSplashScreen from "expo-splash-screen";
 import { SplashScreen } from "@/components/SplashScreen";
 import { useSmartClean } from "@/features/store";
+import { useThemeVersion } from "@/theme";
 
 /**
  * Where every signed-in session lands, and the one place that decides
@@ -24,6 +25,7 @@ import { useSmartClean } from "@/features/store";
  * queries that return nothing.
  */
 export default function Index() {
+  useThemeVersion(); // re-render with the new colours when the theme changes
   const { state, currentUser } = useSmartClean();
 
   // Fires after this component's first commit, whichever branch below

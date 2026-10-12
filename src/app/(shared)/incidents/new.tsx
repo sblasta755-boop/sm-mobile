@@ -11,7 +11,7 @@ import { useSmartClean } from "@/features/store";
 import { useHomePath, useScanPath } from "@/features/roles";
 import { useHasCapability } from "@/features/modules";
 import { createIncident, fileUrl, uploadImage } from "@/api/client";
-import { colors, radius, spacing, typography, themedStyles } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 import type { IncidentPriority } from "@/types/smartclean";
 
 const CATEGORIES = ["Safety", "Security", "Damage", "Complaint", "Lost property", "Maintenance", "Chemical spill", "Missing stock"];
@@ -19,6 +19,7 @@ const PRIORITIES: IncidentPriority[] = ["low", "medium", "high", "critical"];
 const MAX_PHOTOS = 10;
 
 export default function NewIncidentScreen() {
+  useThemeVersion(); // re-render with the new colours when the theme changes
   // Set by the scan result screen (see app/(app)/scan.tsx's "Report
   // incident here") when the cleaner arrived via a QR code already tied
   // to a specific room/zone. There's no manual room/zone picker any

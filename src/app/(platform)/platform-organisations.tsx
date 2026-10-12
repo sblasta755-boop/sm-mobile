@@ -7,7 +7,7 @@ import { Card } from "@/components/Card";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useSmartClean } from "@/features/store";
 import { listPlatformOrganisations, type PlatformOrganisation } from "@/api/client";
-import { colors, radius, spacing, typography, themedStyles } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 import type { StatusTone } from "@/theme";
 
 // Mirrors the web console's STATUS_TONE. past_due is a warning rather
@@ -42,6 +42,7 @@ function attentionReason(org: PlatformOrganisation): string | null {
 }
 
 export default function PlatformOrganisations() {
+  useThemeVersion(); // re-render with the new colours when the theme changes
   const { state } = useSmartClean();
   const [organisations, setOrganisations] = useState<PlatformOrganisation[]>([]);
   const [query, setQuery] = useState("");

@@ -45,6 +45,14 @@ export function fileUrl(filePath: string | undefined): string | undefined {
   return `${API_BASE_URL}/${filePath.replace(/^\/+/, "")}`;
 }
 
+/** A resized copy of an uploaded photo, for places that show it small (see the
+ * backend's /thumbs). Anything that is not an upload falls back to the original. */
+export function thumbUrl(filePath: string | undefined, width = 640): string | undefined {
+  if (!filePath) return undefined;
+  const match = /^\/?images\/([^/?#]+)$/.exec(filePath);
+  return match ? `${API_BASE_URL}/thumbs/${match[1]}?w=${width}` : fileUrl(filePath);
+}
+
 export interface BackendSession {
   accessToken: string;
   refreshToken: string;
@@ -1445,4 +1453,18 @@ export function recordWayfindingPatrol(
     { method: "POST", body: JSON.stringify(payload) },
     accessToken,
   );
+}
+
+/** Marks many notifications read in one request (the server takes a list of ids). */
+export function markNotificationsRead(accessToken: string, ids: string[]) {
+  return request<{ updated: number }>(
+    "/notifications/read",
+    { method: "PATCH", body: JSON.stringify({ ids }) },
+    accessToken,
+  );
+}
+
+/** The optional note the person doing a task leaves for the reviewer. An empty note clears it. */
+export function saveTaskNote(accessToken: string, taskId: string, note: string) {
+  return request<Task>(`/tasks/${taskId}/note`, { method: "PUT", body: JSON.stringify({ note }) }, accessToken);
 }

@@ -6,10 +6,11 @@ import { Card } from "@/components/Card";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useSmartClean } from "@/features/store";
 import { humanStatus } from "@/domain/status";
-import { colors, radius, spacing, typography, themedStyles } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 import type { StatusTone } from "@/theme";
 
 export default function CorrectiveActionsScreen() {
+  useThemeVersion(); // re-render with the new colours when the theme changes
   const { state, currentUser } = useSmartClean();
   const mine = state.correctiveActions.filter((c) => c.assigneeId === currentUser?.id);
 

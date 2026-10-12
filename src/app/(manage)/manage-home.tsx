@@ -4,11 +4,11 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Screen } from "@/components/Screen";
 import { Card } from "@/components/Card";
-import { Button } from "@/components/Button";
+import { ActionTiles } from "@/components/ActionTiles";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useSmartClean } from "@/features/store";
 import { useHasModule } from "@/features/modules";
-import { colors, spacing, typography, themedStyles } from "@/theme";
+import { colors, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 
 /**
  * What a manager needs on opening the app: is anything wrong at my
@@ -21,6 +21,7 @@ import { colors, spacing, typography, themedStyles } from "@/theme";
  * sites", with no client-side filtering to get wrong.
  */
 export default function ManageHome() {
+  useThemeVersion(); // re-render with the new colours when the theme changes
   const { state, currentUser } = useSmartClean();
   const wayfindingOn = useHasModule("wayfinding");
 
@@ -69,32 +70,17 @@ export default function ManageHome() {
         </Card>
       )}
 
-      <Button
-        variant="outline"
-        icon={<Ionicons name="document-text-outline" size={16} color={colors.foreground} />}
-        onPress={() => router.push("/management-report")}
-      >
-        Management report
-      </Button>
-
-      {wayfindingOn && (
-        <>
-        <Button
-          variant="outline"
-          icon={<Ionicons name="compass-outline" size={16} color={colors.foreground} />}
-          onPress={() => router.push("/install-beacon" as never)}
-        >
-          Wayfinding signs
-        </Button>
-        <Button
-          variant="outline"
-          icon={<Ionicons name="walk-outline" size={16} color={colors.foreground} />}
-          onPress={() => router.push("/patrol-walk" as never)}
-        >
-          Walk a path
-        </Button>
-        </>
-      )}
+      <ActionTiles
+        items={[
+          { key: "report", label: "Management report", icon: <Ionicons name="document-text-outline" size={20} color={colors.primary} />, onPress: () => router.push("/management-report") },
+          ...(wayfindingOn
+            ? [
+                { key: "signs", label: "Wayfinding signs", icon: <Ionicons name="compass-outline" size={20} color={colors.primary} />, onPress: () => router.push("/install-beacon" as never) },
+                { key: "walk", label: "Walk a path", icon: <Ionicons name="walk-outline" size={20} color={colors.primary} />, onPress: () => router.push("/patrol-walk" as never) },
+              ]
+            : []),
+        ]}
+      />
 
       <View style={styles.tiles}>
         <Tile label="Open tasks" value={openTasks.length} />

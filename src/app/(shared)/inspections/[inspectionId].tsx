@@ -19,7 +19,7 @@ import {
   PASS_SCORE,
   TASK_CATEGORIES,
 } from "@/domain/inspections";
-import { colors, radius, spacing, typography, themedStyles } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 import type { ChecklistItem } from "@/types/smartclean";
 import { appAlert } from "@/components/Dialog";
 
@@ -31,6 +31,7 @@ import { appAlert } from "@/components/Dialog";
  * cleaner's view of it.
  */
 export default function InspectionScreen() {
+  useThemeVersion(); // re-render with the new colours when the theme changes
   const { inspectionId } = useLocalSearchParams<{ inspectionId: string }>();
   const { state, currentUser, refreshBackendData } = useSmartClean();
   const homePath = useHomePath();
@@ -141,6 +142,13 @@ export default function InspectionScreen() {
           <Text style={styles.muted}>Submitted {new Date(task.submittedAt).toLocaleString("en-ZA")}</Text>
         )}
       </Card>
+
+      {!!task.note && (
+        <Card style={styles.card}>
+          <Text style={styles.sectionTitle}>Note from {doer?.name ?? "the cleaner"}</Text>
+          <Text style={styles.noteText}>{task.note}</Text>
+        </Card>
+      )}
 
       <Text style={styles.sectionTitle}>Checklist</Text>
       <Card style={styles.card}>
@@ -297,6 +305,7 @@ const styles = themedStyles(() => StyleSheet.create({
   flex: { flex: 1 },
   card: { gap: spacing.sm, marginBottom: spacing.md },
   muted: { fontSize: typography.small, color: colors.mutedForeground },
+  noteText: { fontSize: typography.body, color: colors.foreground, lineHeight: 20 },
   taskTitle: { fontSize: typography.body, fontWeight: "700", color: colors.foreground },
   badges: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: spacing.xs },
   sectionTitle: {

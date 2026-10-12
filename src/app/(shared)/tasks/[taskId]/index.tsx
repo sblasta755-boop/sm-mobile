@@ -8,6 +8,7 @@ import { Button } from "@/components/Button";
 import { BrokenGlassIcon } from "@/components/BrokenGlassIcon";
 import { Checkbox } from "@/components/Checkbox";
 import { ProgressBar } from "@/components/ProgressBar";
+import { TaskNote } from "@/components/TaskNote";
 import { StatusBadge, VerifiedBadge } from "@/components/StatusBadge";
 import { useSmartClean } from "@/features/store";
 import { useHomePath, useScanPath } from "@/features/roles";
@@ -17,7 +18,7 @@ import { firstIncompleteKey, groupChecklist, isSectioned } from "@/domain/checkl
 import { itemPhotoProgress } from "@/domain/evidenceSlots";
 import { taskDestination } from "@/domain/inspections";
 import { toneForTask, humanStatus, taskSubmissionBlocked, taskStage, isChecklistUnlocked } from "@/domain/status";
-import { colors, radius, spacing, typography, themedStyles } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 import { appAlert } from "@/components/Dialog";
 
 // steps_required checklist items store their value as a single
@@ -79,6 +80,7 @@ function StepsField({
 }
 
 export default function TaskDetailScreen() {
+  useThemeVersion(); // re-render with the new colours when the theme changes
   const { taskId } = useLocalSearchParams<{ taskId: string }>();
   const { state, currentUser, dispatch } = useSmartClean();
   const homePath = useHomePath();
@@ -594,6 +596,12 @@ export default function TaskDetailScreen() {
           </View>
         );
       })()}
+
+      {/* Optional, and closed until the person doing the task opens it. */}
+      <TaskNote
+        task={task}
+        editable={task.assigneeId === currentUser?.id && ["assigned", "not_started", "in_progress", "rework_required"].includes(task.status)}
+      />
 
       <View style={styles.actionsRow}>
         <Button

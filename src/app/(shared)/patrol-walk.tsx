@@ -9,7 +9,7 @@ import { useSmartClean } from "@/features/store";
 import { useHasModule } from "@/features/modules";
 import { useHomePath } from "@/features/roles";
 import { listWayfindingBeacons, recordWayfindingPatrol, type WayfindingBeaconRecord } from "@/api/client";
-import { colors, spacing, typography, themedStyles } from "@/theme";
+import { colors, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 import { appAlert } from "@/components/Dialog";
 
 const ROLES = ["supervisor", "site_manager", "operations_manager", "org_admin"];
@@ -22,6 +22,7 @@ const clock = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2,
  * If something blocks the way, say so and routing avoids the path.
  */
 export default function PatrolWalkScreen() {
+  useThemeVersion(); // re-render with the new colours when the theme changes
   const { state, currentUser } = useSmartClean();
   const homePath = useHomePath();
   const enabled = useHasModule("wayfinding");
@@ -109,18 +110,22 @@ export default function PatrolWalkScreen() {
             <Button onPress={() => finish(false)} loading={busy} disabled={!to}>
               I&apos;ve arrived
             </Button>
-            <Button variant="destructive" onPress={() => finish(true)} disabled={!to || busy}>
-              Path is blocked
-            </Button>
-            <Button
-              variant="outline"
-              onPress={() => {
-                setStartedAt(null);
-                setElapsed(0);
-              }}
-            >
-              Cancel walk
-            </Button>
+            <View style={styles.row}>
+              <Button variant="destructive" fullWidth={false} style={styles.rowButton} onPress={() => finish(true)} disabled={!to || busy}>
+                Path is blocked
+              </Button>
+              <Button
+                variant="outline"
+                fullWidth={false}
+                style={styles.rowButton}
+                onPress={() => {
+                  setStartedAt(null);
+                  setElapsed(0);
+                }}
+              >
+                Cancel walk
+              </Button>
+            </View>
           </>
         )}
       </Card>
@@ -130,6 +135,8 @@ export default function PatrolWalkScreen() {
 }
 
 const styles = themedStyles(() => StyleSheet.create({
+  row: { flexDirection: "row", gap: spacing.sm },
+  rowButton: { flex: 1 },
   timer: {
     fontSize: typography.title,
     fontWeight: "700",

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { AppState, Platform } from "react-native";
 import * as Device from "expo-device";
 import * as Notifications from "expo-notifications";
@@ -101,6 +101,9 @@ async function getExpoPushToken(): Promise<string | null> {
  * the root (inside SmartCleanProvider so useSmartClean works) - see
  * app/_layout.tsx.
  */
+// Coming back to the app refetches, but not more than this often.
+const FOREGROUND_REFRESH_MIN_MS = 15_000;
+
 export function usePushRegistration() {
   const { state, currentUser, refreshBackendData } = useSmartClean();
   const registeredTokenRef = useRef<string | null>(null);
@@ -165,6 +168,28 @@ export function usePushRegistration() {
     return () => sub.remove();
   }, [currentUser, state.accessToken]);
 
+  // A push that arrives while the app is closed or in the background runs no
+  // app code, so nothing refetched and the new task or notification only showed
+  // after a restart. Refetch whenever the app comes back to the front, and when
+  // a notification is tapped (below), at most once every few seconds. The ref
+  // keeps the listener pointing at the latest refresh function.
+  const refreshRef = useRef(refreshBackendData);
+  refreshRef.current = refreshBackendData;
+  const lastRefreshAt = useRef(0);
+  const refreshSoon = useCallback(() => {
+    const now = Date.now();
+    if (now - lastRefreshAt.current < FOREGROUND_REFRESH_MIN_MS) return;
+    lastRefreshAt.current = now;
+    void refreshRef.current();
+  }, []);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (next) => {
+      if (next === "active") refreshSoon();
+    });
+    return () => sub.remove();
+  }, [refreshSoon]);
+
   // Tap handling: a push tap should take the user straight to what it's
   // about, not just "open the app" - see routeForNotificationData below
   // for the category -> screen mapping. Registered once; expo-notifications
@@ -175,10 +200,11 @@ export function usePushRegistration() {
       const data = response.notification.request.content.data as
         | { category?: string; relatedId?: string }
         | undefined;
+      refreshSoon();
       navigateForNotificationData(data);
     });
     return () => sub.remove();
-  }, []);
+  }, [refreshSoon]);
 
   // A push that arrives while the app is already open only ever drove the
   // banner/sound (see setNotificationHandler above) - it never told the
@@ -190,10 +216,12 @@ export function usePushRegistration() {
   // and reopened the app (which is the only other thing that refetches).
   useEffect(() => {
     const sub = Notifications.addNotificationReceivedListener(() => {
-      void refreshBackendData();
+      // A real event just happened, so always refetch (not throttled).
+      lastRefreshAt.current = Date.now();
+      void refreshRef.current();
     });
     return () => sub.remove();
-  }, [refreshBackendData]);
+  }, []);
 }
 
 /**

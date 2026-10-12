@@ -10,7 +10,7 @@ import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { useSmartClean } from "@/features/store";
 import { useHomePath } from "@/features/roles";
-import { fileUrl } from "@/api/client";
+import { thumbUrl } from "@/api/client";
 import { useTenantBranding } from "@/services/branding";
 import {
   buildManagementReport,
@@ -20,12 +20,15 @@ import {
 } from "@/domain/managementReport";
 import { buildManagementReportHtml } from "@/domain/managementReportHtml";
 import { stampReportFooter } from "@/domain/pdfFooter";
-import { colors, radius, spacing, typography, themedStyles } from "@/theme";
+import { collectReportPhotos, mapWithProgress } from "@/domain/reportPhotos";
+import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 import { appAlert } from "@/components/Dialog";
+import { photoDataUri } from "@/services/reportPhotos";
 
-// Who may produce a client-facing report - the same people the web Reports
-// page is open to. Cleaners and waiters never see this screen.
-const REPORT_ROLES = ["supervisor", "site_manager", "operations_manager", "org_admin", "client_auditor"];
+// Who may produce a client-facing report: managers, supervisors, auditors and
+// cleaners (a cleaner's report covers the work they can see, which is their own).
+// Waiters never see this screen.
+const REPORT_ROLES = ["supervisor", "site_manager", "operations_manager", "org_admin", "client_auditor", "cleaner"];
 
 const pad = (n: number) => String(n).padStart(2, "0");
 const dayKey = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -40,6 +43,7 @@ const shiftDay = (key: string, by: number) => {
  * generate a PDF to share or print. The same report the web app prints.
  */
 export default function ManagementReportScreen() {
+  useThemeVersion(); // re-render with the new colours when the theme changes
   const { state, currentUser } = useSmartClean();
   const homePath = useHomePath();
   const branding = useTenantBranding();
@@ -50,6 +54,8 @@ export default function ManagementReportScreen() {
   const [pickedAreas, setPickedAreas] = useState<string[]>([]);
   const [typedName, setTypedName] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // What the button says while a report is being made.
+  const [stage, setStage] = useState("");
 
   const site = sites.find((s) => s.id === siteId) ?? sites[0];
   const options = useMemo(
@@ -90,6 +96,18 @@ export default function ManagementReportScreen() {
     setBusy(true);
     try {
       const now = new Date();
+      // Fetch small copies of the photos first and embed them in the report, so
+      // the PDF step has nothing left to download and we can show real progress.
+      const photos = collectReportPhotos(report);
+      setStage(photos.length ? `Preparing photos... 0 of ${photos.length}` : "Building the report...");
+      const embedded = await mapWithProgress(
+        photos,
+        4,
+        (photo) => photoDataUri(thumbUrl(photo.filePath, 640) ?? photo.uri ?? ""),
+        (done, total) => total && setStage(`Preparing photos... ${done} of ${total}`),
+      );
+      const photoData = new Map(photos.map((p, i) => [p.id, embedded[i]]));
+      setStage("Building the report...");
       const html = buildManagementReportHtml({
         report,
         reportName: name,
@@ -98,11 +116,13 @@ export default function ManagementReportScreen() {
         generatedAtLabel: `${longDate(dayKey(now)).toUpperCase()} | ${pad(now.getHours())}:${pad(now.getMinutes())}`,
         reviewerName: currentUser?.name ?? "",
         reviewDateLabel: longDate(dayKey(now)),
-        photoSrc: (photo) => fileUrl(photo.filePath) ?? photo.uri ?? null,
+        // A photo that could not be fetched falls back to its link, so the print engine can try once more.
+        photoSrc: (photo) => photoData.get(photo.id) ?? thumbUrl(photo.filePath, 640) ?? photo.uri ?? null,
       });
       // A4 explicitly: Android's print engine defaults to Letter.
       const printed = await Print.printToFileAsync({ html, base64: true, width: 595, height: 842 });
       // The print engine cannot number pages, so the footer is stamped on after.
+      setStage("Adding page numbers...");
       const stamped = await stampReportFooter(printed.base64 ?? "", report.siteName, name.trim() || "Daily Service");
       const uri = `${FileSystem.cacheDirectory}${(name.trim() || "Daily Service").replace(/[^\w-]+/g, "_")}_${dayKey(now)}.pdf`;
       await FileSystem.writeAsStringAsync(uri, stamped, { encoding: FileSystem.EncodingType.Base64 });
@@ -119,6 +139,7 @@ export default function ManagementReportScreen() {
       appAlert("Could not create the report", error instanceof Error ? error.message : "Please try again.");
     } finally {
       setBusy(false);
+      setStage("");
     }
   }
 
@@ -227,7 +248,7 @@ export default function ManagementReportScreen() {
         loading={busy}
         onPress={() => void generate()}
       >
-        Generate PDF
+        {busy && stage ? stage : "Generate PDF"}
       </Button>
     </Screen>
   );

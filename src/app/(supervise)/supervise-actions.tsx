@@ -6,7 +6,7 @@ import { Screen } from "@/components/Screen";
 import { Card } from "@/components/Card";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useSmartClean } from "@/features/store";
-import { colors, radius, spacing, typography, themedStyles } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 
 /**
  * Corrective actions across this supervisor's sites.
@@ -20,6 +20,7 @@ const FILTERS = ["Open", "Overdue", "Mine", "Closed"] as const;
 type Filter = (typeof FILTERS)[number];
 
 export default function SuperviseActions() {
+  useThemeVersion(); // re-render with the new colours when the theme changes
   const { state, currentUser } = useSmartClean();
   const [filter, setFilter] = useState<Filter>("Open");
 

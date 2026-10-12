@@ -11,7 +11,7 @@ import {
   rejectOnboarding,
   type OnboardingGrant,
 } from "@/api/client";
-import { colors, radius, spacing, typography, themedStyles } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 import { appAlert } from "@/components/Dialog";
 
 // The operator is expected to be sitting on this screen with a customer
@@ -31,6 +31,7 @@ const POLL_MS = 5_000;
  * a screenshot, so it gets the most prominent treatment on the card.
  */
 export default function PlatformApprovals() {
+  useThemeVersion(); // re-render with the new colours when the theme changes
   const { state } = useSmartClean();
   const [pending, setPending] = useState<OnboardingGrant[]>([]);
   const [loading, setLoading] = useState(true);

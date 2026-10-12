@@ -21,7 +21,7 @@ import {
 import { reportBatteryOnce } from "@/features/deviceHealth";
 import { getCurrentCoords } from "@/services/geolocation";
 import { useTenantBranding } from "@/services/branding";
-import { colors, radius, spacing, typography, themedStyles, status } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles, status, useThemeVersion } from "@/theme";
 
 // Mirrors the geofence rejection detail shape from app/(app)/scan.tsx -
 // see that file's own comment for where the backend attaches this.
@@ -78,6 +78,7 @@ function extractCode(raw: string): string {
  * routes that belong to the cleaner's own app and would be wrong here.
  */
 export default function SuperviseScan() {
+  useThemeVersion(); // re-render with the new colours when the theme changes
   const { state, currentUser, dispatch, refreshBackendData } = useSmartClean();
   const branding = useTenantBranding();
   const [permission, requestPermission] = useCameraPermissions();

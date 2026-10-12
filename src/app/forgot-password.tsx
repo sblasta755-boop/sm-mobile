@@ -15,7 +15,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { confirmPasswordResetOtp, requestPasswordResetOtp } from "@/api/client";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
-import { colors, radius, spacing, typography, themedStyles } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 
 // Two steps, both inside the app: request a 6-digit code by email, then
 // enter it alongside a new password. Unlike the web app's forgot-
@@ -28,6 +28,7 @@ import { colors, radius, spacing, typography, themedStyles } from "@/theme";
 // code, per-account rate limit) - this screen just has to present them
 // honestly, not re-implement them.
 export default function ForgotPassword() {
+  useThemeVersion(); // re-render with the new colours when the theme changes
   const insets = useSafeAreaInsets();
   const [step, setStep] = useState<"request" | "verify">("request");
   const [email, setEmail] = useState("");

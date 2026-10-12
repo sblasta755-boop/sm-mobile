@@ -5,7 +5,7 @@ import { useSmartClean } from "@/features/store";
 import { colors, radius, spacing, themedStyles, typography, useTheme, type ThemePreference } from "@/theme";
 
 // The people who can produce a client report - same set as the report screen.
-const REPORT_ROLES = ["supervisor", "site_manager", "operations_manager", "org_admin", "client_auditor"];
+const REPORT_ROLES = ["supervisor", "site_manager", "operations_manager", "org_admin", "client_auditor", "cleaner"];
 
 const OPTIONS: { value: ThemePreference; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
   { value: "light", label: "Light", icon: "sunny-outline" },

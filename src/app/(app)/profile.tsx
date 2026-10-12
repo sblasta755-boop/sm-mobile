@@ -15,10 +15,11 @@ import { useSmartClean } from "@/features/store";
 import { useCanManageSiteLayout } from "@/features/roles";
 import { fileUrl, getMyRatingSummary, toUserRecord, updateUser, uploadImage } from "@/api/client";
 import type { TableRatingSummary } from "@/types/smartclean";
-import { colors, radius, spacing, typography, themedStyles } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 import { APP_VERSION } from "@/constants/version";
 
 export default function ProfileScreen() {
+  useThemeVersion(); // re-render with the new colours when the theme changes
   const { state, dispatch, currentUser, signOut } = useSmartClean();
   const canManageSiteLayout = useCanManageSiteLayout();
   // The avatar upload had no feedback at all: tapping it opened the

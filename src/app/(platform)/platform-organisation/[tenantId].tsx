@@ -23,7 +23,7 @@ import {
   type PlatformOrganisation,
   type PlatformSite,
 } from "@/api/client";
-import { colors, radius, spacing, typography, themedStyles } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 import type { StatusTone } from "@/theme";
 import { appAlert } from "@/components/Dialog";
 
@@ -71,6 +71,7 @@ function grantSummary(grant: OnboardingGrant): { tone: StatusTone; label: string
 }
 
 export default function PlatformOrganisationDetail() {
+  useThemeVersion(); // re-render with the new colours when the theme changes
   const { tenantId } = useLocalSearchParams<{ tenantId: string }>();
   const { state } = useSmartClean();
   const [organisation, setOrganisation] = useState<PlatformOrganisation | null>(null);

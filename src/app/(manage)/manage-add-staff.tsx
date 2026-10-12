@@ -11,7 +11,7 @@ import {
   revealStaffOnboardingCode,
   type StaffGrant,
 } from "@/api/client";
-import { colors, radius, spacing, typography, themedStyles } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 
 /**
  * Create a team member's account and hand them a QR code to scan.
@@ -41,6 +41,7 @@ const ADMIN_ROLES = [
 const SITE_REQUIRED = ["site_manager", "supervisor", "cleaner"];
 
 export default function ManageAddStaff() {
+  useThemeVersion(); // re-render with the new colours when the theme changes
   const { state, currentUser } = useSmartClean();
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");

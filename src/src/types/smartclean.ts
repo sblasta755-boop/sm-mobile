@@ -230,7 +230,8 @@ export interface Task {
   submittedAt?: string;
   approvedAt?: string;
   score?: number;
-  note?: string;
+  /** The optional note the person doing the task left for the reviewer. */
+  note?: string | null;
   /** Set for a task created from an incident - by either
    * assignInvestigation (send a cleaner to assess first) or assignTask
    * (the fix is already known), tying it back to the Incident it came

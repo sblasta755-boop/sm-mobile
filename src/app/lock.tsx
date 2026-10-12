@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Button } from "@/components/Button";
 import { useSmartClean } from "@/features/store";
 import { getCapability, labelFor, requestUnlock, type BiometricKind } from "@/services/biometrics";
-import { colors, radius, spacing, typography, themedStyles } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 
 /**
  * The gate in front of a restored-but-locked session.
@@ -23,6 +23,7 @@ import { colors, radius, spacing, typography, themedStyles } from "@/theme";
  * a password.
  */
 export default function LockScreen() {
+  useThemeVersion(); // re-render with the new colours when the theme changes
   const { signOut, unlock } = useSmartClean();
   const insets = useSafeAreaInsets();
   const [kind, setKind] = useState<BiometricKind>("biometric");

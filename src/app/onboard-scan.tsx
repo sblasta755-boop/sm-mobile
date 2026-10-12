@@ -8,7 +8,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { scanOnboardingCode } from "@/api/client";
-import { colors, radius, spacing, typography, themedStyles } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 
 /**
  * Where a brand-new organisation's administrator scans the code their
@@ -22,6 +22,7 @@ import { colors, radius, spacing, typography, themedStyles } from "@/theme";
  * on. See OnboardingController.scan on the backend for why.
  */
 export default function OnboardScan() {
+  useThemeVersion(); // re-render with the new colours when the theme changes
   const insets = useSafeAreaInsets();
   const [permission, requestPermission] = useCameraPermissions();
   const [busy, setBusy] = useState(false);

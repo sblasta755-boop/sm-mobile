@@ -5,7 +5,7 @@ import { Card } from "@/components/Card";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useSmartClean } from "@/features/store";
 import { humanStatus, toneForInspection } from "@/domain/status";
-import { colors, spacing, typography, themedStyles } from "@/theme";
+import { colors, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 import type { Inspection } from "@/types/smartclean";
 
 /**
@@ -23,6 +23,7 @@ import type { Inspection } from "@/types/smartclean";
  * rather than "not purchased".
  */
 export default function AuditQuality() {
+  useThemeVersion(); // re-render with the new colours when the theme changes
   const { state } = useSmartClean();
 
   // Newest first: an auditor reads the record backwards from now.

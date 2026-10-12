@@ -8,7 +8,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { scanStaffOnboardingCode } from "@/api/client";
-import { colors, radius, spacing, typography, themedStyles } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 
 /**
  * Where a new employee scans the code their manager is showing them.
@@ -24,6 +24,7 @@ import { colors, radius, spacing, typography, themedStyles } from "@/theme";
  * yet: their account exists but holds a password nobody has seen.
  */
 export default function StaffOnboardScan() {
+  useThemeVersion(); // re-render with the new colours when the theme changes
   const insets = useSafeAreaInsets();
   const [permission, requestPermission] = useCameraPermissions();
   const [busy, setBusy] = useState(false);

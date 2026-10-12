@@ -5,7 +5,7 @@ import { Screen } from "@/components/Screen";
 import { Button } from "@/components/Button";
 import { useSmartClean } from "@/features/store";
 import { toUserRecord, updateUser } from "@/api/client";
-import { colors, radius, spacing, typography, themedStyles } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 
 // Name/email/phone editing for the signed-in user. Phone has no
 // dedicated backend column - it round-trips through the JSONB profile
@@ -13,6 +13,7 @@ import { colors, radius, spacing, typography, themedStyles } from "@/theme";
 // apply_user_record/user_to_record in services/records.py on the
 // backend), so no backend change was needed to add it here.
 export default function EditProfileScreen() {
+  useThemeVersion(); // re-render with the new colours when the theme changes
   const { state, dispatch, currentUser } = useSmartClean();
   const [name, setName] = useState(currentUser?.name ?? "");
   const [email, setEmail] = useState(currentUser?.email ?? "");

@@ -7,6 +7,7 @@ import { BrokenGlassIcon } from "@/components/BrokenGlassIcon";
 import { Screen } from "@/components/Screen";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
+import { ActionTiles } from "@/components/ActionTiles";
 import { ProgressBar } from "@/components/ProgressBar";
 import { StatusBadge } from "@/components/StatusBadge";
 import { TaskRow } from "@/components/TaskRow";
@@ -16,10 +17,11 @@ import { clockIn as clockInRequest, clockOut as clockOutRequest } from "@/api/cl
 import { getCurrentCoords } from "@/services/geolocation";
 import { useSmartClean } from "@/features/store";
 import { toneForTask, humanStatus } from "@/domain/status";
-import { colors, radius, spacing, typography, themedStyles, status } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles, status, useThemeVersion } from "@/theme";
 import { appAlert } from "@/components/Dialog";
 
 export default function HomeScreen() {
+  useThemeVersion(); // re-render with the new colours when the theme changes
   const { state, currentUser, refreshBackendData } = useSmartClean();
   // Entry points to the three gateable screens a cleaner can reach.
   // Hiding them is presentation only - the server 402s these routes for
@@ -293,19 +295,29 @@ export default function HomeScreen() {
         </View>
       )}
 
-      <View style={styles.quickActions}>
-        {/* Incidents are always tied to a scanned room/zone now, so this
-            sends the cleaner to Scan first rather than straight to the
-            report form - see app/(app)/incidents/new.tsx. */}
-        {hasIncidents && (
-          <Button variant="outline" icon={<BrokenGlassIcon size={16} color={colors.foreground} />} onPress={() => router.push(hasQr ? "/scan" : "/incidents/new")}>
-            Report incident
-          </Button>
-        )}
-        <Button variant="outline" onPress={() => router.push("/profile")}>
-          Sync status
-        </Button>
-      </View>
+      {/* Incidents are always tied to a scanned room/zone now, so this sends the
+          cleaner to Scan first rather than straight to the report form - see
+          app/(app)/incidents/new.tsx. */}
+      <ActionTiles
+        items={[
+          ...(hasIncidents
+            ? [
+                {
+                  key: "incident",
+                  label: "Report incident",
+                  icon: <BrokenGlassIcon size={20} color={colors.primary} />,
+                  onPress: () => router.push(hasQr ? "/scan" : "/incidents/new"),
+                },
+              ]
+            : []),
+          {
+            key: "sync",
+            label: "Sync status",
+            icon: <Ionicons name="sync-outline" size={20} color={colors.primary} />,
+            onPress: () => router.push("/profile"),
+          },
+        ]}
+      />
     </Screen>
   );
 }

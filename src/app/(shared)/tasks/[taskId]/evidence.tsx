@@ -13,7 +13,7 @@ import { addTaskEvidence, fileUrl, uploadImage } from "@/api/client";
 import { taskStage } from "@/domain/status";
 import { evidenceForSlot, evidenceSlots, slotProgress, type EvidenceSlot } from "@/domain/evidenceSlots";
 import { useHasCapability, useHasModule } from "@/features/modules";
-import { colors, radius, spacing, typography, themedStyles } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 import { appAlert } from "@/components/Dialog";
 
 /** The word on a tile: a checklist item's photos are just Before / After / Photo. */
@@ -29,6 +29,7 @@ function tileTitle(slot: EvidenceSlot): string {
  * photo; the camera opens full screen and closes when the photo is done.
  */
 export default function EvidenceScreen() {
+  useThemeVersion(); // re-render with the new colours when the theme changes
   // `item` highlights one checklist item (from the "Take photo" button beside
   // it on the task screen); everything else stays on screen too.
   const { taskId, item: requestedItem } = useLocalSearchParams<{ taskId: string; item?: string }>();

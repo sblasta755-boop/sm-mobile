@@ -8,7 +8,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { useSmartClean } from "@/features/store";
 import { toneForTask, humanStatus } from "@/domain/status";
 import { taskDestination } from "@/domain/inspections";
-import { colors, radius, spacing, typography, themedStyles } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 import type { TaskStatus } from "@/types/smartclean";
 
 /**
@@ -28,6 +28,7 @@ const GROUPS: { label: string; statuses: TaskStatus[] }[] = [
 ];
 
 export default function SuperviseInspections() {
+  useThemeVersion(); // re-render with the new colours when the theme changes
   const { state, currentUser } = useSmartClean();
   const [activeGroup, setActiveGroup] = useState(GROUPS[0].label);
 

@@ -19,7 +19,7 @@ import {
   snoozeTableSessionBill,
 } from "@/api/client";
 import type { TableSession, WaiterSessionEndReason } from "@/types/smartclean";
-import { colors, radius, spacing, typography, themedStyles } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 
 const END_REASONS: { value: WaiterSessionEndReason; label: string; autoTask: boolean }[] = [
   { value: "paid", label: "Paid", autoTask: true },
@@ -43,6 +43,7 @@ const END_REASONS: { value: WaiterSessionEndReason; label: string; autoTask: boo
 const SESSION_POLL_MS = 15_000;
 
 export default function TableSessionDetailScreen() {
+  useThemeVersion(); // re-render with the new colours when the theme changes
   const params = useLocalSearchParams<{
     sessionId: string;
     needsCleanConfirm?: string;

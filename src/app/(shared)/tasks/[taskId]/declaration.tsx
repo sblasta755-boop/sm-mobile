@@ -10,7 +10,7 @@ import { useSmartClean } from "@/features/store";
 import { useHomePath } from "@/features/roles";
 import { useWorkflowPolicy } from "@/features/modules";
 import { submitTask } from "@/api/client";
-import { colors, radius, spacing, typography, themedStyles } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 import { appAlert } from "@/components/Dialog";
 
 // A typed name is the whole "signature" here (no drawn/canvas capture),
@@ -28,6 +28,7 @@ function normalizeName(value: string) {
 }
 
 export default function DeclarationScreen() {
+  useThemeVersion(); // re-render with the new colours when the theme changes
   const { taskId } = useLocalSearchParams<{ taskId: string }>();
   const { state, currentUser, dispatch, refreshBackendData } = useSmartClean();
   const homePath = useHomePath();

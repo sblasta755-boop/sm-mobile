@@ -17,7 +17,7 @@ import {
   type RoomScanResult,
   type RoomScanTrackingState,
 } from "room-scan";
-import { colors, radius, spacing, typography, themedStyles } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 
 /**
  * True AR room scanning - Apple RoomPlan on iOS (16+, A12+ chip), a
@@ -45,6 +45,7 @@ import { colors, radius, spacing, typography, themedStyles } from "@/theme";
  * real on-device scan.
  */
 export default function ScanRoomScreen() {
+  useThemeVersion(); // re-render with the new colours when the theme changes
   const { siteId, floorId, locationId } = useLocalSearchParams<{
     siteId: string;
     floorId: string;

@@ -10,7 +10,8 @@ import { Checkbox } from "@/components/Checkbox";
 import { useSmartClean } from "@/features/store";
 import { getMyAttendanceDays, type AttendanceDay } from "@/api/client";
 import { useTenantBranding } from "@/services/branding";
-import { colors, radius, spacing, typography, themedStyles } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
+import { dateWindows } from "@/domain/dateWindows";
 import { buildPerformanceProfileHtml } from "@/domain/performanceProfilePdf";
 
 const SECTIONS = [
@@ -50,8 +51,11 @@ const DEFAULT_SELECTED: Record<SectionKey, boolean> = {
 };
 
 const ATTENDANCE_WINDOW_DAYS = 90;
+// Under the server's 62-day limit on a single request.
+const ATTENDANCE_MAX_SPAN_DAYS = 45;
 
 export default function PerformanceProfileScreen() {
+  useThemeVersion(); // re-render with the new colours when the theme changes
   const { state, currentUser } = useSmartClean();
   const branding = useTenantBranding();
   const [selected, setSelected] = useState(DEFAULT_SELECTED);
@@ -63,7 +67,12 @@ export default function PerformanceProfileScreen() {
   const myTasks = useMemo(
     () =>
       state.tasks
-        .filter((t) => t.assigneeId === currentUser?.id && ["approved", "closed"].includes(t.status))
+        // Rework counts too: the PDF's approval rate is approved against reworked.
+        .filter(
+          (t) =>
+            t.assigneeId === currentUser?.id &&
+            ["approved", "closed", "rework_required", "resubmitted"].includes(t.status),
+        )
         .sort((a, b) => (b.approvedAt ?? "").localeCompare(a.approvedAt ?? "")),
     [state.tasks, currentUser],
   );
@@ -79,6 +88,26 @@ export default function PerformanceProfileScreen() {
 
   const noSelection = !SECTIONS.some((s) => selected[s.key]);
 
+  // What each section will actually contain, so an empty PDF is never a surprise.
+  // A locked module's data is not sent to the phone at all (see the backend's
+  // bootstrap), so say that rather than implying there is simply none.
+  const modules = state.subscription?.modules ?? [];
+  const locked = (module: string) => modules.length > 0 && !modules.includes(module);
+  const countNote: Record<SectionKey, string> = {
+    tasks: myTasks.length ? `${myTasks.length} on record` : "No completed tasks yet",
+    inspections: locked("inspections")
+      ? "Not included in your organisation's plan"
+      : myInspections.length
+        ? `${myInspections.length} on record`
+        : "No inspected tasks yet",
+    correctiveActions: locked("corrective_actions")
+      ? "Not included in your organisation's plan"
+      : myCorrectiveActions.length
+        ? `${myCorrectiveActions.length} on record`
+        : "None raised against you",
+    attendance: "Loaded when you download",
+  };
+
   function toggle(key: SectionKey) {
     setSelected((prev) => ({ ...prev, [key]: !prev[key] }));
   }
@@ -90,14 +119,14 @@ export default function PerformanceProfileScreen() {
     try {
       let attendanceDays: AttendanceDay[] = [];
       if (selected.attendance && state.accessToken) {
-        const end = new Date();
-        const start = new Date();
-        start.setDate(start.getDate() - ATTENDANCE_WINDOW_DAYS);
-        attendanceDays = await getMyAttendanceDays(
-          state.accessToken,
-          start.toISOString().slice(0, 10),
-          end.toISOString().slice(0, 10),
+        // The server caps one request at 62 days, so ask for the 90 in two pieces.
+        const token = state.accessToken;
+        const pieces = await Promise.all(
+          dateWindows(new Date(), ATTENDANCE_WINDOW_DAYS, ATTENDANCE_MAX_SPAN_DAYS).map((w) =>
+            getMyAttendanceDays(token, w.start, w.end),
+          ),
         );
+        attendanceDays = pieces.flat();
       }
 
       const html = buildPerformanceProfileHtml({
@@ -145,6 +174,7 @@ export default function PerformanceProfileScreen() {
               <View style={styles.sectionText}>
                 <Text style={styles.sectionLabel}>{section.label}</Text>
                 <Text style={styles.sectionDescription}>{section.description}</Text>
+                <Text style={styles.sectionCount}>{countNote[section.key]}</Text>
               </View>
             </Card>
           ))}
@@ -212,6 +242,12 @@ const styles = themedStyles(() => StyleSheet.create({
     fontSize: typography.body,
     fontWeight: "600",
     color: colors.foreground,
+  },
+  sectionCount: {
+    fontSize: typography.small,
+    fontWeight: "600",
+    color: colors.primary,
+    marginTop: 2,
   },
   sectionDescription: {
     fontSize: typography.small,

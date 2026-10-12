@@ -4,11 +4,11 @@ import { StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Screen } from "@/components/Screen";
 import { Card } from "@/components/Card";
-import { Button } from "@/components/Button";
+import { ActionTiles } from "@/components/ActionTiles";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useHasModule } from "@/features/modules";
 import { useSmartClean } from "@/features/store";
-import { colors, radius, spacing, typography, themedStyles } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 
 /**
  * What an auditor opens the app to ask: is this contract being
@@ -26,6 +26,7 @@ import { colors, radius, spacing, typography, themedStyles } from "@/theme";
  * clock-in. Every number is a count of something that already happened.
  */
 export default function AuditHome() {
+  useThemeVersion(); // re-render with the new colours when the theme changes
   const { state, currentUser } = useSmartClean();
   const hasIncidents = useHasModule("incidents");
 
@@ -84,13 +85,9 @@ export default function AuditHome() {
         </Text>
       </Card>
 
-      <Button
-        variant="outline"
-        icon={<Ionicons name="document-text-outline" size={16} color={colors.foreground} />}
-        onPress={() => router.push("/management-report")}
-      >
-        Management report
-      </Button>
+      <ActionTiles
+        items={[{ key: "report", label: "Management report", icon: <Ionicons name="document-text-outline" size={20} color={colors.primary} />, onPress: () => router.push("/management-report") }]}
+      />
 
       <View style={styles.tiles}>
         <Tile label="Outstanding" value={outstanding.length} />

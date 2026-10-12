@@ -10,10 +10,11 @@ import { filterTasks, filtersActive, NO_FILTERS, type TaskFilters } from "@/doma
 import { DateStrip, isSameDay, startOfDay } from "@/components/DateStrip";
 import { useSmartClean } from "@/features/store";
 import { toneForTask, humanStatus } from "@/domain/status";
-import { colors, radius, spacing, typography, themedStyles } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 import type { TaskStatus } from "@/types/smartclean";
 
 export default function ShiftsScreen() {
+  useThemeVersion(); // re-render with the new colours when the theme changes
   const { state, currentUser } = useSmartClean();
   const [activeGroup, setActiveGroup] = useState("Not started");
   const [filters, setFilters] = useState<TaskFilters>(NO_FILTERS);

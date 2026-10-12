@@ -14,7 +14,7 @@ import {
   revealStaffOnboardingCode,
   type StaffGrant,
 } from "@/api/client";
-import { colors, radius, spacing, typography, themedStyles } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 import type { StatusTone } from "@/theme";
 import type { DemoUser } from "@/types/smartclean";
 import { appAlert } from "@/components/Dialog";
@@ -40,6 +40,7 @@ function statusTone(status: string): StatusTone {
 }
 
 export default function ManageTeam() {
+  useThemeVersion(); // re-render with the new colours when the theme changes
   const { state, currentUser } = useSmartClean();
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<DemoUser | null>(null);

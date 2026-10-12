@@ -7,7 +7,7 @@ import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { useSmartClean } from "@/features/store";
 import { collectStaffOnboarding, pollStaffOnboarding } from "@/api/client";
-import { colors, radius, spacing, typography, themedStyles } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 
 // The new starter is standing with their manager while this runs, so it
 // polls briskly.
@@ -25,6 +25,7 @@ const POLL_MS = 3_000;
  * since the collected session is flagged mustChangePassword.
  */
 export default function StaffOnboardWaiting() {
+  useThemeVersion(); // re-render with the new colours when the theme changes
   const params = useLocalSearchParams<{
     claimId: string;
     claimSecret: string;

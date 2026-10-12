@@ -12,7 +12,7 @@ import {
   revealOnboardingCode,
   type OnboardingGrant,
 } from "@/api/client";
-import { colors, radius, spacing, typography, themedStyles } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 
 const TIERS = ["trial", "starter", "professional", "enterprise"] as const;
 
@@ -25,6 +25,7 @@ const TIERS = ["trial", "starter", "professional", "enterprise"] as const;
  * an operator losing their place mid-call.
  */
 export default function PlatformOnboard() {
+  useThemeVersion(); // re-render with the new colours when the theme changes
   const { state } = useSmartClean();
   const [organisationName, setOrganisationName] = useState("");
   const [adminDisplayName, setAdminDisplayName] = useState("");

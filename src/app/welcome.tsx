@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useSmartClean } from "@/features/store";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
-import { colors, radius, spacing, typography, themedStyles } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 import type { Role } from "@/types/smartclean";
 
 /**
@@ -66,6 +66,7 @@ const COPY: Record<Role, { icon: keyof typeof Ionicons.glyphMap; title: string; 
 };
 
 export default function Welcome() {
+  useThemeVersion(); // re-render with the new colours when the theme changes
   const { currentUser, markWelcomeSeen } = useSmartClean();
   const insets = useSafeAreaInsets();
   const copy = COPY[currentUser?.role ?? "cleaner"];

@@ -18,9 +18,10 @@ import { resolveBranding, type ResolvedBranding } from "@/services/branding";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
 import { Ionicons } from "@expo/vector-icons";
-import { colors, radius, spacing, typography, themedStyles } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 
 export default function Login() {
+  useThemeVersion(); // re-render with the new colours when the theme changes
   const { signIn } = useSmartClean();
   const insets = useSafeAreaInsets();
   // Fetched unauthenticated - nobody's signed in yet, so state.tenant

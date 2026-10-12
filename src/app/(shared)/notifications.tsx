@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Animated, Easing, Pressable, StyleSheet, Text, View } from "react-native";
+import { Animated, Easing, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Screen } from "@/components/Screen";
 import { toneColors, type DialogTone } from "@/components/Dialog";
 import { useSmartClean } from "@/features/store";
-import { markNotificationRead } from "@/api/client";
-import { colors, radius, spacing, typography, themedStyles } from "@/theme";
+import { markNotificationRead, markNotificationsRead } from "@/api/client";
+import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 import type { Notification } from "@/types/smartclean";
 
 // bootstrap already scopes state.notifications to what this user can see
@@ -24,6 +24,7 @@ const toneOf = (n: Notification): DialogTone =>
   n.severity === "critical" ? "danger" : n.severity === "warning" ? "warning" : n.read ? "info" : "info";
 
 export default function NotificationsScreen() {
+  useThemeVersion(); // re-render with the new colours when the theme changes
   const { state, dispatch } = useSmartClean();
   const [filter, setFilter] = useState<Filter>("all");
   const all = state.notifications;
@@ -55,17 +56,24 @@ export default function NotificationsScreen() {
 
   const markAll = () => {
     const token = state.accessToken;
+    const ids = unread.map((n) => n.id);
     dispatch({ type: "MARK_NOTIFICATION_READ", id: "", all: true });
-    if (token) unread.forEach((n) => markNotificationRead(token, n.id).catch(() => {}));
+    // One request, not one per notification (a long-lived account has hundreds).
+    if (token && ids.length) markNotificationsRead(token, ids).catch(() => {});
   };
 
-  let index = 0;
-  return (
-    <Screen title="Notifications">
+  // Day labels and cards in one flat list, so only what is on screen gets built.
+  const rows = useMemo<Row[]>(
+    () => groups.flatMap((g) => [{ kind: "label", key: `label-${g.label}`, label: g.label } as Row, ...g.items.map((n) => ({ kind: "item", key: n.id, n }) as Row)]),
+    [groups],
+  );
+
+  const header = (
+    <View>
       <View style={styles.summary}>
         <View style={styles.summaryText}>
           <Text style={styles.summaryTitle}>
-            {unread.length === 0 ? "You're all caught up" : `${unread.length} new`}
+            {unread.length === 0 ? "You're all caught up" : `${unread.length >= 100 ? "100+" : unread.length} new`}
           </Text>
           <Text style={styles.summarySub}>
             {unread.length === 0 ? "Nothing needs your attention." : "Tap one to open it."}
@@ -95,32 +103,47 @@ export default function NotificationsScreen() {
           );
         })}
       </View>
+    </View>
+  );
 
-      {visible.length === 0 ? (
-        <View style={styles.empty}>
-          <View style={styles.emptyIcon}>
-            <Ionicons name="notifications-off-outline" size={30} color={colors.primary} />
+  return (
+    <Screen title="Notifications" scroll={false}>
+      <FlatList
+        data={rows}
+        keyExtractor={(row) => row.key}
+        ListHeaderComponent={header}
+        contentContainerStyle={styles.list}
+        // The first screenful only; the rest is built as you scroll.
+        initialNumToRender={8}
+        maxToRenderPerBatch={8}
+        windowSize={7}
+        removeClippedSubviews
+        renderItem={({ item: row, index }) =>
+          row.kind === "label" ? (
+            <Text style={styles.groupLabel}>{row.label}</Text>
+          ) : (
+            <NotificationCard n={row.n} order={index} onPress={() => open(row.n)} />
+          )
+        }
+        ListEmptyComponent={
+          <View style={styles.empty}>
+            <View style={styles.emptyIcon}>
+              <Ionicons name="notifications-off-outline" size={30} color={colors.primary} />
+            </View>
+            <Text style={styles.emptyTitle}>
+              {filter === "all" ? "Nothing yet" : filter === "unread" ? "No unread notifications" : "Nothing important"}
+            </Text>
+            <Text style={styles.emptySub}>
+              New task assignments and updates will show up here as they happen.
+            </Text>
           </View>
-          <Text style={styles.emptyTitle}>
-            {filter === "all" ? "Nothing yet" : filter === "unread" ? "No unread notifications" : "Nothing important"}
-          </Text>
-          <Text style={styles.emptySub}>
-            New task assignments and updates will show up here as they happen.
-          </Text>
-        </View>
-      ) : (
-        groups.map((group) => (
-          <View key={group.label}>
-            <Text style={styles.groupLabel}>{group.label}</Text>
-            {group.items.map((n) => (
-              <NotificationCard key={n.id} n={n} order={index++} onPress={() => open(n)} />
-            ))}
-          </View>
-        ))
-      )}
+        }
+      />
     </Screen>
   );
 }
+
+type Row = { kind: "label"; key: string; label: string } | { kind: "item"; key: string; n: Notification };
 
 function NotificationCard({ n, order, onPress }: { n: Notification; order: number; onPress: () => void }) {
   const tone = toneColors(toneOf(n));
@@ -132,7 +155,7 @@ function NotificationCard({ n, order, onPress }: { n: Notification; order: numbe
     Animated.timing(enter, {
       toValue: 1,
       duration: 320,
-      delay: Math.min(order, 8) * 45,
+      delay: order < 8 ? order * 45 : 0,
       easing: Easing.out(Easing.cubic),
       useNativeDriver: true,
     }).start();
@@ -164,7 +187,7 @@ function NotificationCard({ n, order, onPress }: { n: Notification; order: numbe
         ]}
       >
         <View style={[styles.accent, { backgroundColor: n.read ? colors.border : tone.fg }]} />
-        <View style={[styles.glow, { backgroundColor: tone.fg, shadowColor: tone.fg }, n.read && styles.glowRead]}>
+        <View style={[styles.glow, { backgroundColor: tone.fg + "22" }, n.read && styles.glowRead]}>
           <View style={[styles.bubble, { backgroundColor: tone.bg, borderColor: tone.fg + "66" }]}>
             <Ionicons name={iconFor(n)} size={20} color={tone.fg} />
           </View>
@@ -230,6 +253,7 @@ function timeAgo(iso: string): string {
 
 const styles = themedStyles(() =>
   StyleSheet.create({
+    list: { padding: spacing.lg, paddingBottom: spacing.xxl },
     summary: { flexDirection: "row", alignItems: "center", gap: spacing.md, marginBottom: spacing.sm },
     summaryText: { flex: 1 },
     summaryTitle: { fontSize: typography.h1, fontWeight: "700", color: colors.foreground },
@@ -286,12 +310,8 @@ const styles = themedStyles(() =>
       alignItems: "center",
       justifyContent: "center",
       opacity: 1,
-      shadowOpacity: 0.55,
-      shadowRadius: 10,
-      shadowOffset: { width: 0, height: 0 },
-      elevation: 4,
     },
-    glowRead: { opacity: 0.55, shadowOpacity: 0, elevation: 0 },
+    glowRead: { opacity: 0.55 },
     bubble: {
       width: 40,
       height: 40,

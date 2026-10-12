@@ -7,7 +7,7 @@ import { Button } from "@/components/Button";
 import { AppearanceRow, ReportsRow } from "@/components/ProfilePreferences";
 import { BiometricLockRow } from "@/components/BiometricLockRow";
 import { useSmartClean } from "@/features/store";
-import { colors, radius, spacing, typography, themedStyles } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 import { APP_VERSION } from "@/constants/version";
 
 /**
@@ -21,6 +21,7 @@ import { APP_VERSION } from "@/constants/version";
  * like a loading failure.
  */
 export default function SuperviseProfile() {
+  useThemeVersion(); // re-render with the new colours when the theme changes
   const { state, currentUser, signOut } = useSmartClean();
 
   const mySites = state.sites.filter((site) => currentUser?.siteIds.includes(site.id));

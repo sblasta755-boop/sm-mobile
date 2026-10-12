@@ -11,7 +11,7 @@ import { useHasModule } from "@/features/modules";
 import { useHomePath } from "@/features/roles";
 import { installWayfindingBeacon, listWayfindingBeacons, type WayfindingBeaconRecord } from "@/api/client";
 import { getCurrentCoords } from "@/services/geolocation";
-import { colors, radius, spacing, typography, themedStyles } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 import { appAlert } from "@/components/Dialog";
 
 // Who may put up visitor-guidance signs: the same people the server allows.
@@ -31,6 +31,7 @@ const KINDS: Record<string, string> = {
  * map has to be drawn. The placard link is shared on to be printed.
  */
 export default function InstallBeaconScreen() {
+  useThemeVersion(); // re-render with the new colours when the theme changes
   const { state, currentUser } = useSmartClean();
   const homePath = useHomePath();
   const enabled = useHasModule("wayfinding");

@@ -8,7 +8,7 @@ import { TaskSearchBar } from "@/components/TaskSearchBar";
 import { useSmartClean } from "@/features/store";
 import { taskDestination } from "@/domain/inspections";
 import { boardColumns, filterTasks, isOverdue, NO_FILTERS, type TaskFilters } from "@/domain/taskBoard";
-import { colors, radius, spacing, typography, themedStyles } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 
 /**
  * The same tasks as My shift, laid out as a board: one column per stage,
@@ -17,6 +17,7 @@ import { colors, radius, spacing, typography, themedStyles } from "@/theme";
  * their sites and can narrow to their own.
  */
 export default function KanbanScreen() {
+  useThemeVersion(); // re-render with the new colours when the theme changes
   const { state, currentUser } = useSmartClean();
   const { width } = useWindowDimensions();
   const [filters, setFilters] = useState<TaskFilters>(NO_FILTERS);

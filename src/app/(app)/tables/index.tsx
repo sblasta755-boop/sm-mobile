@@ -10,7 +10,7 @@ import { attendTableSession, claimTableSession, listTableSessions } from "@/api/
 import { riskLabel, sortByRisk } from "@/features/tableRisk";
 import { Button } from "@/components/Button";
 import type { TableSession } from "@/types/smartclean";
-import { colors, radius, spacing, typography, themedStyles } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 
 // How often to re-fetch the table grid while this screen is open. Push
 // SHOULD tell the waiter about a new request the moment it lands
@@ -30,6 +30,7 @@ const TABLES_POLL_MS = 20_000;
 // the (supervise) group's own list screens (a Card per row, pull to
 // refresh) rather than inventing a new list pattern.
 export default function TablesScreen() {
+  useThemeVersion(); // re-render with the new colours when the theme changes
   const { state } = useSmartClean();
   const [sessions, setSessions] = useState<TableSession[]>([]);
   const [loading, setLoading] = useState(true);

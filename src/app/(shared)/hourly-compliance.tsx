@@ -8,7 +8,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { useSmartClean } from "@/features/store";
 import { isSameDay } from "@/components/DateStrip";
 import { toneForTask, humanStatus } from "@/domain/status";
-import { colors, radius, spacing, typography, themedStyles, status } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles, status, useThemeVersion } from "@/theme";
 
 // LEGACY SCREEN, NOW READ FROM REAL TASKS - superseded by tagged Tasks
 // (see the "Hourly compliance" tab on the web app's /tasks and
@@ -32,6 +32,7 @@ import { colors, radius, spacing, typography, themedStyles, status } from "@/the
 // data, and links straight into each task rather than recording
 // anything itself.
 export default function HourlyComplianceScreen() {
+  useThemeVersion(); // re-render with the new colours when the theme changes
   const { state, currentUser } = useSmartClean();
 
   // Every hourly-compliance Task this cleaner has a stake in today:

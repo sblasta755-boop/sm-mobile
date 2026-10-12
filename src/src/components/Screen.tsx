@@ -1,4 +1,4 @@
-import { Fragment, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { router, usePathname } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -70,7 +70,7 @@ export function Screen({
   scroll?: boolean;
   backTo?: string;
 }) {
-  const themeVersion = useThemeVersion();
+  useThemeVersion();
   const { state, currentUser } = useSmartClean();
   const insets = useSafeAreaInsets();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -148,8 +148,7 @@ export function Screen({
         style={styles.content}
         contentContainerStyle={scroll ? styles.contentContainer : undefined}
       >
-        {/* Keyed so a theme change rebuilds the screen with the new colours. */}
-        <Fragment key={themeVersion}>{children}</Fragment>
+        {children}
       </Content>
 
       <ProfileMenuSheet visible={menuOpen} onClose={() => setMenuOpen(false)} />

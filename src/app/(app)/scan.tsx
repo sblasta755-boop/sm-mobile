@@ -23,7 +23,7 @@ import {
 import { reportBatteryOnce } from "@/features/deviceHealth";
 import { getCurrentCoords } from "@/services/geolocation";
 import { useTenantBranding } from "@/services/branding";
-import { colors, radius, spacing, typography, themedStyles, status } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles, status, useThemeVersion } from "@/theme";
 
 // The structured payload evaluate_geofence attaches to a geofence
 // rejection's AppError.detail (see app/controllers/common.py on the
@@ -78,8 +78,6 @@ interface ScanResult {
   accuracyMeters?: number | null;
 }
 
-const SUGGESTIONS = ["SITE-SBP-001", "ROOM-SBP-BTH-02", "ZONE-SBP-REC-01", "STOCK-SBP-001"];
-
 function extractCode(raw: string): string {
   // /scan/<code> is the web app's own deep-link poster pattern; /table/
   // <code> is the same idea for a table's printed QR (see the "no-login
@@ -98,6 +96,7 @@ function extractCode(raw: string): string {
 }
 
 export default function ScanScreen() {
+  useThemeVersion(); // re-render with the new colours when the theme changes
   const { state, currentUser, dispatch, refreshBackendData } = useSmartClean();
   const branding = useTenantBranding();
   const [permission, requestPermission] = useCameraPermissions();
@@ -502,21 +501,8 @@ export default function ScanScreen() {
       </View>
 
       <Text style={styles.helpText}>
-        Point at a {branding.name} QR sticker. You can also tap a suggestion or type a code.
+        Point at a {branding.name} QR sticker. You can also type a code.
       </Text>
-
-      <View style={styles.suggestions}>
-        {SUGGESTIONS.map((s) => (
-          <Pressable
-            key={s}
-            style={[styles.suggestionChip, scanning && styles.suggestionChipDisabled]}
-            disabled={scanning}
-            onPress={() => scan(s)}
-          >
-            <Text style={styles.suggestionText}>{s}</Text>
-          </Pressable>
-        ))}
-      </View>
 
       <View style={styles.manualRow}>
         <TextInput
@@ -879,22 +865,6 @@ const styles = themedStyles(() => StyleSheet.create({
     color: colors.mutedForeground,
     marginBottom: spacing.sm,
   },
-  suggestions: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.sm,
-    marginBottom: spacing.md,
-  },
-  suggestionChip: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 6,
-  },
-  suggestionChipDisabled: {
-    opacity: 0.5,
-  },
   scanningOverlay: {
     ...StyleSheet.absoluteFillObject,
     alignItems: "center",
@@ -906,11 +876,6 @@ const styles = themedStyles(() => StyleSheet.create({
     fontSize: typography.small,
     fontWeight: "600",
     color: colors.white,
-  },
-  suggestionText: {
-    fontSize: typography.tiny,
-    fontWeight: "600",
-    color: colors.foreground,
   },
   manualRow: {
     flexDirection: "row",

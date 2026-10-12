@@ -9,7 +9,7 @@ import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { useSmartClean } from "@/features/store";
 import { fileUrl, updateFloorPlanImage, uploadImage } from "@/api/client";
-import { colors, radius, spacing, typography, themedStyles } from "@/theme";
+import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 
 /**
  * Photo of an existing paper/printed floor plan, used as the visual
@@ -22,6 +22,7 @@ import { colors, radius, spacing, typography, themedStyles } from "@/theme";
  * are legitimate here.
  */
 export default function PhotoBackdropScreen() {
+  useThemeVersion(); // re-render with the new colours when the theme changes
   const { siteId, floorId } = useLocalSearchParams<{ siteId: string; floorId: string }>();
   const { state, refreshBackendData } = useSmartClean();
   const site = state.sites.find((s) => s.id === siteId);
