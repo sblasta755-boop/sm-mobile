@@ -1468,3 +1468,22 @@ export function markNotificationsRead(accessToken: string, ids: string[]) {
 export function saveTaskNote(accessToken: string, taskId: string, note: string) {
   return request<Task>(`/tasks/${taskId}/note`, { method: "PUT", body: JSON.stringify({ note }) }, accessToken);
 }
+
+export interface WayfindingEdgeRecord {
+  id: string;
+  aBeaconId: string;
+  bBeaconId: string;
+  status: "open" | "closed" | "hazard";
+  source: "geometry" | "observed" | "manual";
+  confidence: number;
+  verifiedAt: string | null;
+}
+
+/** The walkable links between a site's signs (for drawing the map). */
+export function listWayfindingEdges(accessToken: string, siteId: string) {
+  return request<WayfindingEdgeRecord[]>(
+    `/wayfinding/edges?siteId=${encodeURIComponent(siteId)}`,
+    {},
+    accessToken,
+  );
+}

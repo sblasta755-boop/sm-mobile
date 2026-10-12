@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Redirect } from "expo-router";
 import * as NativeSplashScreen from "expo-splash-screen";
 import { SplashScreen } from "@/components/SplashScreen";
@@ -24,9 +24,28 @@ import { useThemeVersion } from "@/theme";
  * module-based routing would hand them a full customer app backed by
  * queries that return nothing.
  */
+// How long the animated splash stays up on a cold start. Restoring the session
+// from secure storage takes a few tens of milliseconds, and the splash used to
+// leave the moment that finished, so its entrance animation (about a second)
+// was cut off almost as soon as it began.
+const SPLASH_MIN_MS = 1800;
+// Only the first launch of the app process holds the splash; reaching this
+// screen again later (sign out, a redirect) must not show it again.
+let splashHeld = false;
+
 export default function Index() {
   useThemeVersion(); // re-render with the new colours when the theme changes
   const { state, currentUser } = useSmartClean();
+  const [holding, setHolding] = useState(!splashHeld);
+
+  useEffect(() => {
+    if (!holding) return;
+    const timer = setTimeout(() => {
+      splashHeld = true;
+      setHolding(false);
+    }, SPLASH_MIN_MS);
+    return () => clearTimeout(timer);
+  }, [holding]);
 
   // Fires after this component's first commit, whichever branch below
   // renders - the native splash comes down only once something of ours
@@ -36,7 +55,7 @@ export default function Index() {
     NativeSplashScreen.hideAsync().catch(() => {});
   }, []);
 
-  if (!state.sessionRestored) {
+  if (!state.sessionRestored || holding) {
     return <SplashScreen />;
   }
 

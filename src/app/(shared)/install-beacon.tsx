@@ -6,6 +6,7 @@ import { Screen } from "@/components/Screen";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { SelectField } from "@/components/SelectField";
+import { WayfindingMap } from "@/components/WayfindingMap";
 import { useSmartClean } from "@/features/store";
 import { useHasModule } from "@/features/modules";
 import { useHomePath } from "@/features/roles";
@@ -91,6 +92,16 @@ export default function InstallBeaconScreen() {
 
   return (
     <Screen title="Wayfinding signs">
+      {/* The existing signs and, once you have a position, where the new one will go. */}
+      {beacons.length > 0 || fix ? (
+        <WayfindingMap
+          beacons={beacons}
+          edges={[]}
+          here={fix ? { latitude: fix.latitude, longitude: fix.longitude, accuracy: fix.accuracy } : null}
+          draft={fix ? { latitude: fix.latitude, longitude: fix.longitude } : null}
+          height={240}
+        />
+      ) : null}
       <Card>
         <SelectField
           label="Site"

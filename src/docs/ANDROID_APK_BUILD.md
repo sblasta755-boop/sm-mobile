@@ -55,6 +55,8 @@ the workflow run number, so each build can be installed over the previous one.
 
 ## Notes
 
+- The APK's version text (Android Settings, release title, email, profile footer) is `git describe --tags --always`, e.g. `build-19-27-g08e33b9`: the last `build-N` release tag, commits since, and the commit. `src/app.config.js` sets it; without git it falls back to the number in `app.json`. Install order still comes from the build number (`versionCode`).
+
 - Only `arm64-v8a` and `armeabi-v7a` are built (virtually all phones; smaller and faster).
   Add `x86_64` in the workflow's `-PreactNativeArchitectures` for emulators.
 - iOS can't be built this way (needs macOS + Apple signing).

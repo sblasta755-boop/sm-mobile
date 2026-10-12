@@ -34,6 +34,15 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v5
+        with:
+          # Full history and tags, so git describe can name the build.
+          fetch-depth: 0
+
+      - name: Compute version
+        run: |
+          version="$(git describe --tags --always)"
+          echo "APP_VERSION_NAME=$version" >> "$GITHUB_ENV"
+          echo "App version: $version"
 
       - name: Check signing secrets are configured
         run: |
@@ -138,7 +147,7 @@ jobs:
       - name: Name the APK
         id: apk
         run: |
-          version="$(node -p "require('./app.json').expo.version")"
+          version="$APP_VERSION_NAME"
           name="soma360-${version}-build${{ github.run_number }}.apk"
           cp android/app/build/outputs/apk/release/app-release.apk "$name"
           echo "name=$name" >> "$GITHUB_OUTPUT"
