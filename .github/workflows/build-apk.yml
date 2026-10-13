@@ -1,85 +1,85 @@
-name: Build and notify
+# name: Build and notify
 
-# Runs the same build-and-notify.mjs flow the local
-# "docker compose --profile build-notify run build-notify" already uses
-# (see mobile/docker-compose.yml + mobile/src/Dockerfile's build-notify
-# stage) - a real EAS cloud build, waited on synchronously, then one
-# email with the finished APK's download link. This workflow just runs
-# that same script on GitHub's own runner instead of a local container,
-# so a push doesn't depend on someone's machine being on.
-on:
-  push:
-    branches:
-      - subscription
+# # Runs the same build-and-notify.mjs flow the local
+# # "docker compose --profile build-notify run build-notify" already uses
+# # (see mobile/docker-compose.yml + mobile/src/Dockerfile's build-notify
+# # stage) - a real EAS cloud build, waited on synchronously, then one
+# # email with the finished APK's download link. This workflow just runs
+# # that same script on GitHub's own runner instead of a local container,
+# # so a push doesn't depend on someone's machine being on.
+# on:
+#   push:
+#     branches:
+#       - subscription
 
-# A build already running for this branch is superseded by a newer push
-# rather than left to race it - two builds for the same branch/profile
-# racing each other just burns EAS build minutes for a result the
-# newer commit will make stale anyway. cancel-in-progress: true is safe
-# here specifically because build-and-notify.mjs's eas build call is the
-# only externally-visible side effect this job has (no deploy step, no
-# artifact other than the emailed link) - cancelling it mid-flight
-# leaves nothing half-applied.
-concurrency:
-  group: build-apk-${{ github.ref }}
-  cancel-in-progress: true
+# # A build already running for this branch is superseded by a newer push
+# # rather than left to race it - two builds for the same branch/profile
+# # racing each other just burns EAS build minutes for a result the
+# # newer commit will make stale anyway. cancel-in-progress: true is safe
+# # here specifically because build-and-notify.mjs's eas build call is the
+# # only externally-visible side effect this job has (no deploy step, no
+# # artifact other than the emailed link) - cancelling it mid-flight
+# # leaves nothing half-applied.
+# concurrency:
+#   group: build-apk-${{ github.ref }}
+#   cancel-in-progress: true
 
-jobs:
-  build-and-notify:
-    name: EAS build + email notification
-    runs-on: ubuntu-latest
-    # 60 minutes was not actually enough in practice - a real run hit
-    # exactly this ceiling ("The job has exceeded the maximum execution
-    # time of 1h0m0s") and was killed mid-build. EAS's free/default build
-    # queue alone can run past an hour at busy times, before the actual
-    # Android build even starts, so the old estimate badly underweighted
-    # queue time. 6h leaves real headroom for that without ever
-    # approaching GitHub's own hard per-job cap.
-    timeout-minutes: 360
-    defaults:
-      run:
-        working-directory: src
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v5
-        with:
-          # build-and-notify.mjs's eas build call fingerprints/versions
-          # off real git history (see src/Dockerfile's own comment on
-          # why .git is copied into that image) - a shallow checkout
-          # would starve it of that.
-          fetch-depth: 0
+# jobs:
+#   build-and-notify:
+#     name: EAS build + email notification
+#     runs-on: ubuntu-latest
+#     # 60 minutes was not actually enough in practice - a real run hit
+#     # exactly this ceiling ("The job has exceeded the maximum execution
+#     # time of 1h0m0s") and was killed mid-build. EAS's free/default build
+#     # queue alone can run past an hour at busy times, before the actual
+#     # Android build even starts, so the old estimate badly underweighted
+#     # queue time. 6h leaves real headroom for that without ever
+#     # approaching GitHub's own hard per-job cap.
+#     timeout-minutes: 360
+#     defaults:
+#       run:
+#         working-directory: src
+#     steps:
+#       - name: Check out repository
+#         uses: actions/checkout@v5
+#         with:
+#           # build-and-notify.mjs's eas build call fingerprints/versions
+#           # off real git history (see src/Dockerfile's own comment on
+#           # why .git is copied into that image) - a shallow checkout
+#           # would starve it of that.
+#           fetch-depth: 0
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v5
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: src/package-lock.json
+#       - name: Setup Node.js
+#         uses: actions/setup-node@v5
+#         with:
+#           node-version: 22
+#           cache: npm
+#           cache-dependency-path: src/package-lock.json
 
-      - name: Install dependencies
-        run: npm ci
+#       - name: Install dependencies
+#         run: npm ci
 
-      - name: Install EAS CLI and mailer
-        run: npm install -g eas-cli && npm install nodemailer
+#       - name: Install EAS CLI and mailer
+#         run: npm install -g eas-cli && npm install nodemailer
 
-      - name: Build (EAS cloud) and email the result
-        run: node scripts/build-and-notify.mjs
-        env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-          EAS_BUILD_PROFILE: ${{ vars.EAS_BUILD_PROFILE || 'preview' }}
-          # "smtp" (default) or "brevo" - same switch build-and-notify.mjs
-          # mirrors from the backend's own EMAIL_PROVIDER. Only the
-          # chosen provider's secrets need real values in the repo's
-          # Actions settings; the other provider's are read as empty
-          # strings and simply unused.
-          EMAIL_PROVIDER: ${{ vars.EMAIL_PROVIDER || 'smtp' }}
-          SMTP_HOST: ${{ secrets.SMTP_HOST }}
-          SMTP_PORT: ${{ vars.SMTP_PORT || '587' }}
-          SMTP_SECURE: ${{ vars.SMTP_SECURE || 'false' }}
-          SMTP_USER: ${{ secrets.SMTP_USER }}
-          SMTP_PASS: ${{ secrets.SMTP_PASS }}
-          MAIL_FROM: ${{ vars.MAIL_FROM }}
-          MAIL_TO: ${{ vars.MAIL_TO }}
-          BREVO_API_KEY: ${{ secrets.BREVO_API_KEY }}
-          BREVO_FROM_EMAIL: ${{ vars.BREVO_FROM_EMAIL }}
-          BREVO_FROM_NAME: ${{ vars.BREVO_FROM_NAME || 'Šoma360' }}
+#       - name: Build (EAS cloud) and email the result
+#         run: node scripts/build-and-notify.mjs
+#         env:
+#           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+#           EAS_BUILD_PROFILE: ${{ vars.EAS_BUILD_PROFILE || 'preview' }}
+#           # "smtp" (default) or "brevo" - same switch build-and-notify.mjs
+#           # mirrors from the backend's own EMAIL_PROVIDER. Only the
+#           # chosen provider's secrets need real values in the repo's
+#           # Actions settings; the other provider's are read as empty
+#           # strings and simply unused.
+#           EMAIL_PROVIDER: ${{ vars.EMAIL_PROVIDER || 'smtp' }}
+#           SMTP_HOST: ${{ secrets.SMTP_HOST }}
+#           SMTP_PORT: ${{ vars.SMTP_PORT || '587' }}
+#           SMTP_SECURE: ${{ vars.SMTP_SECURE || 'false' }}
+#           SMTP_USER: ${{ secrets.SMTP_USER }}
+#           SMTP_PASS: ${{ secrets.SMTP_PASS }}
+#           MAIL_FROM: ${{ vars.MAIL_FROM }}
+#           MAIL_TO: ${{ vars.MAIL_TO }}
+#           BREVO_API_KEY: ${{ secrets.BREVO_API_KEY }}
+#           BREVO_FROM_EMAIL: ${{ vars.BREVO_FROM_EMAIL }}
+#           BREVO_FROM_NAME: ${{ vars.BREVO_FROM_NAME || 'Šoma360' }}
