@@ -6,7 +6,7 @@ import { Screen } from "@/components/Screen";
 import { Card } from "@/components/Card";
 import { StatusBadge } from "@/components/StatusBadge";
 import { TaskSearchBar } from "@/components/TaskSearchBar";
-import { filterTasks, filtersActive, NO_FILTERS, type TaskFilters } from "@/domain/taskBoard";
+import { filterTasks, filtersActive, NO_FILTERS, tagsOf, type TaskFilters } from "@/domain/taskBoard";
 import { DateStrip, isSameDay, startOfDay } from "@/components/DateStrip";
 import { useSmartClean } from "@/features/store";
 import { toneForTask, humanStatus } from "@/domain/status";
@@ -69,7 +69,7 @@ export default function ShiftsScreen() {
           <Text style={styles.boardButtonText}>Board view</Text>
         </Pressable>
       </View>
-      <TaskSearchBar filters={filters} onChange={setFilters} />
+      <TaskSearchBar filters={filters} onChange={setFilters} availableTags={tagsOf(state.tasks)} />
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabsRow} contentContainerStyle={styles.tabsContent}>
         {groups.map((group) => {
           const selected = group.label === active.label;

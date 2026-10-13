@@ -65,6 +65,8 @@ export interface BackendBootstrap {
   /** The organisation's plan and unlocked modules. Optional so a build
    * running against an older backend still type-checks. */
   subscription?: SubscriptionState;
+  /** Organisation-chosen tag colours (lower-cased tag to colour name). */
+  tagColors?: Record<string, string>;
   users: DemoUser[];
   sites: Site[];
   locations: Location[];
@@ -794,6 +796,7 @@ function normalizeBootstrap(payload: Record<string, unknown>): BackendBootstrap 
     // Passed through as-is: the server already sends camelCase and the
     // RESOLVED module list, so there is nothing to derive here.
     subscription: payload.subscription as SubscriptionState | undefined,
+    tagColors: (payload.tagColors as Record<string, string> | undefined) ?? {},
     users: list(payload.users).map(normalizeUser),
     sites: list(payload.sites).map((site) => ({
       clientId: "",

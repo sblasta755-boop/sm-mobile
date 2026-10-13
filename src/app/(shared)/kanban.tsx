@@ -5,9 +5,10 @@ import { Screen } from "@/components/Screen";
 import { Card } from "@/components/Card";
 import { StatusBadge } from "@/components/StatusBadge";
 import { TaskSearchBar } from "@/components/TaskSearchBar";
+import { TagChips } from "@/components/TagChip";
 import { useSmartClean } from "@/features/store";
 import { taskDestination } from "@/domain/inspections";
-import { boardColumns, filterTasks, isOverdue, NO_FILTERS, type TaskFilters } from "@/domain/taskBoard";
+import { boardColumns, filterTasks, isOverdue, NO_FILTERS, tagsOf, type TaskFilters } from "@/domain/taskBoard";
 import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 
 /**
@@ -44,7 +45,7 @@ export default function KanbanScreen() {
   return (
     <Screen title="Task board" scroll={false}>
       <View style={styles.top}>
-        <TaskSearchBar filters={filters} onChange={setFilters} />
+        <TaskSearchBar filters={filters} onChange={setFilters} availableTags={tagsOf(tasks)} />
         {isSupervisor && (
           <View style={styles.mineRow}>
             <Switch value={mineOnly} onValueChange={setMineOnly} />
@@ -78,6 +79,7 @@ export default function KanbanScreen() {
                       <Text style={styles.cardMeta} numberOfLines={1}>
                         {task.locationName ?? "Whole site"} • Due {task.dueTime}
                       </Text>
+                      <TagChips tags={task.tags} />
                       {isSupervisor && !mineOnly && (
                         <Text style={styles.cardMeta} numberOfLines={1}>
                           {nameOf(task.assigneeId)}

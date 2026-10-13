@@ -9,6 +9,7 @@ import { BrokenGlassIcon } from "@/components/BrokenGlassIcon";
 import { Checkbox } from "@/components/Checkbox";
 import { ProgressBar } from "@/components/ProgressBar";
 import { TaskNote } from "@/components/TaskNote";
+import { TagChips } from "@/components/TagChip";
 import { StatusBadge, VerifiedBadge } from "@/components/StatusBadge";
 import { useSmartClean } from "@/features/store";
 import { useHomePath, useScanPath } from "@/features/roles";
@@ -468,6 +469,7 @@ export default function TaskDetailScreen() {
             )}
           </>
         )}
+        <TagChips tags={task.tags} max={8} />
         <View style={styles.progressRow}>
           <View style={styles.progressBarWrap}>
             <ProgressBar value={pct} />

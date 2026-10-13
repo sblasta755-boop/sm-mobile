@@ -2,6 +2,8 @@ import { useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { filtersActive, NO_FILTERS, type PriorityFilter, type TaskFilters } from "@/domain/taskBoard";
+import { useSmartClean } from "@/features/store";
+import { tagStyle } from "@/domain/tagColors";
 import { colors, radius, spacing, typography, themedStyles } from "@/theme";
 
 const PRIORITIES: { value: PriorityFilter; label: string }[] = [
@@ -20,13 +22,25 @@ export function TaskSearchBar({
   filters,
   onChange,
   placeholder = "Search tasks",
+  availableTags = [],
 }: {
   filters: TaskFilters;
   onChange: (next: TaskFilters) => void;
   placeholder?: string;
+  /** Tags the list could be narrowed to (shown in their colours). */
+  availableTags?: string[];
 }) {
+  const { state } = useSmartClean();
   const [open, setOpen] = useState(false);
-  const activeCount = (filters.priority !== "all" ? 1 : 0) + (filters.overdueOnly ? 1 : 0);
+  const activeCount =
+    (filters.priority !== "all" ? 1 : 0) + (filters.overdueOnly ? 1 : 0) + filters.tags.length;
+  const toggleTag = (tag: string) =>
+    onChange({
+      ...filters,
+      tags: filters.tags.some((t) => t.toLowerCase() === tag.toLowerCase())
+        ? filters.tags.filter((t) => t.toLowerCase() !== tag.toLowerCase())
+        : [...filters.tags, tag],
+    });
 
   return (
     <View style={styles.wrap}>
@@ -83,6 +97,28 @@ export function TaskSearchBar({
               );
             })}
           </View>
+          {availableTags.length > 0 && (
+            <View style={styles.chips}>
+              {availableTags.map((tag) => {
+                const selected = filters.tags.some((t) => t.toLowerCase() === tag.toLowerCase());
+                const look = tagStyle(tag, state.tagColors);
+                return (
+                  <Pressable
+                    key={tag}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected }}
+                    onPress={() => toggleTag(tag)}
+                    style={[
+                      styles.chip,
+                      { borderColor: look.borderColor, backgroundColor: selected ? look.color : look.backgroundColor },
+                    ]}
+                  >
+                    <Text style={[styles.chipText, { color: selected ? colors.white : look.color }]}>{tag}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          )}
           <Pressable
             accessibilityRole="checkbox"
             accessibilityState={{ checked: filters.overdueOnly }}

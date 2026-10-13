@@ -20,12 +20,14 @@ export interface TaskFilters {
   priority: PriorityFilter;
   /** Only tasks past their due time that are not finished. */
   overdueOnly: boolean;
+  /** Tasks carrying ANY of these tags (compared ignoring case); empty means all. */
+  tags: string[];
 }
 
-export const NO_FILTERS: TaskFilters = { query: "", priority: "all", overdueOnly: false };
+export const NO_FILTERS: TaskFilters = { query: "", priority: "all", overdueOnly: false, tags: [] };
 
 export function filtersActive(filters: TaskFilters): boolean {
-  return filters.query.trim() !== "" || filters.priority !== "all" || filters.overdueOnly;
+  return filters.query.trim() !== "" || filters.priority !== "all" || filters.overdueOnly || filters.tags.length > 0;
 }
 
 const FINISHED = new Set(["approved", "closed", "cancelled"]);
@@ -53,6 +55,19 @@ export function matchesQuery(task: BoardTask, query: string, extra = ""): boolea
   return words.every((word) => haystack.includes(word));
 }
 
+function hasAnyTag(task: BoardTask, wanted: string[]): boolean {
+  if (wanted.length === 0) return true;
+  const have = new Set((task.tags ?? []).map((t) => t.toLowerCase()));
+  return wanted.some((t) => have.has(t.toLowerCase()));
+}
+
+/** Every tag used by these tasks, once each (first spelling wins), in name order. */
+export function tagsOf(tasks: BoardTask[]): string[] {
+  const seen = new Map<string, string>();
+  for (const task of tasks) for (const tag of task.tags ?? []) if (!seen.has(tag.toLowerCase())) seen.set(tag.toLowerCase(), tag);
+  return [...seen.values()].sort((a, b) => a.localeCompare(b));
+}
+
 export function filterTasks<T extends BoardTask>(
   tasks: T[],
   filters: TaskFilters,
@@ -64,7 +79,8 @@ export function filterTasks<T extends BoardTask>(
     (task) =>
       matchesQuery(task, filters.query, extra(task)) &&
       (filters.priority === "all" || task.priority === filters.priority) &&
-      (!filters.overdueOnly || isOverdue(task, now)),
+      (!filters.overdueOnly || isOverdue(task, now)) &&
+      hasAnyTag(task, filters.tags),
   );
 }
 

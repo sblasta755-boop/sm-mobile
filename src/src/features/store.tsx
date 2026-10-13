@@ -58,6 +58,8 @@ interface State {
    * lands; consumers treat that as "not yet known" and fail open, since
    * the server enforces the real answer. */
   subscription: SubscriptionState | null;
+  /** Colours the organisation chose for task tags (lower-cased tag to colour name). */
+  tagColors: Record<string, string>;
   /** A restored session that is being withheld until the user passes a
    * Face ID / fingerprint prompt.
    *
@@ -162,6 +164,7 @@ function initial(): State {
     assets: [],
     attendance: {},
     subscription: null,
+    tagColors: {},
     locked: false,
     mustChangePassword: false,
     hasSeenWelcome: true,
@@ -195,6 +198,7 @@ function bootstrapState(bootstrap: BackendBootstrap): Partial<State> {
     stock: bootstrap.stock ?? [],
     assets: bootstrap.assets ?? [],
     subscription: bootstrap.subscription ?? null,
+    tagColors: bootstrap.tagColors ?? {},
   };
 }
 

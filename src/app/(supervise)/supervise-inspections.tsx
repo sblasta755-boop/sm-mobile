@@ -7,13 +7,14 @@ import { Card } from "@/components/Card";
 import { StatusBadge } from "@/components/StatusBadge";
 import { TaskSearchBar } from "@/components/TaskSearchBar";
 import { Button } from "@/components/Button";
+import { TagChips } from "@/components/TagChip";
 import { DateStrip, startOfDay } from "@/components/DateStrip";
 import { SelectField } from "@/components/SelectField";
 import { useSmartClean } from "@/features/store";
 import { toneForTask, humanStatus } from "@/domain/status";
 import { taskDestination } from "@/domain/inspections";
 import { matchesInspectionFilters } from "@/domain/inspectionFilters";
-import { filterTasks, filtersActive, NO_FILTERS, type TaskFilters } from "@/domain/taskBoard";
+import { filterTasks, filtersActive, NO_FILTERS, tagsOf, type TaskFilters } from "@/domain/taskBoard";
 import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 import type { TaskStatus } from "@/types/smartclean";
 
@@ -80,7 +81,12 @@ export default function SuperviseInspections() {
           Board view
         </Button>
       </View>
-      <TaskSearchBar filters={filters} onChange={setFilters} placeholder="Search inspections" />
+      <TaskSearchBar
+        filters={filters}
+        onChange={setFilters}
+        placeholder="Search inspections"
+        availableTags={tagsOf(state.tasks)}
+      />
       <View style={styles.more}>
         <SelectField
           label="Cleaner"
@@ -168,6 +174,7 @@ export default function SuperviseInspections() {
                   {nameOf(task.assigneeId) ? ` \u2022 ${nameOf(task.assigneeId)}` : ""}
                   {task.dueTime ? ` \u2022 Due ${task.dueTime}` : ""}
                 </Text>
+                <TagChips tags={task.tags} />
               </View>
               <StatusBadge tone={toneForTask(task.status)} label={humanStatus(task.status)} />
             </Card>

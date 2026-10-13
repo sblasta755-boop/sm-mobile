@@ -2,6 +2,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Card } from "@/components/Card";
 import { StatusBadge } from "@/components/StatusBadge";
+import { TagChips } from "@/components/TagChip";
 import { humanStatus, toneForTask } from "@/domain/status";
 import { colors, radius, spacing, typography, themedStyles } from "@/theme";
 import type { Task } from "@/types/smartclean";
@@ -26,6 +27,7 @@ export function TaskRow({ task, onPress }: { task: Task; onPress: () => void }) 
           <Text style={styles.meta} numberOfLines={1}>
             {task.locationName ?? "Whole site"} • Due {task.dueTime}
           </Text>
+          <TagChips tags={task.tags} />
         </View>
         <View style={styles.badges}>
           <StatusBadge tone={toneForTask(task.status)} label={humanStatus(task.status)} />
