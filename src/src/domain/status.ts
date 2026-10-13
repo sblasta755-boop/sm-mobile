@@ -79,6 +79,8 @@ export function taskSubmissionBlocked(
   qrVerified?: boolean;
   startMethod?: string | null;
   requiresBeforeAfter: boolean;
+  /** False for a task set up as needing no photo evidence. */
+  evidenceRequired?: boolean;
   checklist: { type: string; done?: boolean; photoCount?: number }[];
   evidence: { kind: string }[];
   },
@@ -96,7 +98,9 @@ export function taskSubmissionBlocked(
   const photoItemsOwnTheirPhotos = task.checklist.some((item) => item.type === "photo_required" && item.photoCount);
   const legacyPhotoItem = task.checklist.some((item) => item.type === "photo_required" && !item.photoCount);
   const missingEvidence =
-    (task.requiresBeforeAfter &&
+    // A task set up as needing no evidence skips every task-level photo rule.
+    (task.evidenceRequired !== false &&
+      task.requiresBeforeAfter &&
       !photoItemsOwnTheirPhotos &&
       (!task.evidence.some((e) => e.kind === "before") ||
         !task.evidence.some((e) => e.kind === "after"))) ||
@@ -107,7 +111,11 @@ export function taskSubmissionBlocked(
       (task.requiresBeforeAfter
         ? !task.evidence.some((e) => e.kind === "after")
         : task.evidence.length === 0)) ||
-    (requireEvidencePhoto && !task.requiresBeforeAfter && !photoItemsOwnTheirPhotos && task.evidence.length === 0);
+    (requireEvidencePhoto &&
+      task.evidenceRequired !== false &&
+      !task.requiresBeforeAfter &&
+      !photoItemsOwnTheirPhotos &&
+      task.evidence.length === 0);
   const missingChecks = task.checklist.some((item) => item.type !== "note" && !item.done);
   // Not started at all, or - only when the policy demands an area scan -
   // started without one. Without that demand a manual start is enough.

@@ -261,6 +261,8 @@ export interface Task {
   metadata?: Record<string, unknown>;
   /** Done by a supervisor / site manager rather than a cleaner. */
   isSupervisorTask?: boolean;
+  /** False when the task was set up as needing no photo evidence at all. */
+  evidenceRequired?: boolean;
   /** Belongs to the whole site (no room); started by scanning the site QR. */
   isSiteWide?: boolean;
   /** How this task repeats, set only on a recurring task's own template

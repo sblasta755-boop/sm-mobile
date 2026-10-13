@@ -531,6 +531,7 @@ export default function TaskDetailScreen() {
       )}
 
       {stage === "finish" &&
+        task.evidenceRequired !== false &&
         (task.requiresBeforeAfter
           ? !task.evidence.some((e) => e.kind === "after")
           : task.evidence.length === 0) && (
