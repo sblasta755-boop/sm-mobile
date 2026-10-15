@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useSmartClean } from "@/features/store";
 import { homePathForRole } from "@/features/roles";
 import { ProfileMenuSheet } from "@/components/ProfileMenuSheet";
+import { SyncBanner } from "@/components/SyncBanner";
 import { colors, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 
 // Every group's bottom-tab roots (see each _layout.tsx's <Tabs.Screen>
@@ -138,11 +139,7 @@ export function Screen({
         )}
       </View>
 
-      {state.connectivity === "offline" && (
-        <View style={styles.offlineBanner}>
-          <Text style={styles.offlineText}>Offline mode - changes will sync when reconnected.</Text>
-        </View>
-      )}
+      <SyncBanner />
 
       <Content
         style={styles.content}

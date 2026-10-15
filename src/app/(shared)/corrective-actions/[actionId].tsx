@@ -7,7 +7,8 @@ import { Button } from "@/components/Button";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useSmartClean } from "@/features/store";
 import { useHomePath, useScanPath } from "@/features/roles";
-import { updateCorrectiveAction } from "@/api/client";
+import { drainQueue } from "@/features/evidenceUploader";
+import { enqueueMutation } from "@/features/outbox";
 import { humanStatus } from "@/domain/status";
 import { colors, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 import { formatDateTime } from "@/services/formatDateTime";
@@ -15,7 +16,7 @@ import { formatDateTime } from "@/services/formatDateTime";
 export default function CorrectiveActionDetailScreen() {
   useThemeVersion(); // re-render with the new colours when the theme changes
   const { actionId } = useLocalSearchParams<{ actionId: string }>();
-  const { state, dispatch, refreshBackendData } = useSmartClean();
+  const { state, currentUser } = useSmartClean();
   const homePath = useHomePath();
   const scanPath = useScanPath();
   const ca = state.correctiveActions.find((c) => c.id === actionId);
@@ -31,18 +32,19 @@ export default function CorrectiveActionDetailScreen() {
   const task = state.tasks.find((t) => t.id === ca.taskId);
 
   async function resubmit() {
-    if (!ca || !state.accessToken) return;
-    try {
-      const updated = await updateCorrectiveAction(state.accessToken, ca.id, {
+    if (!ca || !currentUser) return;
+    // Saved on the phone first and sent when there is a connection.
+    await enqueueMutation({
+      userId: currentUser.id,
+      kind: "corrective.update",
+      payload: {
+        actionId: ca.id,
         status: "awaiting_reinspection",
         note: "Rework resubmitted with fresh evidence",
-      });
-      dispatch({ type: "UPDATE_CA", id: ca.id, patch: updated });
-      await refreshBackendData();
-      router.push(homePath as never);
-    } catch {
-      // best-effort - UI stays on this screen so the cleaner can retry
-    }
+      },
+    });
+    void drainQueue();
+    router.push(homePath as never);
   }
 
   return (

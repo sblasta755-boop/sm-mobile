@@ -7,6 +7,7 @@ import { ThemeProvider, useTheme } from "@/theme";
 import { DialogHost } from "@/components/Dialog";
 import { usePushRegistration } from "@/features/pushNotifications";
 import { useDeviceHealthReporting } from "@/features/deviceHealth";
+import { useEvidenceUploader } from "@/features/evidenceUploader";
 
 // Keep the native splash image up until our animated in-app splash
 // (rendered from app/index.tsx while the session restores) has actually
@@ -36,6 +37,8 @@ export default function RootLayout() {
 function PushNotificationsBridge() {
   usePushRegistration();
   useDeviceHealthReporting();
+  // Uploads photos taken offline, in the background, as soon as there is a connection.
+  useEvidenceUploader();
   return null;
 }
 

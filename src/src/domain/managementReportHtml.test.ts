@@ -89,3 +89,44 @@ describe("buildManagementReportHtml", () => {
     expect(render()).toMatch(/<a href="https:\/\/soma360\.mycelixai\.com\/"><img src="data:image\/png;base64,/);
   });
 });
+
+describe("item notes and sign-off in the report", () => {
+  const withExtras = (extra: object, itemExtra: object = {}) => {
+    const t = {
+      ...task,
+      ...extra,
+      checklist: [{ ...(task.checklist[0] as object), ...itemExtra }],
+    } as unknown as Task;
+    const r = buildManagementReport({
+      site: { id: "s1", name: "HQ", address: "x" },
+      date: DAY,
+      tasks: [t],
+      inspections: [],
+      users: [{ id: "u1", name: "Kat" }, { id: "u2", name: "Kgaugelo" }],
+    });
+    return buildManagementReportHtml({
+      report: r,
+      reportName: "Daily",
+      clientName: "Client",
+      clientLogoUrl: null,
+      generatedAtLabel: "x",
+      reviewerName: "R",
+      reviewDateLabel: "x",
+      photoSrc: () => null,
+    });
+  };
+
+  it("prints a note under its checklist item, escaped, and nothing when there is none", () => {
+    expect(withExtras({}, { note: "Sticky <floor>" })).toContain("Sticky &lt;floor&gt;");
+    expect(withExtras({})).not.toContain('class="note"');
+  });
+
+  it("prints who signed off, with the drawn signature when there is one", () => {
+    const html = withExtras({
+      signoff: { name: "Kat", signedAt: at("08:00"), path: "M0 0 L10 10", width: 200, height: 100 },
+    });
+    expect(html).toContain("Signed off");
+    expect(html).toContain('<path d="M0 0 L10 10"');
+    expect(withExtras({})).not.toContain("Signed off");
+  });
+});

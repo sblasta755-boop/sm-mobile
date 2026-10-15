@@ -299,7 +299,7 @@ export function updateChecklistItem(
   accessToken: string,
   taskId: string,
   itemId: string,
-  patch: { done?: boolean; value?: string },
+  patch: { done?: boolean; value?: string; note?: string },
 ) {
   return request<Task>(
     `/tasks/${taskId}/checklist`,
@@ -312,6 +312,8 @@ export function addTaskEvidence(
   accessToken: string,
   taskId: string,
   evidence: {
+    /** Lets the server recognise a retry of the same photo (it records it once). */
+    id?: string;
     kind: string;
     label?: string;
     /** The photo_required checklist item this photo is the proof for. */
@@ -319,6 +321,8 @@ export function addTaskEvidence(
     filePath?: string;
     liveCapture?: boolean;
     offlineOriginated?: boolean;
+    /** When the photo was actually taken (ISO), which may be well before it uploads. */
+    capturedAt?: string;
   },
 ) {
   return request<Task>(
@@ -334,20 +338,34 @@ export function startTask(
   accessToken: string,
   taskId: string,
   scan?: { qrValue: string; latitude?: number; longitude?: number },
+  /** When the person really started (ISO), for a start made offline and sent later. */
+  startedAt?: string,
 ) {
   return request<Task>(
     `/tasks/${taskId}/start`,
     // With a scan: the site QR for a site-wide task, verified server-side
     // (code match + geofence). Without one: the manual, no-scan start.
-    scan ? { method: "POST", body: JSON.stringify({ method: "qr", ...scan }) } : { method: "POST" },
+    scan
+      ? { method: "POST", body: JSON.stringify({ method: "qr", ...scan, startedAt }) }
+      : { method: "POST", body: JSON.stringify({ method: "manual", startedAt }) },
     accessToken,
   );
 }
 
-export function submitTask(accessToken: string, taskId: string) {
+export function submitTask(
+  accessToken: string,
+  taskId: string,
+  submittedAt?: string,
+  signoff?: {
+    signerName?: string;
+    signature?: { strokes: number[][][]; width: number; height: number };
+    /** A submission replayed from the offline queue. */
+    offlineRecorded?: boolean;
+  },
+) {
   return request<Task>(
     `/tasks/${taskId}/submit`,
-    { method: "POST", body: JSON.stringify({ declarationAccepted: true }) },
+    { method: "POST", body: JSON.stringify({ declarationAccepted: true, submittedAt, ...signoff }) },
     accessToken,
   );
 }
@@ -383,6 +401,9 @@ export interface ClockPayload {
   method?: "qr" | "manual" | "geofence";
   latitude?: number;
   longitude?: number;
+  /** For a scan made with no signal: when it really happened (ISO) and that it was offline. */
+  occurredAt?: string;
+  offlineRecorded?: boolean;
 }
 
 export function clockIn(accessToken: string, payload: ClockPayload) {
@@ -810,7 +831,10 @@ function normalizeBootstrap(payload: Record<string, unknown>): BackendBootstrap 
       // this used to be String(...) of a raw ISO timestamp, which is
       // exactly what Home/Shifts/task detail then printed. Time only -
       // a task list is already grouped by day.
-      dueTime: formatTime((task.dueTime ?? task.dueAt ?? task.scheduledAt) as string | undefined),
+      // A task with a work window reads "08:00 - 10:00"; otherwise its deadline.
+      dueTime: task.hasTimeRange
+        ? `${formatTime(task.scheduledAt as string | undefined)} - ${formatTime(task.dueAt as string | undefined)}`
+        : formatTime((task.dueTime ?? task.dueAt ?? task.scheduledAt) as string | undefined),
       estimatedMinutes: Number(task.estimatedMinutes ?? 30),
       ...task,
       evidence: list(task.evidence).map((evidence) => ({ imgSeed: 0, ...evidence })),

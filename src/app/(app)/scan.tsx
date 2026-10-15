@@ -4,6 +4,9 @@ import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, TextInput, View 
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from "expo-camera";
 import { Ionicons } from "@expo/vector-icons";
 import { Screen } from "@/components/Screen";
+import { drainQueue } from "@/features/evidenceUploader";
+import { enqueueMutation } from "@/features/outbox";
+import { resolveOfflineScan, type ScanLocation, type ScanSite, type ScanTask } from "@/domain/offlineScan";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { StatusBadge, VerifiedBadge } from "@/components/StatusBadge";
@@ -141,6 +144,88 @@ export default function ScanScreen() {
 
   const clocked = currentUser ? state.attendance[currentUser.id]?.clockedInAt : undefined;
 
+  // With no connection a scan is decided on the phone from what it already
+  // holds (domain/offlineScan), saved, and sent when there is a signal; the
+  // server then re-checks it (see features/evidenceUploader).
+  const scanOffline = useCallback(
+    async (code: string, coords: Awaited<ReturnType<typeof getCurrentCoords>>) => {
+      if (!currentUser) return;
+      const point = { latitude: coords?.latitude, longitude: coords?.longitude };
+      const alreadyClockedIn = Boolean(state.attendance[currentUser.id]?.clockedInAt);
+      const outcome = resolveOfflineScan({
+        code,
+        userId: currentUser.id,
+        sites: state.sites as unknown as ScanSite[],
+        locations: state.locations as unknown as ScanLocation[],
+        tasks: state.tasks as unknown as ScanTask[],
+        clockedIn: alreadyClockedIn,
+        coords: coords ? { latitude: coords.latitude, longitude: coords.longitude } : null,
+      });
+      if (!outcome.ok) {
+        setResult({ code, ok: false, reason: outcome.reason, accuracyMeters: coords?.accuracy ?? null });
+        return;
+      }
+      const at = new Date().toISOString();
+      if (outcome.kind === "site") {
+        const goingOut = outcome.direction === "out";
+        if (outcome.siteTasks.length > 0 && !skipSitePickerRef.current && (goingOut || !attendanceOn)) {
+          setSitePicker({
+            code,
+            tasks: outcome.siteTasks as unknown as Task[],
+            clockedIn: goingOut && attendanceOn,
+            ...point,
+          });
+          return;
+        }
+        skipSitePickerRef.current = false;
+        await enqueueMutation({
+          userId: currentUser.id,
+          kind: "attendance.clock",
+          payload: { direction: outcome.direction, siteId: outcome.site.id, qrValue: code, ...point, at },
+        });
+        void drainQueue();
+        setResult({
+          code,
+          ok: true,
+          linkedName: outcome.site.name,
+          kind: "site",
+          clockedOut: goingOut,
+          geofenceVerified: outcome.geofenceVerified,
+        });
+        if (!goingOut) setApproval({ siteName: outcome.site.name, at });
+        return;
+      }
+      if (!outcome.task) {
+        setResult({
+          code,
+          ok: false,
+          reason:
+            "No task assigned to you here is saved on this phone. If this is an hourly round, scan it again when you are online.",
+          locationId: outcome.location.id,
+          linkedName: outcome.location.name,
+        });
+        return;
+      }
+      await enqueueMutation({
+        userId: currentUser.id,
+        kind: "task.scan",
+        taskId: outcome.task.id,
+        payload: { value: code, ...point, at },
+      });
+      void drainQueue();
+      setResult({
+        code,
+        ok: true,
+        linkedName: outcome.location.name,
+        locationId: outcome.location.id,
+        taskId: outcome.task.id,
+        kind: "room",
+        geofenceVerified: outcome.geofenceVerified,
+      });
+    },
+    [currentUser, state.attendance, state.sites, state.locations, state.tasks, attendanceOn],
+  );
+
   const scan = useCallback(
     async (rawCode: string) => {
       const code = extractCode(rawCode);
@@ -154,6 +239,11 @@ export default function ScanScreen() {
       // evaluate_geofence), so a denied/unavailable location fails the
       // scan rather than silently proceeding unverified.
       const coords = await getCurrentCoords();
+
+      if (state.connectivity === "offline") {
+        await scanOffline(code, coords);
+        return;
+      }
 
       let resolved: Awaited<ReturnType<typeof resolveQr>>;
       try {
@@ -385,7 +475,7 @@ export default function ScanScreen() {
         setScanning(false);
       }
     },
-    [state.accessToken, state.attendance, currentUser, refreshBackendData],
+    [state.accessToken, state.attendance, state.connectivity, currentUser, refreshBackendData, scanOffline, attendanceOn],
   );
 
   const confirmClaim = useCallback(async () => {
@@ -576,6 +666,24 @@ export default function ScanScreen() {
                 loading={startingSiteTask}
                 onPress={async () => {
                   if (!state.accessToken) return;
+                  if (state.connectivity === "offline" && currentUser) {
+                    // Saved on the phone, verified by the server when it syncs.
+                    await enqueueMutation({
+                      userId: currentUser.id,
+                      kind: "task.start",
+                      taskId: task.id,
+                      payload: {
+                        qrValue: sitePicker.code,
+                        latitude: sitePicker.latitude,
+                        longitude: sitePicker.longitude,
+                        startedAt: new Date().toISOString(),
+                      },
+                    });
+                    void drainQueue();
+                    setSitePicker(null);
+                    router.push(`/tasks/${task.id}`);
+                    return;
+                  }
                   setStartingSiteTask(true);
                   try {
                     const updated = await startTaskRequest(state.accessToken, task.id, {
@@ -636,6 +744,12 @@ export default function ScanScreen() {
               <Text style={styles.resultLine}>
                 Linked to: <Text style={styles.resultStrong}>{result.linkedName}</Text>
               </Text>
+              {state.connectivity === "offline" && (
+                <Text style={styles.resultLine}>
+                  <Text style={styles.resultStrong}>Saved on this phone.</Text> It is sent and checked when you
+                  reconnect.
+                </Text>
+              )}
               {result.clockedOut && (
                 <Text style={styles.resultLine}>
                   <Text style={styles.resultStrong}>Clocked out.</Text> Have a good rest of your day.

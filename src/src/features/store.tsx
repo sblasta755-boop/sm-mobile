@@ -1,5 +1,13 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import NetInfo from "@react-native-community/netinfo";
+import {
+  applyAttendance,
+  applyCorrectiveUpdates,
+  applyInspectionDecisions,
+  applyMutations,
+} from "@/domain/outbox";
+import { loadOutbox, useOutbox } from "@/features/outbox";
+import { loadTaskFilters, resetTaskFilters } from "@/features/taskFilters";
 import { createContext, useContext, useEffect, useMemo, useReducer, useRef, type ReactNode } from "react";
 import {
   loadBackendBootstrap,
@@ -486,6 +494,8 @@ export function SmartCleanProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     const { accessToken, refreshToken } = state;
+    // A different person on this phone should not inherit the last one's filters.
+    resetTaskFilters();
     await SecureSessionService.clear();
     dispatch({ type: "SIGN_OUT" });
     if (accessToken && refreshToken) {
@@ -564,9 +574,30 @@ export function SmartCleanProvider({ children }: { children: ReactNode }) {
 
   const unlock = () => dispatch({ type: "UNLOCK" });
 
+  // Changes made on the phone and not yet accepted by the server are shown on
+  // top of the tasks it last sent, so the app behaves the same offline.
+  const outbox = useOutbox();
+  useEffect(() => {
+    void loadOutbox();
+    void loadTaskFilters();
+  }, []);
+  const shownState = useMemo(
+    () =>
+      outbox.length === 0
+        ? state
+        : {
+            ...state,
+            tasks: applyMutations(state.tasks, outbox),
+            attendance: currentUser ? applyAttendance(state.attendance, outbox, currentUser.id) : state.attendance,
+            inspections: applyInspectionDecisions(state.inspections, outbox),
+            correctiveActions: applyCorrectiveUpdates(state.correctiveActions, outbox),
+          },
+    [state, outbox, currentUser],
+  );
+
   const value = useMemo(
     () => ({
-      state,
+      state: shownState,
       currentUser,
       dispatch,
       signIn,
@@ -576,7 +607,7 @@ export function SmartCleanProvider({ children }: { children: ReactNode }) {
       refreshBackendData,
       markWelcomeSeen,
     }),
-    [currentUser, state],
+    [currentUser, shownState],
   );
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;

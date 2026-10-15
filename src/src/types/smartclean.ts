@@ -57,6 +57,10 @@ export interface WorkflowPolicy {
     /** Who reviews a task a supervisor / site manager did: "site_manager" or "none". */
     supervisorTaskReview?: "site_manager" | "none";
     supervisorTasksRequireClockIn?: boolean;
+    /** How a person signs on submit: name only, name and signature, or signature only. */
+    signoffMode?: "name" | "name_and_signature" | "signature";
+    /** Whether the typed name must match the signer's account name. */
+    signoffRequireNameMatch?: boolean;
   };
   qr: { enabled: boolean };
 }
@@ -159,6 +163,8 @@ export interface ChecklistItem {
   sectionId?: string;
   sectionName?: string;
   sectionOrder?: number;
+  /** The doer's optional note on this item. */
+  note?: string;
   /** photo_required items: how many photos prove the item. Absent on tasks
    * from before photos were tied to items (they keep the old rule). */
   photoCount?: number;
@@ -263,6 +269,10 @@ export interface Task {
   isSupervisorTask?: boolean;
   /** False when the task was set up as needing no photo evidence at all. */
   evidenceRequired?: boolean;
+  /** scheduledAt..dueAt is a work window (start and end), not only a deadline. */
+  hasTimeRange?: boolean;
+  /** How the doer signed off when they submitted. */
+  signoff?: { name?: string | null; signedAt?: string; mode?: string; path?: string | null; width?: number | null; height?: number | null } | null;
   /** Belongs to the whole site (no room); started by scanning the site QR. */
   isSiteWide?: boolean;
   /** How this task repeats, set only on a recurring task's own template

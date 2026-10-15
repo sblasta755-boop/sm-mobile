@@ -3,6 +3,7 @@ import { router } from "expo-router";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Screen } from "@/components/Screen";
+import { useTaskFilters } from "@/features/taskFilters";
 import { Card } from "@/components/Card";
 import { StatusBadge } from "@/components/StatusBadge";
 import { TaskSearchBar } from "@/components/TaskSearchBar";
@@ -14,7 +15,7 @@ import { useSmartClean } from "@/features/store";
 import { toneForTask, humanStatus } from "@/domain/status";
 import { taskDestination } from "@/domain/inspections";
 import { matchesInspectionFilters } from "@/domain/inspectionFilters";
-import { filterTasks, filtersActive, NO_FILTERS, tagsOf, type TaskFilters } from "@/domain/taskBoard";
+import { filterTasks, filtersActive, NO_FILTERS, tagsOf } from "@/domain/taskBoard";
 import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 import type { TaskStatus } from "@/types/smartclean";
 
@@ -38,7 +39,8 @@ export default function SuperviseInspections() {
   useThemeVersion(); // re-render with the new colours when the theme changes
   const { state, currentUser } = useSmartClean();
   const [activeGroup, setActiveGroup] = useState(GROUPS[0].label);
-  const [filters, setFilters] = useState<TaskFilters>(NO_FILTERS);
+  // Shared across screens and kept until the person changes it (features/taskFilters).
+  const [filters, setFilters] = useTaskFilters();
   // Narrow to one cleaner and/or the day the work was submitted.
   const [cleanerId, setCleanerId] = useState<string | null>(null);
   const [day, setDay] = useState<Date | null>(null);

@@ -4,13 +4,18 @@ import { ActivityIndicator, Image, Pressable, StyleSheet, Text, TextInput, View 
 import { Ionicons } from "@expo/vector-icons";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { Screen } from "@/components/Screen";
+import { prepareEvidencePhoto } from "@/services/photoPrep";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { SelectField } from "@/components/SelectField";
 import { useSmartClean } from "@/features/store";
 import { useHomePath, useScanPath } from "@/features/roles";
 import { useHasCapability } from "@/features/modules";
-import { createIncident, fileUrl, uploadImage } from "@/api/client";
+import { fileUrl } from "@/api/client";
+import { appAlert } from "@/components/Dialog";
+import { drainQueue } from "@/features/evidenceUploader";
+import { enqueueMutation } from "@/features/outbox";
+import { keepPhoto } from "@/features/evidenceQueue";
 import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 import type { IncidentPriority } from "@/types/smartclean";
 
@@ -35,7 +40,7 @@ export default function NewIncidentScreen() {
     locationId?: string;
     taskId?: string;
   }>();
-  const { state, currentUser, dispatch, refreshBackendData } = useSmartClean();
+  const { state, currentUser } = useSmartClean();
   const homePath = useHomePath();
   const scanPath = useScanPath();
   // Organisations without QR codes have nothing to scan, so the location is
@@ -114,8 +119,11 @@ export default function NewIncidentScreen() {
     try {
       const photo = await cameraRef.current.takePictureAsync({ quality: 0.6, base64: false, skipProcessing: true });
       if (!photo?.uri) return;
-      const filePath = await uploadImage(state.accessToken, photo.uri, `incident-${Date.now()}.jpg`, "image/jpeg");
-      setPhotoPaths((prev) => [...prev, filePath]);
+      // Shrunk first: a full camera frame is several megabytes to send.
+      // Kept on the phone and sent with the report, so taking it needs no signal.
+      const small = await prepareEvidencePhoto(photo.uri, photo.width, photo.height);
+      const localUri = await keepPhoto(small, `incident_${Date.now()}`);
+      setPhotoPaths((prev) => [...prev, localUri]);
     } finally {
       setUploadingPhoto(false);
     }
@@ -129,19 +137,28 @@ export default function NewIncidentScreen() {
     if (!site || !state.accessToken || !locationId || !hasValidScan) return;
     setBusy(true);
     try {
-      const incident = await createIncident(state.accessToken, {
-        siteId: site.id,
-        locationId,
-        category,
-        priority,
-        description,
-        offlineOriginated: state.connectivity === "offline",
-        filePaths: photoPaths,
-        suggestedSteps: suggestedSteps.map((s) => s.trim()).filter(Boolean),
-        taskId: taskId || undefined,
+      // Saved on the phone and sent as soon as there is a connection (now, if
+      // there already is one), so the report is never lost to a dead signal.
+      if (!currentUser) return;
+      await enqueueMutation({
+        userId: currentUser.id,
+        kind: "incident.create",
+        payload: {
+          siteId: site.id,
+          locationId,
+          category,
+          priority,
+          description,
+          offlineOriginated: state.connectivity === "offline",
+          localPhotos: photoPaths,
+          suggestedSteps: suggestedSteps.map((s) => s.trim()).filter(Boolean),
+          taskId: taskId || undefined,
+        },
       });
-      dispatch({ type: "CREATE_INCIDENT", incident });
-      await refreshBackendData();
+      void drainQueue();
+      if (state.connectivity === "offline") {
+        appAlert("Report saved", "There is no connection right now. Your report is saved on this phone and will be sent automatically.");
+      }
       // Back to the task that prompted this report (rather than /home)
       // when arriving via taskId - the cleaner was mid-task and should
       // land back where they left off, not at the top of the app.
@@ -356,7 +373,10 @@ export default function NewIncidentScreen() {
             <View style={styles.photoRow}>
               {photoPaths.map((filePath) => (
                 <View key={filePath} style={styles.photoThumbWrap}>
-                  <Image source={{ uri: fileUrl(filePath) }} style={styles.photoThumb} />
+                  <Image
+                    source={{ uri: filePath.startsWith("file:") ? filePath : fileUrl(filePath) }}
+                    style={styles.photoThumb}
+                  />
                   <Pressable
                     accessibilityLabel="Remove photo"
                     onPress={() => removePhoto(filePath)}

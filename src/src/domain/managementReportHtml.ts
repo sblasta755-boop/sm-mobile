@@ -63,9 +63,13 @@ function taskSection(section: ReportSection, number: number, photoSrc: ReportHtm
       const band = i % 2 ? ' class="band"' : "";
       const photoRow =
         check.photos.length > 0 ? `<tr${band}><td colspan="4">${photos(check.photos, photoSrc)}</td></tr>` : "";
+      // The doer's note on this item, only when one was written.
+      const noteRow = check.note
+        ? `<tr${band}><td></td><td colspan="3" class="note"><span class="k">Note</span> ${esc(check.note)}</td></tr>`
+        : "";
       return `<tr${band}><td class="b">${esc(check.section)}</td><td>${esc(check.action)}</td>
         <td style="color:${check.done ? GREEN : RED}">${check.done ? "Complete" : "Not complete"}</td>
-        <td style="color:${check.photoStatus === "Not captured" ? RED : "inherit"}">${esc(check.photoStatus)}</td></tr>${photoRow}`;
+        <td style="color:${check.photoStatus === "Not captured" ? RED : "inherit"}">${esc(check.photoStatus)}</td></tr>${noteRow}${photoRow}`;
     })
     .join("");
   const taskPhotos =
@@ -81,6 +85,7 @@ function taskSection(section: ReportSection, number: number, photoSrc: ReportHtm
     <div class="kpis">
       ${kpi("Started", section.started ?? "-")}${kpi("Submitted", section.submitted ?? "-")}${kpi("Approved", section.approved ?? "-")}
     </div>
+    ${signoffBlock(section.task.signoff)}
     <h3>Operational checklist</h3>
     <table class="grid"><thead><tr><th>Section</th><th>Required action</th><th>Result</th><th>Photo status</th></tr></thead>
       <tbody>${rows}${taskPhotos}</tbody></table>
@@ -90,6 +95,18 @@ function taskSection(section: ReportSection, number: number, photoSrc: ReportHtm
         .map((v, i) => `<td${i === 0 ? ' class="b"' : ""}>${esc(v.value)}</td>`)
         .join("")}</tr></tbody></table>
   </section>`;
+}
+
+/** Who signed the task off and, when they drew one, their signature. */
+function signoffBlock(signoff: ReportSection["task"]["signoff"]): string {
+  if (!signoff || (!signoff.name && !signoff.path)) return "";
+  const drawing =
+    signoff.path && signoff.width && signoff.height
+      ? `<svg class="sig" viewBox="0 0 ${signoff.width} ${signoff.height}" xmlns="http://www.w3.org/2000/svg"><path d="${esc(signoff.path)}" fill="none" stroke="#0f172a" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`
+      : "";
+  return `<div class="signoff"><span class="k">Signed off</span>${drawing}${
+    signoff.name ? `<span class="who">${esc(signoff.name)}</span>` : ""
+  }${signoff.signedAt ? `<span class="muted small"> ${esc(new Date(signoff.signedAt).toLocaleString("en-ZA"))}</span>` : ""}</div>`;
 }
 
 const kpi = (label: string, value: string) =>
@@ -166,6 +183,12 @@ export function buildManagementReportHtml(options: ReportHtmlOptions): string {
   figure { margin: 0; text-align: center; }
   figure img { height: 90px; width: auto; border: 1px solid #e2e8f0; border-radius: 3px; }
   figcaption { font-size: 7px; text-transform: uppercase; color: #64748b; margin-top: 2px; }
+  .note { font-size: 10px; color: #334155; background: #f8fafc; }
+  .note .k { color: #0a8f8a; font-weight: 700; text-transform: uppercase; margin-right: 4px; }
+  .signoff { margin: 8px 0; display: flex; align-items: center; gap: 10px; }
+  .signoff .k { font-size: 9px; font-weight: 700; text-transform: uppercase; color: #64748b; }
+  .signoff svg.sig { width: 140px; height: 56px; border-bottom: 1px solid #94a3b8; }
+  .signoff .who { font-weight: 700; }
   .noimg { width: 90px; height: 90px; display: flex; align-items: center; justify-content: center; border: 1px solid #e2e8f0; color: #94a3b8; font-size: 9px; }
   .totals p { margin: 4px 0; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: #334155; }
   .approval { display: flex; gap: 12px; background: #f8fafc; padding: 12px; border-radius: 4px; }

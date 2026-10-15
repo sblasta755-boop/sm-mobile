@@ -8,6 +8,9 @@ import { Screen } from "@/components/Screen";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { ActionTiles } from "@/components/ActionTiles";
+import { ActiveFiltersBar } from "@/components/ActiveFiltersBar";
+import { useTaskFilters } from "@/features/taskFilters";
+import { filterTasks } from "@/domain/taskBoard";
 import { ProgressBar } from "@/components/ProgressBar";
 import { StatusBadge } from "@/components/StatusBadge";
 import { TaskRow } from "@/components/TaskRow";
@@ -77,6 +80,9 @@ export default function HomeScreen() {
   // mobile.home.tsx).
   const myTasks = allMyTasks.filter((t) => isSameDay(new Date(t.scheduledAt), selectedDate));
   const done = myTasks.filter((t) => ["approved", "closed"].includes(t.status)).length;
+  // The filters set on the task lists apply to this list too, until they are changed.
+  const [taskFilters] = useTaskFilters();
+  const shownTasks = filterTasks(myTasks, taskFilters);
   const openCA = state.correctiveActions.filter(
     (c) => c.assigneeId === currentUser?.id && c.status !== "closed",
   );
@@ -224,11 +230,15 @@ export default function HomeScreen() {
           </Pressable>
         </View>
       </View>
+      <ActiveFiltersBar />
       {myTasks.length === 0 && (
         <Text style={styles.emptyTasks}>No tasks assigned for this day.</Text>
       )}
+      {myTasks.length > 0 && shownTasks.length === 0 && (
+        <Text style={styles.emptyTasks}>No tasks match your filters.</Text>
+      )}
       <View style={styles.list}>
-        {myTasks.slice(0, 3).map((t) => (
+        {shownTasks.slice(0, 3).map((t) => (
           <TaskRow key={t.id} task={t} onPress={() => router.push(`/tasks/${t.id}`)} />
         ))}
       </View>

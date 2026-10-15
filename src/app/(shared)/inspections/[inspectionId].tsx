@@ -9,7 +9,9 @@ import { ScoreControl } from "@/components/ScoreControl";
 import { StatusBadge, VerifiedBadge } from "@/components/StatusBadge";
 import { useSmartClean } from "@/features/store";
 import { useHomePath } from "@/features/roles";
-import { decideInspection, fileUrl } from "@/api/client";
+import { fileUrl } from "@/api/client";
+import { drainQueue } from "@/features/evidenceUploader";
+import { enqueueMutation } from "@/features/outbox";
 import { groupChecklist, isSectioned } from "@/domain/checklistSections";
 import {
   canInspectRole,
@@ -65,17 +67,25 @@ export default function InspectionScreen() {
   const allowed = canInspectRole(currentUser?.role) && !selfApproval && !needsManager;
 
   const finish = async (decision: "approve" | "reject") => {
-    if (!state.accessToken) return;
+    if (!currentUser) return;
     setDeciding(decision);
     try {
-      await decideInspection(state.accessToken, insp.id, {
-        decision,
-        score: overall,
-        scores,
-        comments: comments.trim() || undefined,
-        reason: decision === "reject" ? reason.trim() : undefined,
+      // Saved on the phone first and sent when there is a connection, so the
+      // decision is never lost to a dead signal (see features/outbox).
+      await enqueueMutation({
+        userId: currentUser.id,
+        kind: "inspection.decide",
+        taskId: task.id,
+        payload: {
+          inspectionId: insp.id,
+          decision,
+          score: overall,
+          scores,
+          comments: comments.trim() || undefined,
+          reason: decision === "reject" ? reason.trim() : undefined,
+        },
       });
-      await refreshBackendData();
+      void drainQueue();
       appAlert(
         decision === "approve" ? "Approved" : "Sent back",
         decision === "approve"

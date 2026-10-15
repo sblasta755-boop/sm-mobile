@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { router, useLocalSearchParams } from "expo-router";
-import { StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import Svg, { Path } from "react-native-svg";
+import { Ionicons } from "@expo/vector-icons";
 import { Screen } from "@/components/Screen";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
@@ -9,34 +11,31 @@ import { StatusBadge, VerifiedBadge } from "@/components/StatusBadge";
 import { useSmartClean } from "@/features/store";
 import { useHomePath } from "@/features/roles";
 import { useWorkflowPolicy } from "@/features/modules";
-import { submitTask } from "@/api/client";
+import { drainQueue } from "@/features/evidenceUploader";
+import { enqueueMutation } from "@/features/outbox";
 import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 import { appAlert } from "@/components/Dialog";
-
-// A typed name is the whole "signature" here (no drawn/canvas capture),
-// so the only thing actually worth enforcing is that it's genuinely the
-// signer's own name, not just any string ≥3 characters - previously
-// "vvvvvcc" passed the same as "Jane Cleaner" would have, since nothing
-// ever compared what was typed against who was actually signing (the
-// typed value isn't even sent to the backend - only declarationAccepted
-// is, see submitTask - so the check exists purely to stop a meaningless
-// scribble from satisfying what's presented as a real attestation).
-// Case/whitespace-insensitive so "jane cleaner" or "Jane  Cleaner"
-// still matches the account's real display name.
-function normalizeName(value: string) {
-  return value.trim().toLowerCase().replace(/\s+/g, " ");
-}
+import { SignatureDrawer, type SignatureResult } from "@/components/SignatureDrawer";
+import {
+  signaturePayload,
+  signoffProblems,
+  strokesToPath,
+  wantsName,
+  wantsSignature,
+} from "@/domain/signoff";
 
 export default function DeclarationScreen() {
   useThemeVersion(); // re-render with the new colours when the theme changes
   const { taskId } = useLocalSearchParams<{ taskId: string }>();
-  const { state, currentUser, dispatch, refreshBackendData } = useSmartClean();
+  const { state, currentUser } = useSmartClean();
   const homePath = useHomePath();
   const policy = useWorkflowPolicy();
   const task = state.tasks.find((t) => t.id === taskId);
   const [agree, setAgree] = useState(false);
   const [signature, setSignature] = useState("");
   const [busy, setBusy] = useState(false);
+  const [drawn, setDrawn] = useState<SignatureResult | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   if (!task) {
     return (
@@ -46,21 +45,39 @@ export default function DeclarationScreen() {
     );
   }
 
-  const signatureMatches =
-    Boolean(currentUser?.name) && normalizeName(signature) === normalizeName(currentUser!.name);
+  const mode = policy?.tasks.signoffMode ?? "name";
+  const requireNameMatch = policy?.tasks.signoffRequireNameMatch ?? true;
+  const problems = signoffProblems({
+    mode,
+    requireNameMatch,
+    accountName: currentUser?.name ?? "",
+    typedName: signature,
+    strokes: drawn?.strokes ?? [],
+  });
+  const signedOk = problems.length === 0;
 
   async function submit() {
-    if (!task || !state.accessToken) return;
+    if (!task || !currentUser) return;
     setBusy(true);
     try {
-      const updatedTask = await submitTask(state.accessToken, task.id);
-      dispatch({ type: "UPDATE_TASK", taskId: task.id, patch: updatedTask });
-      await refreshBackendData();
-      // A supervisor task in an organisation that does not review them is
-      // closed by the server on submit - say so, rather than leaving a task
-      // that quietly shows "approved" with no inspection behind it.
-      if (updatedTask.status === "approved" && updatedTask.isSupervisorTask) {
-        appAlert("Task closed", "Submitted and closed - your organisation doesn't review supervisor tasks.");
+      // Saved on the phone and sent after this task's photos, in order, as soon
+      // as there is a connection. The task shows as submitted straight away.
+      await enqueueMutation({
+        userId: currentUser.id,
+        kind: "task.submit",
+        taskId: task.id,
+        payload: {
+          submittedAt: new Date().toISOString(),
+          ...(wantsName(mode) ? { signerName: signature.trim() } : {}),
+          ...(wantsSignature(mode) && drawn ? { signature: signaturePayload(drawn.strokes, drawn.width, drawn.height) } : {}),
+        },
+      });
+      void drainQueue();
+      if (state.connectivity === "offline") {
+        appAlert(
+          "Submitted on this phone",
+          "There is no connection right now. Your submission and photos are saved and will be sent automatically.",
+        );
       }
       router.push(homePath as never);
     } catch (error) {
@@ -106,32 +123,57 @@ export default function DeclarationScreen() {
           <Checkbox checked={agree} onChange={setAgree} />
           <Text style={styles.agreeLabel}>I agree to the declaration above.</Text>
         </View>
-        <View style={styles.signatureField}>
-          <Text style={styles.signatureLabel}>Signature</Text>
-          <TextInput
-            style={styles.signatureInput}
-            placeholder={currentUser?.name ? `Type "${currentUser.name}" to sign` : "Type your full name"}
-            placeholderTextColor={colors.mutedForeground}
-            value={signature}
-            onChangeText={setSignature}
-          />
-          {signature.trim().length > 0 && !signatureMatches && (
-            <Text style={styles.signatureError}>
-              Type your name exactly as it appears on your account to sign.
-            </Text>
-          )}
-        </View>
-        {agree && !signature.trim() && (
-          <Text style={styles.mutedSmall}>Sign above to enable submission.</Text>
+        {wantsName(mode) && (
+          <View style={styles.signatureField}>
+            <Text style={styles.signatureLabel}>{mode === "name" ? "Signature" : "Your name"}</Text>
+            <TextInput
+              style={styles.signatureInput}
+              placeholder={currentUser?.name ? `Type "${currentUser.name}" to sign` : "Type your full name"}
+              placeholderTextColor={colors.mutedForeground}
+              value={signature}
+              onChangeText={setSignature}
+            />
+            {signature.trim().length > 0 && problems.includes("The name must match your account name") && (
+              <Text style={styles.signatureError}>
+                Type your name exactly as it appears on your account to sign.
+              </Text>
+            )}
+          </View>
         )}
-        {!agree && signatureMatches && (
-          <Text style={styles.mutedSmall}>Tick the box above to enable submission.</Text>
+        {wantsSignature(mode) && (
+          <View style={styles.signatureField}>
+            <Text style={styles.signatureLabel}>Signature</Text>
+            <Pressable accessibilityRole="button" style={styles.signatureBox} onPress={() => setDrawerOpen(true)}>
+              {drawn && drawn.strokes.length > 0 ? (
+                <Svg width="100%" height={90} viewBox={`0 0 ${drawn.width} ${drawn.height}`}>
+                  <Path d={strokesToPath(drawn.strokes)} stroke={colors.foreground} strokeWidth={2.5} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                </Svg>
+              ) : (
+                <View style={styles.signatureEmpty}>
+                  <Ionicons name="create-outline" size={20} color={colors.primary} />
+                  <Text style={styles.signatureAdd}>Tap to sign</Text>
+                </View>
+              )}
+            </Pressable>
+          </View>
         )}
+        {agree && !signedOk && <Text style={styles.mutedSmall}>{problems.join(". ")} to enable submission.</Text>}
+        {!agree && signedOk && <Text style={styles.mutedSmall}>Tick the box above to enable submission.</Text>}
       </Card>
 
-      <Button disabled={busy || !agree || !signatureMatches} onPress={submit}>
+      <Button disabled={busy || !agree || !signedOk} onPress={submit}>
         Submit task
       </Button>
+
+      <SignatureDrawer
+        visible={drawerOpen}
+        initial={drawn}
+        onClose={() => setDrawerOpen(false)}
+        onDone={(result) => {
+          setDrawn(result);
+          setDrawerOpen(false);
+        }}
+      />
     </Screen>
   );
 }
@@ -195,6 +237,17 @@ const styles = themedStyles(() => StyleSheet.create({
     color: colors.foreground,
     backgroundColor: colors.background,
   },
+  signatureBox: {
+    minHeight: 96,
+    borderWidth: 1,
+    borderColor: colors.input,
+    borderRadius: radius.md,
+    backgroundColor: colors.background,
+    justifyContent: "center",
+    paddingHorizontal: spacing.md,
+  },
+  signatureEmpty: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm },
+  signatureAdd: { fontSize: typography.body, fontWeight: "600", color: colors.primary },
   signatureError: {
     fontSize: typography.tiny,
     color: colors.destructive,

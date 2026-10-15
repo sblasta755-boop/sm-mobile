@@ -2,13 +2,14 @@ import { useMemo, useState } from "react";
 import { router } from "expo-router";
 import { Pressable, ScrollView, StyleSheet, Switch, Text, View, useWindowDimensions } from "react-native";
 import { Screen } from "@/components/Screen";
+import { useTaskFilters } from "@/features/taskFilters";
 import { Card } from "@/components/Card";
 import { StatusBadge } from "@/components/StatusBadge";
 import { TaskSearchBar } from "@/components/TaskSearchBar";
 import { TagChips } from "@/components/TagChip";
 import { useSmartClean } from "@/features/store";
 import { taskDestination } from "@/domain/inspections";
-import { boardColumns, filterTasks, isOverdue, NO_FILTERS, tagsOf, type TaskFilters } from "@/domain/taskBoard";
+import { boardColumns, filterTasks, isOverdue, tagsOf } from "@/domain/taskBoard";
 import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 
 /**
@@ -21,7 +22,8 @@ export default function KanbanScreen() {
   useThemeVersion(); // re-render with the new colours when the theme changes
   const { state, currentUser } = useSmartClean();
   const { width } = useWindowDimensions();
-  const [filters, setFilters] = useState<TaskFilters>(NO_FILTERS);
+  // Shared across screens and kept until the person changes it (features/taskFilters).
+  const [filters, setFilters] = useTaskFilters();
   const isSupervisor = currentUser?.role === "supervisor";
   const [mineOnly, setMineOnly] = useState(!isSupervisor);
 

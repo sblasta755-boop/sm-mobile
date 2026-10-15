@@ -2,9 +2,9 @@ import { useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Button } from "@/components/Button";
-import { appAlert } from "@/components/Dialog";
 import { useSmartClean } from "@/features/store";
-import { saveTaskNote } from "@/api/client";
+import { enqueueMutation } from "@/features/outbox";
+import { drainQueue } from "@/features/evidenceUploader";
 import { colors, radius, spacing, themedStyles, typography, useThemeVersion } from "@/theme";
 import type { Task } from "@/types/smartclean";
 
@@ -17,7 +17,7 @@ const MAX = 1000;
  */
 export function TaskNote({ task, editable }: { task: Task; editable: boolean }) {
   useThemeVersion();
-  const { state, dispatch } = useSmartClean();
+  const { currentUser } = useSmartClean();
   const saved = task.note ?? "";
   const [open, setOpen] = useState(false);
   const [text, setText] = useState(saved);
@@ -29,15 +29,14 @@ export function TaskNote({ task, editable }: { task: Task; editable: boolean }) 
   const dirty = text.trim() !== saved;
 
   async function save() {
-    if (!state.accessToken || !dirty) return;
+    if (!currentUser || !dirty) return;
     setSaving(true);
     try {
-      const updated = await saveTaskNote(state.accessToken, task.id, text);
-      dispatch({ type: "UPDATE_TASK", taskId: task.id, patch: { note: updated.note ?? null } });
-      setText(updated.note ?? "");
-      if (!updated.note) setOpen(false);
-    } catch (error) {
-      appAlert("Could not save the note", error instanceof Error ? error.message : "Please try again.");
+      // Saved on the phone at once and sent when there is a connection.
+      await enqueueMutation({ userId: currentUser.id, kind: "task.note", taskId: task.id, payload: { note: text } });
+      void drainQueue();
+      setText(text.trim());
+      if (!text.trim()) setOpen(false);
     } finally {
       setSaving(false);
     }

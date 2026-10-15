@@ -23,6 +23,8 @@ export interface ReportCheck {
   /** "Not required" | "Captured in app" | "Not captured" */
   photoStatus: string;
   photos: Evidence[];
+  /** The doer's note on this item; absent when none was written. */
+  note?: string;
 }
 
 export interface ReportSection {
@@ -215,6 +217,7 @@ function buildChecks(task: Task): { checks: ReportCheck[]; taskPhotos: Evidence[
       done: !!item.done,
       photoStatus,
       photos,
+      ...(item.note?.trim() ? { note: item.note.trim() } : {}),
     };
   });
   // Everything not tied to a checklist item (an old task's Before/After, a

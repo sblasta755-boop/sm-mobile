@@ -3,10 +3,11 @@ import { router } from "expo-router";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Screen } from "@/components/Screen";
+import { useTaskFilters } from "@/features/taskFilters";
 import { Card } from "@/components/Card";
 import { StatusBadge } from "@/components/StatusBadge";
 import { TaskSearchBar } from "@/components/TaskSearchBar";
-import { filterTasks, filtersActive, NO_FILTERS, tagsOf, type TaskFilters } from "@/domain/taskBoard";
+import { filterTasks, filtersActive, tagsOf } from "@/domain/taskBoard";
 import { DateStrip, isSameDay, startOfDay } from "@/components/DateStrip";
 import { useSmartClean } from "@/features/store";
 import { toneForTask, humanStatus } from "@/domain/status";
@@ -17,7 +18,8 @@ export default function ShiftsScreen() {
   useThemeVersion(); // re-render with the new colours when the theme changes
   const { state, currentUser } = useSmartClean();
   const [activeGroup, setActiveGroup] = useState("Not started");
-  const [filters, setFilters] = useState<TaskFilters>(NO_FILTERS);
+  // Shared across screens and kept until the person changes it (features/taskFilters).
+  const [filters, setFilters] = useTaskFilters();
   const today = useMemo(() => startOfDay(new Date()), []);
   const [selectedDate, setSelectedDate] = useState(today);
   // Hourly-compliance rounds have their own dedicated screen ("My hourly

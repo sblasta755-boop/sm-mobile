@@ -9,12 +9,16 @@ import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { useSmartClean } from "@/features/store";
 import { useScanPath } from "@/features/roles";
-import { addTaskEvidence, fileUrl, uploadImage } from "@/api/client";
+import { fileUrl } from "@/api/client";
 import { taskStage } from "@/domain/status";
 import { evidenceForSlot, evidenceSlots, slotProgress, type EvidenceSlot } from "@/domain/evidenceSlots";
 import { useHasCapability, useHasModule } from "@/features/modules";
 import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 import { appAlert } from "@/components/Dialog";
+import { prepareEvidencePhoto } from "@/services/photoPrep";
+import { drainQueue } from "@/features/evidenceUploader";
+import { enqueuePhoto, keepPhoto, useEvidenceQueue } from "@/features/evidenceQueue";
+import { mergeQueuedEvidence, type QueuedPhoto } from "@/domain/evidenceQueue";
 
 /** The word on a tile: a checklist item's photos are just Before / After / Photo. */
 function tileTitle(slot: EvidenceSlot): string {
@@ -33,7 +37,7 @@ export default function EvidenceScreen() {
   // `item` highlights one checklist item (from the "Take photo" button beside
   // it on the task screen); everything else stays on screen too.
   const { taskId, item: requestedItem } = useLocalSearchParams<{ taskId: string; item?: string }>();
-  const { state, currentUser, dispatch } = useSmartClean();
+  const { state, currentUser } = useSmartClean();
   const insets = useSafeAreaInsets();
   const scanPath = useScanPath();
   const hasAttendance = useHasModule("attendance");
@@ -42,6 +46,8 @@ export default function EvidenceScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const [cameraSlotKey, setCameraSlotKey] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Photos on the phone waiting to upload (see features/evidenceQueue).
+  const queue = useEvidenceQueue();
   const cameraRef = useRef<CameraView | null>(null);
 
   if (!task) {
@@ -113,7 +119,8 @@ export default function EvidenceScreen() {
   }
 
   // `task` is narrowed above; the closures below need a name that stays narrowed.
-  const currentTask = task;
+  // Photos still on the phone count as taken, online or not.
+  const currentTask = mergeQueuedEvidence(task, queue);
   const stage = taskStage(currentTask);
   const slots = evidenceSlots(currentTask, stage);
   const issueSlot = slots.find((slot) => slot.kind === "issue");
@@ -158,35 +165,46 @@ export default function EvidenceScreen() {
   }
 
   async function capture() {
-    if (!cameraRef.current || busy || !state.accessToken || !cameraSlot) return;
+    if (!cameraRef.current || busy || !state.accessToken || !currentUser || !cameraSlot) return;
+    const slot = cameraSlot;
     setBusy(true);
     try {
-      const photo = await cameraRef.current.takePictureAsync({ quality: 0.6, base64: false, skipProcessing: true });
+      const photo = await cameraRef.current.takePictureAsync({ quality: 0.7, base64: false, skipProcessing: true });
       if (!photo?.uri) return;
       // A checklist item's photo is labelled with the item and sent with its
       // id, so the server ties the image to exactly that item.
-      const label = cameraSlot.checklistItemId
-        ? `${currentTask.checklist.find((c) => c.id === cameraSlot.checklistItemId)?.label ?? cameraSlot.label} - ${tileTitle(cameraSlot)}`
-        : cameraSlot.kind === "before"
+      const label = slot.checklistItemId
+        ? `${currentTask.checklist.find((c) => c.id === slot.checklistItemId)?.label ?? slot.label} - ${tileTitle(slot)}`
+        : slot.kind === "before"
           ? "Before photo"
-          : cameraSlot.kind === "after"
+          : slot.kind === "after"
             ? "After photo"
-            : cameraSlot.kind === "evidence"
+            : slot.kind === "evidence"
               ? "Evidence"
               : "Issue photo";
-      const filePath = await uploadImage(state.accessToken, photo.uri, `${cameraSlot.kind}-${Date.now()}.jpg`);
-      const updatedTask = await addTaskEvidence(state.accessToken, currentTask.id, {
-        kind: cameraSlot.kind,
-        checklistItemId: cameraSlot.checklistItemId,
+      const id = `ev_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      // Everything up to here works with no connection: shrink the photo, keep
+      // a copy in the app's own storage and put it in the queue. It uploads in
+      // the background (features/evidenceUploader) and is deleted from the
+      // phone only once the server has it.
+      const small = await prepareEvidencePhoto(photo.uri, photo.width, photo.height);
+      const localUri = await keepPhoto(small, id);
+      await enqueuePhoto({
+        id,
+        userId: currentUser.id,
+        taskId: currentTask.id,
+        kind: slot.kind as QueuedPhoto["kind"],
+        checklistItemId: slot.checklistItemId,
         label,
-        filePath,
-        liveCapture: true,
+        localUri,
+        capturedAt: new Date().toISOString(),
         offlineOriginated: state.connectivity === "offline",
+        status: "queued",
+        attempts: 0,
       });
-      dispatch({ type: "UPDATE_TASK", taskId: currentTask.id, patch: updatedTask });
+      void drainQueue();
       // Stay in the camera only while this slot still wants more photos.
-      const after = evidenceSlots(updatedTask, taskStage(updatedTask)).find((slot) => slot.key === cameraSlot.key);
-      if (!after || after.required === null || after.taken >= after.required) setCameraSlotKey(null);
+      if (slot.required === null || slot.taken + 1 >= slot.required) setCameraSlotKey(null);
     } catch (error) {
       appAlert("Could not save the photo", error instanceof Error ? error.message : "Please try again.");
     } finally {
@@ -216,6 +234,14 @@ export default function EvidenceScreen() {
             {group.slots.map((slot) => {
               const latest = evidenceForSlot(currentTask.evidence, slot)[0];
               const uri = latest ? (fileUrl(latest.filePath) ?? latest.uri) : undefined;
+              const waiting = (latest as { queued?: boolean } | undefined)?.queued === true;
+              const rejected = queue.find(
+                (p) =>
+                  p.taskId === currentTask.id &&
+                  p.status === "rejected" &&
+                  p.kind === slot.kind &&
+                  (p.checklistItemId ?? null) === (slot.checklistItemId ?? null),
+              );
               const complete = slot.required !== null ? slot.taken >= slot.required : slot.taken > 0;
               const locked = !slot.unlocked;
               return (
@@ -235,14 +261,29 @@ export default function EvidenceScreen() {
                     />
                     <Text style={[styles.tileTitle, uri && styles.onPhoto]}>{tileTitle(slot)}</Text>
                     {slot.required !== null && (
-                      <Text style={[styles.tileCount, uri && styles.onPhoto]}>{slotProgress(slot)}</Text>
+                      <Text style={[styles.tileCount, uri && styles.onPhoto]}>
+                        {slotProgress(slot)}
+                      </Text>
                     )}
                     {locked && slot.lockedReason && (
                       <Text style={styles.tileHint} numberOfLines={2}>
                         {slot.lockedReason}
                       </Text>
                     )}
-                    {!locked && uri && <Text style={[styles.tileHint, styles.onPhoto]}>Tap to retake</Text>}
+                    {waiting && (
+                      <View style={styles.uploadRow}>
+                        <Ionicons name="cloud-upload-outline" size={14} color={colors.white} />
+                        <Text style={[styles.tileHint, styles.onPhoto]}>Saved, uploading when online</Text>
+                      </View>
+                    )}
+                    {rejected && (
+                      <Text style={[styles.tileHint, styles.onPhoto]} numberOfLines={2}>
+                        Not accepted: {rejected.error ?? "retake it"}
+                      </Text>
+                    )}
+                    {!locked && uri && !waiting && !rejected && (
+                      <Text style={[styles.tileHint, styles.onPhoto]}>Tap to retake</Text>
+                    )}
                   </View>
                 </Pressable>
               );
@@ -339,6 +380,7 @@ const styles = themedStyles(() => StyleSheet.create({
   tileOverlayOnPhoto: { backgroundColor: "rgba(0,0,0,0.35)" },
   tileTitle: { fontSize: typography.body, fontWeight: "700", color: colors.foreground },
   tileCount: { fontSize: typography.tiny, fontWeight: "600", color: colors.mutedForeground },
+  uploadRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   tileHint: { fontSize: typography.tiny, color: colors.mutedForeground, textAlign: "center" },
   onPhoto: { color: colors.white },
   doneButton: { marginTop: spacing.md },

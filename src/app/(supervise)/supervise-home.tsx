@@ -3,6 +3,9 @@ import { router } from "expo-router";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Screen } from "@/components/Screen";
+import { ActiveFiltersBar } from "@/components/ActiveFiltersBar";
+import { useTaskFilters } from "@/features/taskFilters";
+import { filterTasks } from "@/domain/taskBoard";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { ActionTiles } from "@/components/ActionTiles";
@@ -56,6 +59,10 @@ export default function SuperviseHome() {
       ),
     [state.tasks, currentUser],
   );
+
+  // The filters set on the task lists apply here too, until they are changed.
+  const [taskFilters] = useTaskFilters();
+  const shownTasks = useMemo(() => filterTasks(myTasks, taskFilters), [myTasks, taskFilters]);
 
   const reworkOut = useMemo(
     () => state.tasks.filter((task) => task.status === "rework_required"),
@@ -156,6 +163,8 @@ export default function SuperviseHome() {
         ]}
       />
 
+      <ActiveFiltersBar />
+
       {myTasks.length > 0 && (
         <>
           <View style={styles.sectionHeader}>
@@ -164,7 +173,8 @@ export default function SuperviseHome() {
               <Text style={styles.link}>View all</Text>
             </Pressable>
           </View>
-          {myTasks.slice(0, 3).map((task) => (
+          {shownTasks.length === 0 && <Text style={styles.muted}>No tasks match your filters.</Text>}
+          {shownTasks.slice(0, 3).map((task) => (
             <TaskRow key={task.id} task={task} onPress={() => router.push(`/tasks/${task.id}`)} />
           ))}
         </>

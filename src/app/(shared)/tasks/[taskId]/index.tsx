@@ -9,18 +9,22 @@ import { BrokenGlassIcon } from "@/components/BrokenGlassIcon";
 import { Checkbox } from "@/components/Checkbox";
 import { ProgressBar } from "@/components/ProgressBar";
 import { TaskNote } from "@/components/TaskNote";
+import { ItemNote } from "@/components/ItemNote";
+import { useEvidenceQueue } from "@/features/evidenceQueue";
+import { enqueueMutation } from "@/features/outbox";
+import { drainQueue } from "@/features/evidenceUploader";
+import { mergeQueuedEvidence, waitingCount } from "@/domain/evidenceQueue";
 import { TagChips } from "@/components/TagChip";
 import { StatusBadge, VerifiedBadge } from "@/components/StatusBadge";
 import { useSmartClean } from "@/features/store";
 import { useHomePath, useScanPath } from "@/features/roles";
-import { fileUrl, startTask, updateChecklistItem } from "@/api/client";
+import { fileUrl } from "@/api/client";
 import { useHasCapability, useHasModule, useWorkflowPolicy } from "@/features/modules";
 import { firstIncompleteKey, groupChecklist, isSectioned } from "@/domain/checklistSections";
 import { itemPhotoProgress } from "@/domain/evidenceSlots";
 import { taskDestination } from "@/domain/inspections";
 import { toneForTask, humanStatus, taskSubmissionBlocked, taskStage, isChecklistUnlocked } from "@/domain/status";
 import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
-import { appAlert } from "@/components/Dialog";
 
 // steps_required checklist items store their value as a single
 // newline-joined string (same shape as a "note" item's value) so the
@@ -88,7 +92,11 @@ export default function TaskDetailScreen() {
   const scanPath = useScanPath();
   // Sections opened/closed by hand; otherwise only the first incomplete one is open.
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
-  const task = state.tasks.find((t) => t.id === taskId);
+  const queue = useEvidenceQueue();
+  const stored = state.tasks.find((t) => t.id === taskId);
+  // Photos still on the phone count as taken, so the screen behaves the same offline.
+  const task = stored ? mergeQueuedEvidence(stored, queue) : undefined;
+  const waitingPhotos = stored ? waitingCount(queue, stored.id) : 0;
   // Organisation workflow (see useHasCapability: QR fails open, manual
   // fails closed). Presentation only - the server authorises every start.
   const hasAttendance = useHasModule("attendance");
@@ -97,49 +105,43 @@ export default function TaskDetailScreen() {
   const policy = useWorkflowPolicy();
   const requireAreaScan = policy?.tasks.requireAreaScan ?? true;
 
+  // Changes are saved on the phone first (shown at once, sent when there is a
+  // connection), so none of this needs a signal. See features/outbox.
   async function startManually() {
-    if (!task || !state.accessToken) return;
-    try {
-      const updated = await startTask(state.accessToken, task.id);
-      dispatch({ type: "UPDATE_TASK", taskId: task.id, patch: updated });
-    } catch (error) {
-      appAlert("Could not start task", error instanceof Error ? error.message : "Please try again.");
-    }
+    if (!task || !currentUser) return;
+    await enqueueMutation({
+      userId: currentUser.id,
+      kind: "task.start",
+      taskId: task.id,
+      payload: { startedAt: new Date().toISOString() },
+    });
+    void drainQueue();
+  }
+
+  // The optional note on one checklist item (hidden until opened).
+  async function saveItemNote(itemId: string, text: string) {
+    if (!task || !currentUser) return;
+    await enqueueMutation({
+      userId: currentUser.id,
+      kind: "task.checklist",
+      taskId: task.id,
+      payload: { itemId, note: text },
+    });
+    void drainQueue();
   }
 
   async function toggleCheck(itemId: string, value: boolean | string) {
-    if (!task || !state.accessToken) return;
-    dispatch({
-      type: "UPDATE_TASK",
+    if (!task || !currentUser) return;
+    await enqueueMutation({
+      userId: currentUser.id,
+      kind: "task.checklist",
       taskId: task.id,
-      patch: {
-        checklist: task.checklist.map((item) => {
-          if (item.id !== itemId) return item;
-          const nextValue = typeof value === "string" ? value : item.value;
-          return {
-            ...item,
-            // "steps_required" mirrors the backend's own derivation
-            // (TaskController.update_checklist) - done exactly when
-            // there's real text, not a manual toggle.
-            done:
-              item.type === "steps_required"
-                ? Boolean(nextValue?.trim())
-                : typeof value === "boolean"
-                  ? value
-                  : item.done,
-            value: nextValue,
-          };
-        }),
+      payload: {
+        itemId,
+        ...(typeof value === "boolean" ? { done: value } : { value }),
       },
     });
-    try {
-      await updateChecklistItem(state.accessToken, task.id, itemId, {
-        done: typeof value === "boolean" ? value : undefined,
-        value: typeof value === "string" ? value : undefined,
-      });
-    } catch {
-      // best-effort - local optimistic update stands; next refresh will reconcile
-    }
+    void drainQueue();
   }
 
   if (!task) {
@@ -401,6 +403,16 @@ export default function TaskDetailScreen() {
                 onChange={(text) => toggleCheck(item.id, text)}
               />
             )}
+            {item.type !== "declaration" && (
+              <ItemNote
+                note={item.note}
+                editable={
+                  task.assigneeId === currentUser?.id &&
+                  ["assigned", "not_started", "in_progress", "rework_required"].includes(task.status)
+                }
+                onSave={(text) => void saveItemNote(item.id, text)}
+              />
+            )}
           </View>
         </View>
       </Card>
@@ -605,6 +617,16 @@ export default function TaskDetailScreen() {
         task={task}
         editable={task.assigneeId === currentUser?.id && ["assigned", "not_started", "in_progress", "rework_required"].includes(task.status)}
       />
+
+      {waitingPhotos > 0 && (
+        <View style={styles.infoBox}>
+          <Ionicons name="cloud-upload-outline" size={14} color={colors.info} />
+          <Text style={styles.infoLine}>
+            {waitingPhotos} photo{waitingPhotos === 1 ? "" : "s"} saved on this phone. They upload by themselves when
+            there is a connection.
+          </Text>
+        </View>
+      )}
 
       <View style={styles.actionsRow}>
         <Button

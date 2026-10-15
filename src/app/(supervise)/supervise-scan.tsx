@@ -4,6 +4,9 @@ import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, TextInput, View 
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from "expo-camera";
 import { Ionicons } from "@expo/vector-icons";
 import { Screen } from "@/components/Screen";
+import { drainQueue } from "@/features/evidenceUploader";
+import { enqueueMutation } from "@/features/outbox";
+import { resolveOfflineScan, type ScanLocation, type ScanSite, type ScanTask } from "@/domain/offlineScan";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { StatusBadge, VerifiedBadge } from "@/components/StatusBadge";
@@ -113,6 +116,62 @@ export default function SuperviseScan() {
       try {
         const coords = await getCurrentCoords();
 
+        // No connection: decide on the phone from what it holds, save the scan,
+        // and let the server re-check it when it syncs (see domain/offlineScan).
+        if (state.connectivity === "offline" && currentUser) {
+          const point = { latitude: coords?.latitude, longitude: coords?.longitude };
+          const goingOutNow = Boolean(state.attendance[currentUser.id]?.clockedInAt);
+          const outcome = resolveOfflineScan({
+            code,
+            userId: currentUser.id,
+            sites: state.sites as unknown as ScanSite[],
+            locations: state.locations as unknown as ScanLocation[],
+            tasks: state.tasks as unknown as ScanTask[],
+            clockedIn: goingOutNow,
+            coords: coords ? { latitude: coords.latitude, longitude: coords.longitude } : null,
+          });
+          if (!outcome.ok) {
+            setResult({ code, ok: false, reason: outcome.reason, accuracyMeters: coords?.accuracy ?? null });
+            return;
+          }
+          const at = new Date().toISOString();
+          if (outcome.kind === "room") {
+            if (!outcome.task) {
+              setResult({ code, ok: false, reason: "You have no task to do in this room today.", accuracyMeters: coords?.accuracy ?? null });
+              return;
+            }
+            await enqueueMutation({
+              userId: currentUser.id,
+              kind: "task.scan",
+              taskId: outcome.task.id,
+              payload: { value: code, ...point, at },
+            });
+            void drainQueue();
+            router.push(`/tasks/${outcome.task.id}`);
+            return;
+          }
+          const goingOut = outcome.direction === "out";
+          if (outcome.siteTasks.length > 0 && !skipSitePickerRef.current && (goingOut || !attendanceOn)) {
+            setSitePicker({
+              code,
+              tasks: outcome.siteTasks as unknown as Task[],
+              clockedIn: goingOut && attendanceOn,
+              ...point,
+            });
+            return;
+          }
+          skipSitePickerRef.current = false;
+          await enqueueMutation({
+            userId: currentUser.id,
+            kind: "attendance.clock",
+            payload: { direction: outcome.direction, siteId: outcome.site.id, qrValue: code, ...point, at },
+          });
+          void drainQueue();
+          setResult({ code, ok: true, siteName: outcome.site.name, clockedOut: goingOut });
+          if (!goingOut) setApproval({ siteName: outcome.site.name, at });
+          return;
+        }
+
         let resolved: Awaited<ReturnType<typeof resolveQr>>;
         try {
           resolved = await resolveQr(state.accessToken, code, coords?.latitude, coords?.longitude);
@@ -210,7 +269,17 @@ export default function SuperviseScan() {
         setScanning(false);
       }
     },
-    [state.accessToken, state.attendance, currentUser, refreshBackendData, attendanceOn],
+    [
+      state.accessToken,
+      state.attendance,
+      state.connectivity,
+      state.sites,
+      state.locations,
+      state.tasks,
+      currentUser,
+      refreshBackendData,
+      attendanceOn,
+    ],
   );
 
   const onBarcodeScanned = useCallback(
@@ -306,6 +375,24 @@ export default function SuperviseScan() {
                 loading={startingSiteTask}
                 onPress={async () => {
                   if (!state.accessToken) return;
+                  if (state.connectivity === "offline" && currentUser) {
+                    // Saved on the phone, verified by the server when it syncs.
+                    await enqueueMutation({
+                      userId: currentUser.id,
+                      kind: "task.start",
+                      taskId: task.id,
+                      payload: {
+                        qrValue: sitePicker.code,
+                        latitude: sitePicker.latitude,
+                        longitude: sitePicker.longitude,
+                        startedAt: new Date().toISOString(),
+                      },
+                    });
+                    void drainQueue();
+                    setSitePicker(null);
+                    router.push(`/tasks/${task.id}`);
+                    return;
+                  }
                   setStartingSiteTask(true);
                   try {
                     const updated = await startTaskRequest(state.accessToken, task.id, {
