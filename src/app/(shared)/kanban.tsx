@@ -10,6 +10,8 @@ import { TagChips } from "@/components/TagChip";
 import { useSmartClean } from "@/features/store";
 import { taskDestination } from "@/domain/inspections";
 import { boardColumns, filterTasks, isOverdue, tagsOf } from "@/domain/taskBoard";
+import { isOnToday } from "@/domain/todayFocus";
+import { useNow } from "@/features/useNow";
 import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 
 /**
@@ -26,13 +28,20 @@ export default function KanbanScreen() {
   const [filters, setFilters] = useTaskFilters();
   const isSupervisor = currentUser?.role === "supervisor";
   const [mineOnly, setMineOnly] = useState(!isSupervisor);
+  // Today's work by default: earlier days are locked records, not things to act
+  // on, so they only appear when asked for.
+  const [allDays, setAllDays] = useState(false);
+  const now = useNow();
 
   const tasks = useMemo(
     () =>
       state.tasks.filter(
-        (task) => !task.isHourlyCompliance && (!mineOnly || task.assigneeId === currentUser?.id),
+        (task) =>
+          !task.isHourlyCompliance &&
+          (!mineOnly || task.assigneeId === currentUser?.id) &&
+          (allDays || isOnToday(task, now)),
       ),
-    [state.tasks, mineOnly, currentUser],
+    [state.tasks, mineOnly, currentUser, allDays, now],
   );
   const nameOf = (id: string) => state.users.find((user) => user.id === id)?.name ?? "";
   const visible = useMemo(
@@ -48,6 +57,24 @@ export default function KanbanScreen() {
     <Screen title="Task board" scroll={false}>
       <View style={styles.top}>
         <TaskSearchBar filters={filters} onChange={setFilters} availableTags={tagsOf(tasks)} />
+        <View style={styles.dayRow}>
+          {[
+            { value: false, label: "Today" },
+            { value: true, label: "All days" },
+          ].map((option) => (
+            <Pressable
+              key={option.label}
+              accessibilityRole="button"
+              accessibilityState={{ selected: allDays === option.value }}
+              onPress={() => setAllDays(option.value)}
+              style={[styles.dayChip, allDays === option.value && styles.dayChipOn]}
+            >
+              <Text style={[styles.dayChipText, allDays === option.value && styles.dayChipTextOn]}>
+                {option.label}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
         {isSupervisor && (
           <View style={styles.mineRow}>
             <Switch value={mineOnly} onValueChange={setMineOnly} />
@@ -106,6 +133,17 @@ export default function KanbanScreen() {
 
 const styles = themedStyles(() => StyleSheet.create({
   top: { paddingHorizontal: spacing.lg, paddingTop: spacing.md },
+  dayRow: { flexDirection: "row", gap: 6, marginBottom: spacing.sm },
+  dayChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  dayChipOn: { backgroundColor: colors.primary, borderColor: colors.primary },
+  dayChipText: { fontSize: typography.small, fontWeight: "600", color: colors.mutedForeground },
+  dayChipTextOn: { color: colors.primaryForeground },
   mineRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginBottom: spacing.sm },
   mineText: { fontSize: typography.small, color: colors.foreground },
   board: { paddingHorizontal: spacing.lg, paddingBottom: spacing.lg, gap: spacing.md },

@@ -87,3 +87,16 @@ export function focusTasks<T extends FocusTask>(tasks: T[], now: number = Date.n
   );
   return placed.map((entry) => entry.task);
 }
+
+/**
+ * Whether a task belongs to today's work: the server locks every task outside
+ * its own day (or, for a time range, outside its window), so anything else is
+ * a record, not something to act on.
+ */
+export function isOnToday(task: FocusTask, now: number = Date.now()): boolean {
+  const start = time(task.scheduledAt);
+  const due = time(task.dueAt);
+  if (start !== null && isSameLocalDay(start, now)) return true;
+  if (start === null && due !== null && isSameLocalDay(due, now)) return true;
+  return Boolean(task.hasTimeRange) && start !== null && due !== null && now >= start && now <= due;
+}
