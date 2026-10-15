@@ -58,3 +58,15 @@ describe("focusTasks", () => {
     ]);
   });
 });
+
+describe("ranges past midnight", () => {
+  const night = { hasTimeRange: true, scheduledAt: iso("20:00"), dueAt: new Date("2026-10-16T02:00:00").toISOString() };
+  const late = (hhmm: string) => new Date(`2026-10-16T${hhmm}:00`).getTime();
+  it("is on the list from an hour before it starts until it ends, across midnight", () => {
+    expect(focusGroup(task("a", night), at("18:30"))).toBeNull();
+    expect(focusGroup(task("a", night), at("19:30"))).toBe("soon");
+    expect(focusGroup(task("a", night), at("23:30"))).toBe("now");
+    expect(focusGroup(task("a", night), late("01:00"))).toBe("now");
+    expect(focusGroup(task("a", night), late("03:00"))).toBe("overdue");
+  });
+});

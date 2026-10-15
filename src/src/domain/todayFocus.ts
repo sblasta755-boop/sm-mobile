@@ -49,15 +49,18 @@ export function focusGroup(task: FocusTask, now: number): FocusGroup | null {
 
   const start = time(task.scheduledAt);
   const due = time(task.dueAt);
-  const anchor = due ?? start;
-  if (anchor === null || !isSameLocalDay(anchor, now)) return null;
 
+  // A time range is judged by its window, so one that runs past midnight
+  // (20:00 to 02:00) is on the list the whole time it is open.
   if (task.hasTimeRange && start !== null) {
     if (now < start - LEAD_MS) return null;
     if (now < start) return "soon";
-    if (due !== null && now > due) return "overdue";
+    if (due !== null && now > due) return isSameLocalDay(due, now) ? "overdue" : null;
     return "now";
   }
+
+  const anchor = due ?? start;
+  if (anchor === null || !isSameLocalDay(anchor, now)) return null;
   // Only a deadline: it can be done any time today, and is late once that passes.
   if (due !== null && now > due) return "overdue";
   return "now";
