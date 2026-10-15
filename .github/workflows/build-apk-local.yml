@@ -183,6 +183,12 @@ jobs:
         id: public
         if: ${{ vars.RELEASES_REPO != '' }}
         run: |
+          # Accept "owner/repo", or a pasted URL such as
+          # https://github.com/owner/repo.git, and reduce it to owner/repo.
+          RELEASES_REPO="${RELEASES_REPO#https://github.com/}"
+          RELEASES_REPO="${RELEASES_REPO#http://github.com/}"
+          RELEASES_REPO="${RELEASES_REPO%.git}"
+          RELEASES_REPO="${RELEASES_REPO%/}"
           tag="build-${{ github.run_number }}"
           gh release create "$tag" "${{ steps.apk.outputs.name }}" \
             --repo "$RELEASES_REPO" \
