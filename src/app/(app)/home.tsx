@@ -120,6 +120,8 @@ export default function HomeScreen() {
     }
   }
   const canClockWithoutScan = canManualClock || canGeofenceClock;
+  // No card at all when this organisation does not clock people in this way.
+  const showShiftCard = hasAttendance && ((canScanClock && hasQr) || canClockWithoutScan);
 
   return (
     <Screen
@@ -127,7 +129,7 @@ export default function HomeScreen() {
         <DateStrip today={today} selectedDate={selectedDate} onSelect={setSelectedDate} />
       }
     >
-      {hasAttendance && (
+      {showShiftCard && (
       <Card padded={false} style={styles.shiftCard}>
         <ImageBackground
           source={

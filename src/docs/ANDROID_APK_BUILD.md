@@ -101,6 +101,30 @@ Add repository **variables** (Settings → Secrets and variables → Actions →
 
 These are the same names the EAS workflow and the backend use, so existing values work as-is.
 
-If the repository is **private**, the link asks the recipient to sign in to GitHub (they need
-access to the repo). For a link that opens for anyone, the APK would have to be hosted elsewhere
-(e.g. an S3/R2 bucket) - not done here.
+If the repository is **private**, the GitHub release link only opens for people with access to
+the repo. Section 6 hosts the APK publicly instead, and the email then links there.
+
+## 6. In-app updates (public releases repo)
+
+Installed apps check the backend for the newest build, show an "Update available" card on the
+Profile tab plus a one-time prompt, and a platform operator can set a minimum supported build
+below which the app asks for the update before use. Android cannot install silently: tapping
+**Update now** downloads the APK and the system installer asks for one confirmation (the first
+time, the browser also needs "Install unknown apps" allowed).
+
+This repository is private, so the APK is also published as a release on a separate **public**
+repo that holds nothing but APKs. One-time setup:
+
+1. Create an empty public repo, e.g. `yourname/soma360-releases`.
+2. Create a fine-grained personal access token limited to that repo with **Contents: Read and write**.
+3. Backend `.env`: set `APP_RELEASE_TOKEN` to a long random string (`openssl rand -hex 32`), run
+   the migration and restart.
+4. In this repo's Actions settings add secrets `RELEASES_REPO_TOKEN` (the token from step 2) and
+   `APP_RELEASE_TOKEN` (same value as the backend), and the variable `RELEASES_REPO`
+   (`yourname/soma360-releases`).
+
+Each build is then released there as `build-<run number>` and registered at
+`POST /api/v1/app/releases`; the download email links to it too. Builds must keep the same
+signing key and a higher version code (the run number) to install over the old one. Until
+`RELEASES_REPO` is set the step is skipped and nothing changes. To force an update, use
+Platform > App releases > "Require this build or newer".

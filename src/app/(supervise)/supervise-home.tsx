@@ -12,7 +12,7 @@ import { ActionTiles } from "@/components/ActionTiles";
 import { StatusBadge } from "@/components/StatusBadge";
 import { TaskRow } from "@/components/TaskRow";
 import { useSmartClean } from "@/features/store";
-import { useHasModule } from "@/features/modules";
+import { useHasCapability, useHasModule } from "@/features/modules";
 import { toneForTask, humanStatus } from "@/domain/status";
 import { taskDestination } from "@/domain/inspections";
 import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
@@ -30,6 +30,9 @@ export default function SuperviseHome() {
   useThemeVersion(); // re-render with the new colours when the theme changes
   const { state, currentUser } = useSmartClean();
   const wayfindingOn = useHasModule("wayfinding");
+  const hasAttendance = useHasModule("attendance");
+  const canScanClock = useHasCapability("qr_attendance");
+  const hasQr = useHasCapability("qr_codes");
   const hasInspections = useHasModule("inspections");
   const hasCorrectiveActions = useHasModule("corrective_actions");
   const hasHourlyCompliance = useHasModule("hourly_compliance");
@@ -85,7 +88,7 @@ export default function SuperviseHome() {
 
   return (
     <Screen title="Today">
-      {!noSites && (
+      {!noSites && hasAttendance && canScanClock && hasQr && (
         <Card padded={false} style={styles.shiftCard}>
           <View style={styles.shiftOverlay}>
             <View style={styles.shiftTopRow}>

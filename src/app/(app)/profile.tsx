@@ -6,6 +6,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { Screen } from "@/components/Screen";
 import { Card } from "@/components/Card";
+import { UpdateBanner } from "@/components/UpdateBanner";
 import { Button } from "@/components/Button";
 import { StatusBadge } from "@/components/StatusBadge";
 import { BrokenGlassIcon } from "@/components/BrokenGlassIcon";
@@ -89,6 +90,7 @@ export default function ProfileScreen() {
 
   return (
     <Screen title="Profile">
+      <UpdateBanner />
       <Card style={styles.profileCard}>
         <Pressable
           style={styles.avatarWrap}

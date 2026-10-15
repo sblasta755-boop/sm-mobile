@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Screen } from "@/components/Screen";
 import { Card } from "@/components/Card";
+import { UpdateBanner } from "@/components/UpdateBanner";
 import { Button } from "@/components/Button";
 import { AppearanceRow, ReportsRow } from "@/components/ProfilePreferences";
 import { BiometricLockRow } from "@/components/BiometricLockRow";
@@ -28,6 +29,7 @@ export default function SuperviseProfile() {
 
   return (
     <Screen title="Profile">
+      <UpdateBanner />
       <Card style={styles.identityCard}>
         <View style={styles.avatar}>
           <Text style={styles.avatarText}>{currentUser?.initials ?? "?"}</Text>

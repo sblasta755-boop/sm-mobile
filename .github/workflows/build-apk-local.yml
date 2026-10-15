@@ -174,13 +174,45 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
 
+      # Public hosting: this repository is private, so its release link only
+      # opens for members. The APK is also published as a release on a separate
+      # PUBLIC repo (variable RELEASES_REPO, token secret RELEASES_REPO_TOKEN),
+      # and the build is registered with the backend so installed apps can offer
+      # it. Skipped until RELEASES_REPO is set; see src/docs/ANDROID_APK_BUILD.md.
+      - name: Publish to the public releases repo and register the build
+        id: public
+        if: ${{ vars.RELEASES_REPO != '' }}
+        run: |
+          tag="build-${{ github.run_number }}"
+          gh release create "$tag" "${{ steps.apk.outputs.name }}" \
+            --repo "$RELEASES_REPO" \
+            --title "Šoma360 ${{ steps.apk.outputs.version }} (build ${{ github.run_number }})" \
+            --notes "Signed release APK."
+          url="https://github.com/$RELEASES_REPO/releases/download/$tag/${{ steps.apk.outputs.name }}"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          if [ -n "$APP_RELEASE_TOKEN" ] && [ -n "$EXPO_PUBLIC_API_BASE_URL" ]; then
+            notes="$(printf '%s' "$COMMIT_MESSAGE" | head -n 12)"
+            jq -n --arg code "${{ github.run_number }}" --arg name "$APP_VERSION_NAME" \
+              --arg url "$url" --arg notes "$notes" \
+              '{platform:"android",versionCode:($code|tonumber),versionName:$name,downloadUrl:$url,notes:$notes}' \
+              | curl -fsS -X POST "${EXPO_PUBLIC_API_BASE_URL%/}/app/releases" \
+                  -H "Content-Type: application/json" -H "X-Release-Token: $APP_RELEASE_TOKEN" -d @-
+          else
+            echo "::warning::APP_RELEASE_TOKEN or EXPO_PUBLIC_API_BASE_URL is not set, so the build was published but not registered for in-app updates."
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.RELEASES_REPO_TOKEN }}
+          RELEASES_REPO: ${{ vars.RELEASES_REPO }}
+          APP_RELEASE_TOKEN: ${{ secrets.APP_RELEASE_TOKEN }}
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+
       - name: Email the download link
         if: ${{ vars.MAIL_TO != '' }}
         run: |
           npm install --no-save nodemailer
           node scripts/send-build-email.mjs
         env:
-          APK_URL: ${{ steps.release.outputs.url }}
+          APK_URL: ${{ steps.public.outputs.url || steps.release.outputs.url }}
           APK_NAME: ${{ steps.apk.outputs.name }}
           APK_SIZE_MB: ${{ steps.apk.outputs.size }}
           APP_VERSION: ${{ steps.apk.outputs.version }}

@@ -5,6 +5,8 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { SmartCleanProvider } from "@/features/store";
 import { ThemeProvider, useTheme } from "@/theme";
 import { DialogHost } from "@/components/Dialog";
+import { UpdateRequiredGate } from "@/components/UpdateBanner";
+import { useAppUpdateWatcher } from "@/features/appUpdate";
 import { usePushRegistration } from "@/features/pushNotifications";
 import { useDeviceHealthReporting } from "@/features/deviceHealth";
 import { useEvidenceUploader } from "@/features/evidenceUploader";
@@ -24,6 +26,7 @@ export default function RootLayout() {
           <PushNotificationsBridge />
           <ThemedStatusBar />
           <Stack screenOptions={{ headerShown: false }} />
+          <UpdateRequiredGate />
           <DialogHost />
         </SmartCleanProvider>
       </ThemeProvider>
@@ -39,6 +42,8 @@ function PushNotificationsBridge() {
   useDeviceHealthReporting();
   // Uploads photos taken offline, in the background, as soon as there is a connection.
   useEvidenceUploader();
+  // Looks for a newer app build at launch, on resume and when back online.
+  useAppUpdateWatcher();
   return null;
 }
 
