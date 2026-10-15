@@ -243,3 +243,4 @@ jobs:
       - name: Warn when no email is configured
         if: ${{ vars.MAIL_TO == '' }}
         run: echo "::warning::MAIL_TO is not set, so no download email was sent. The APK is under Artifacts and in the build-${{ github.run_number }} release."
+ 
