@@ -17,6 +17,10 @@ describe("focusGroup", () => {
       expect(focusGroup(task("a", { status }), now)).toBeNull();
     }
   });
+  it("drops work left under way on an earlier day (the server has locked it)", () => {
+    const yesterday = new Date("2026-10-14T08:00:00").toISOString();
+    expect(focusGroup(task("a", { status: "in_progress", scheduledAt: yesterday, dueAt: yesterday }), now)).toBeNull();
+  });
   it("keeps work under way", () => {
     expect(focusGroup(task("a", { status: "in_progress", dueAt: iso("09:00") }), now)).toBe("under_way");
     expect(focusGroup(task("a", { status: "rework_required" }), now)).toBe("under_way");

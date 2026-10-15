@@ -44,11 +44,17 @@ function isSameLocalDay(a: number, b: number): boolean {
  */
 export function focusGroup(task: FocusTask, now: number): FocusGroup | null {
   if (!OPEN.has(task.status)) return null;
-  // Work already under way stays until it is handed in, whatever day it began.
-  if (UNDER_WAY.has(task.status)) return "under_way";
-
   const start = time(task.scheduledAt);
   const due = time(task.dueAt);
+
+  // Work already under way stays until it is handed in, but only while it can
+  // still be worked: tasks belong to their own day (the server locks them after
+  // it), so one left over from an earlier day is not something to do now.
+  if (UNDER_WAY.has(task.status)) {
+    const onItsDay = start !== null && isSameLocalDay(start, now);
+    const insideItsRange = Boolean(task.hasTimeRange) && start !== null && due !== null && now >= start && now <= due;
+    return onItsDay || insideItsRange ? "under_way" : null;
+  }
 
   // A time range is judged by its window, so one that runs past midnight
   // (20:00 to 02:00) is on the list the whole time it is open.
