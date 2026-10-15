@@ -53,3 +53,19 @@ export function strokesToPath(strokes: Stroke[]): string {
     .map((s) => "M" + s.points.map(([x, y]) => `${x.toFixed(1)} ${y.toFixed(1)}`).join(" L"))
     .join(" ");
 }
+
+
+/** The wording around the name field. When the name has to match the account,
+ * the account name is shown as the thing to type; when it does not, the person
+ * is just asked to type their own full name. */
+export function nameFieldCopy(args: {
+  mode: SignoffMode;
+  requireNameMatch: boolean;
+  accountName?: string | null;
+}): { label: string; placeholder: string } {
+  const label = args.mode === "name" ? "Sign with your name" : "Your name";
+  if (args.requireNameMatch && args.accountName) {
+    return { label, placeholder: `Type "${args.accountName}" to sign` };
+  }
+  return { label, placeholder: "Type your full name" };
+}

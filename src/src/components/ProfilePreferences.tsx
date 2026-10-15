@@ -63,6 +63,20 @@ export function ReportsRow() {
   );
 }
 
+/** A row that opens the feedback screen (a message and photos to the Šoma360 team). */
+export function FeedbackRow() {
+  return (
+    <Pressable style={styles.linkRow} onPress={() => router.push("/feedback")}>
+      <Ionicons name="chatbubble-ellipses-outline" size={18} color={colors.foreground} />
+      <View style={styles.linkText}>
+        <Text style={styles.title}>Send feedback</Text>
+        <Text style={styles.sub}>Report a problem or share an idea</Text>
+      </View>
+      <Ionicons name="chevron-forward" size={16} color={colors.mutedForeground} />
+    </Pressable>
+  );
+}
+
 const styles = themedStyles(() =>
   StyleSheet.create({
     block: { paddingVertical: spacing.sm, gap: spacing.sm },

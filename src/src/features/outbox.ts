@@ -80,6 +80,8 @@ export async function enqueueMutation(input: {
 export async function updateMutation(id: string, patch: Partial<OutboxMutation>) {
   items = items.map((m) => (m.id === id ? { ...m, ...patch } : m));
   emit();
+  // "Sending" is not worth a disk write: a restart reverts it to pending anyway.
+  if (Object.keys(patch).length === 1 && patch.status === "sending") return;
   await persist();
 }
 

@@ -18,6 +18,7 @@ import { appAlert } from "@/components/Dialog";
 import { SignatureDrawer, type SignatureResult } from "@/components/SignatureDrawer";
 import {
   signaturePayload,
+  nameFieldCopy,
   signoffProblems,
   strokesToPath,
   wantsName,
@@ -47,6 +48,7 @@ export default function DeclarationScreen() {
 
   const mode = policy?.tasks.signoffMode ?? "name";
   const requireNameMatch = policy?.tasks.signoffRequireNameMatch ?? true;
+  const nameCopy = nameFieldCopy({ mode, requireNameMatch, accountName: currentUser?.name });
   const problems = signoffProblems({
     mode,
     requireNameMatch,
@@ -125,10 +127,10 @@ export default function DeclarationScreen() {
         </View>
         {wantsName(mode) && (
           <View style={styles.signatureField}>
-            <Text style={styles.signatureLabel}>{mode === "name" ? "Signature" : "Your name"}</Text>
+            <Text style={styles.signatureLabel}>{nameCopy.label}</Text>
             <TextInput
               style={styles.signatureInput}
-              placeholder={currentUser?.name ? `Type "${currentUser.name}" to sign` : "Type your full name"}
+              placeholder={nameCopy.placeholder}
               placeholderTextColor={colors.mutedForeground}
               value={signature}
               onChangeText={setSignature}

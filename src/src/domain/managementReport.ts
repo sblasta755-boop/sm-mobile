@@ -10,6 +10,7 @@
 // rather than printing a reassuring default.
 
 import type { ChecklistItem, Evidence, Inspection, Task } from "@/types/smartclean";
+import { evidenceByItem } from "./evidenceByItem";
 
 export interface ReportUser {
   id: string;
@@ -202,8 +203,10 @@ function locationProof(task: Task): string {
 
 function buildChecks(task: Task): { checks: ReportCheck[]; taskPhotos: Evidence[] } {
   const owned = new Set<string>();
+  // Each item's photos in reading order: before, then after, oldest first.
+  const { byItem } = evidenceByItem(task.checklist, task.evidence);
   const checks: ReportCheck[] = task.checklist.filter(countable).map((item) => {
-    const photos = item.type === "photo_required" ? task.evidence.filter((e) => e.checklistItemId === item.id) : [];
+    const photos = item.type === "photo_required" ? (byItem[item.id] ?? []) : [];
     photos.forEach((p) => owned.add(p.id));
     const photoStatus =
       item.type !== "photo_required"

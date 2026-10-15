@@ -13,6 +13,7 @@ import { fileUrl } from "@/api/client";
 import { drainQueue } from "@/features/evidenceUploader";
 import { enqueueMutation } from "@/features/outbox";
 import { groupChecklist, isSectioned } from "@/domain/checklistSections";
+import { evidenceByItem } from "@/domain/evidenceByItem";
 import {
   canInspectRole,
   canReviewSupervisorTask,
@@ -115,17 +116,44 @@ export default function InspectionScreen() {
       ],
     );
 
+  // Each photo sits under the checklist item it proves; the rest are "Other photos".
+  const { byItem, loose } = evidenceByItem(task.checklist, task.evidence);
+  const caption = (e: { kind: string; label: string }) =>
+    e.kind === "before" ? "Before" : e.kind === "after" ? "After" : e.label || e.kind;
+  const thumb = (e: (typeof task.evidence)[number]) => {
+    const uri = fileUrl(e.filePath) ?? e.uri;
+    return (
+      <Pressable
+        key={e.id}
+        disabled={!uri}
+        accessibilityLabel={`View ${caption(e)} photo full size`}
+        onPress={() => uri && setViewing({ uri, label: caption(e) })}
+        style={styles.thumbWrap}
+      >
+        {uri ? <Image source={{ uri }} style={styles.thumb} /> : <View style={[styles.thumb, styles.thumbEmpty]} />}
+        <Text style={styles.thumbLabel} numberOfLines={2}>
+          {caption(e)}
+        </Text>
+        {e.duplicateOf && <Text style={styles.dup}>Possible duplicate</Text>}
+      </Pressable>
+    );
+  };
+
   const row = (item: ChecklistItem) => (
-    <View key={item.id} style={styles.checkRow}>
-      <Ionicons
-        name={item.done ? "checkmark-circle" : "ellipse-outline"}
-        size={16}
-        color={item.done ? colors.success : colors.mutedForeground}
-      />
-      <View style={styles.flex}>
-        <Text style={[styles.checkLabel, !item.done && styles.muted]}>{item.label}</Text>
-        {!!item.value && <Text style={styles.checkValue}>&ldquo;{item.value}&rdquo;</Text>}
+    <View key={item.id} style={styles.checkBlock}>
+      <View style={styles.checkRow}>
+        <Ionicons
+          name={item.done ? "checkmark-circle" : "ellipse-outline"}
+          size={16}
+          color={item.done ? colors.success : colors.mutedForeground}
+        />
+        <View style={styles.flex}>
+          <Text style={[styles.checkLabel, !item.done && styles.muted]}>{item.label}</Text>
+          {!!item.value && <Text style={styles.checkValue}>&ldquo;{item.value}&rdquo;</Text>}
+          {!!item.note && <Text style={styles.checkValue}>Note: {item.note}</Text>}
+        </View>
       </View>
+      {(byItem[item.id] ?? []).length > 0 && <View style={styles.itemThumbs}>{byItem[item.id].map(thumb)}</View>}
     </View>
   );
 
@@ -177,34 +205,12 @@ export default function InspectionScreen() {
           : task.checklist.map(row)}
       </Card>
 
-      <Text style={styles.sectionTitle}>Evidence ({task.evidence.length})</Text>
-      {task.evidence.length === 0 ? (
-        <Text style={styles.muted}>No evidence was captured.</Text>
-      ) : (
-        <View style={styles.thumbs}>
-          {task.evidence.map((e) => {
-            const uri = fileUrl(e.filePath) ?? e.uri;
-            return (
-              <Pressable
-                key={e.id}
-                disabled={!uri}
-                accessibilityLabel={`View ${e.label} full size`}
-                onPress={() => uri && setViewing({ uri, label: e.label })}
-                style={styles.thumbWrap}
-              >
-                {uri ? (
-                  <Image source={{ uri }} style={styles.thumb} />
-                ) : (
-                  <View style={[styles.thumb, styles.thumbEmpty]} />
-                )}
-                <Text style={styles.thumbLabel} numberOfLines={2}>
-                  {e.label}
-                </Text>
-                {e.duplicateOf && <Text style={styles.dup}>Possible duplicate</Text>}
-              </Pressable>
-            );
-          })}
-        </View>
+      {task.evidence.length === 0 && <Text style={styles.muted}>No evidence was captured.</Text>}
+      {loose.length > 0 && (
+        <>
+          <Text style={styles.sectionTitle}>Other photos ({loose.length})</Text>
+          <View style={styles.thumbs}>{loose.map(thumb)}</View>
+        </>
       )}
 
       {decided ? (
@@ -330,6 +336,8 @@ const styles = themedStyles(() => StyleSheet.create({
   groupHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   groupTitle: { fontSize: typography.small, fontWeight: "700", color: colors.foreground },
   done: { fontSize: typography.small, fontWeight: "600", color: colors.success },
+  checkBlock: { gap: spacing.xs },
+  itemThumbs: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, paddingLeft: 24, paddingBottom: spacing.xs },
   checkRow: { flexDirection: "row", alignItems: "flex-start", gap: spacing.sm },
   checkLabel: { fontSize: typography.small, color: colors.foreground },
   checkValue: { fontSize: typography.small, fontStyle: "italic", color: colors.mutedForeground },

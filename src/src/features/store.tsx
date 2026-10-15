@@ -567,7 +567,12 @@ export function SmartCleanProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!state.sessionRestored) return;
     const { accessToken: _accessToken, refreshToken: _refreshToken, authExpiresAt: _authExpiresAt, sessionRestored: _sessionRestored, locked: _locked, ...persistable } = state;
-    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(persistable));
+    // Serialising every task on each change blocked the JS thread long enough
+    // to make a tick on a checklist item feel slow. Wait until changes settle.
+    const timer = setTimeout(() => {
+      AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(persistable)).catch(() => {});
+    }, 1000);
+    return () => clearTimeout(timer);
   }, [state]);
 
   const currentUser = state.users.find((user) => user.id === state.currentUserId);

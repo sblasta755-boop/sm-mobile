@@ -10,7 +10,7 @@ import { UpdateBanner } from "@/components/UpdateBanner";
 import { Button } from "@/components/Button";
 import { StatusBadge } from "@/components/StatusBadge";
 import { BrokenGlassIcon } from "@/components/BrokenGlassIcon";
-import { AppearanceRow, ReportsRow } from "@/components/ProfilePreferences";
+import { AppearanceRow, FeedbackRow, ReportsRow } from "@/components/ProfilePreferences";
 import { BiometricLockRow } from "@/components/BiometricLockRow";
 import { useSmartClean } from "@/features/store";
 import { useCanManageSiteLayout } from "@/features/roles";
@@ -177,6 +177,7 @@ export default function ProfileScreen() {
           <BiometricLockRow />
           <ReportsRow />
           <AppearanceRow />
+        <FeedbackRow />
         </Card>
       </View>
 

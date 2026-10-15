@@ -212,6 +212,8 @@ export interface Task {
   // backend (camel_task's scheduledAt) but this type never declared it
   // until DateStrip's selectedDate started actually filtering the
   // assigned-tasks list on Home (see app/(app)/home.tsx).
+  /** When the task was created (sent by the backend; absent in older cached state). */
+  createdAt?: string;
   scheduledAt: string;
   dueTime: string;
   estimatedMinutes: number;

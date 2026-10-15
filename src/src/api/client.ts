@@ -1514,3 +1514,23 @@ export function listWayfindingEdges(accessToken: string, siteId: string) {
     accessToken,
   );
 }
+
+// ---- Feedback ----
+
+export interface FeedbackPayload {
+  category: "bug" | "idea" | "question" | "other";
+  message: string;
+  /** Paths from uploadImage, at most five. */
+  filePaths: string[];
+  appVersion?: string;
+  platform?: string;
+}
+
+/** Emails the platform operators (server side: ADMIN_ALERT_EMAILS). */
+export function sendFeedback(accessToken: string, payload: FeedbackPayload) {
+  return request<{ sent: boolean; photosAttached: number; photosSkipped: number }>(
+    "/feedback",
+    { method: "POST", body: JSON.stringify(payload) },
+    accessToken,
+  );
+}

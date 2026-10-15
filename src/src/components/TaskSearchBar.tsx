@@ -1,7 +1,13 @@
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { filtersActive, NO_FILTERS, type PriorityFilter, type TaskFilters } from "@/domain/taskBoard";
+import {
+  filtersActive,
+  NO_FILTERS,
+  TASK_SORT_OPTIONS,
+  type PriorityFilter,
+  type TaskFilters,
+} from "@/domain/taskBoard";
 import { useSmartClean } from "@/features/store";
 import { tagStyle } from "@/domain/tagColors";
 import { colors, radius, spacing, typography, themedStyles } from "@/theme";
@@ -33,7 +39,10 @@ export function TaskSearchBar({
   const { state } = useSmartClean();
   const [open, setOpen] = useState(false);
   const activeCount =
-    (filters.priority !== "all" ? 1 : 0) + (filters.overdueOnly ? 1 : 0) + filters.tags.length;
+    (filters.priority !== "all" ? 1 : 0) +
+    (filters.overdueOnly ? 1 : 0) +
+    filters.tags.length +
+    (filters.sort !== "default" ? 1 : 0);
   const toggleTag = (tag: string) =>
     onChange({
       ...filters,
@@ -81,6 +90,24 @@ export function TaskSearchBar({
 
       {open && (
         <View style={styles.panel}>
+          <Text style={styles.groupLabel}>Sort by</Text>
+          <View style={styles.chips}>
+            {TASK_SORT_OPTIONS.map((option) => {
+              const selected = filters.sort === option.value;
+              return (
+                <Pressable
+                  key={option.value}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected }}
+                  onPress={() => onChange({ ...filters, sort: option.value })}
+                  style={[styles.chip, selected && styles.chipOn]}
+                >
+                  <Text style={[styles.chipText, selected && styles.chipTextOn]}>{option.label}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          <Text style={styles.groupLabel}>Filter</Text>
           <View style={styles.chips}>
             {PRIORITIES.map((option) => {
               const selected = filters.priority === option.value;
@@ -191,6 +218,7 @@ const styles = themedStyles(() => StyleSheet.create({
     borderRadius: radius.md,
     backgroundColor: colors.card,
   },
+  groupLabel: { fontSize: typography.small, fontWeight: "700", color: colors.mutedForeground },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   chip: {
     paddingHorizontal: 12,

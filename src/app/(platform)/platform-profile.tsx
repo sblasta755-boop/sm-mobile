@@ -5,7 +5,7 @@ import { Screen } from "@/components/Screen";
 import { Card } from "@/components/Card";
 import { UpdateBanner } from "@/components/UpdateBanner";
 import { Button } from "@/components/Button";
-import { AppearanceRow } from "@/components/ProfilePreferences";
+import { AppearanceRow, FeedbackRow } from "@/components/ProfilePreferences";
 import { BiometricLockRow } from "@/components/BiometricLockRow";
 import { useSmartClean } from "@/features/store";
 import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
@@ -74,6 +74,7 @@ export default function PlatformProfile() {
         </Pressable>
         <BiometricLockRow />
         <AppearanceRow />
+        <FeedbackRow />
       </Card>
 
       <Button variant="outline" onPress={handleSignOut}>

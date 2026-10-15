@@ -8,9 +8,71 @@ export interface BoardTask {
   priority?: string;
   locationName?: string | null;
   dueAt?: string | null;
+  scheduledAt?: string | null;
+  createdAt?: string | null;
   isSupervisorTask?: boolean;
   isSiteWide?: boolean;
   tags?: string[];
+}
+
+export type TaskSort =
+  | "default"
+  | "due_asc"
+  | "due_desc"
+  | "created_desc"
+  | "created_asc"
+  | "title_asc"
+  | "title_desc"
+  | "priority";
+
+/** The orders a task list can be put in; "default" keeps the list as it came. */
+export const TASK_SORT_OPTIONS: { value: TaskSort; label: string }[] = [
+  { value: "default", label: "Default order" },
+  { value: "due_asc", label: "Due soonest" },
+  { value: "due_desc", label: "Due latest" },
+  { value: "created_desc", label: "Newest first" },
+  { value: "created_asc", label: "Oldest first" },
+  { value: "title_asc", label: "A to Z" },
+  { value: "title_desc", label: "Z to A" },
+  { value: "priority", label: "Priority" },
+];
+
+const PRIORITY_RANK: Record<string, number> = { high: 0, medium: 1, low: 2 };
+
+function time(value?: string | null): number | null {
+  if (!value) return null;
+  const t = new Date(value).getTime();
+  return Number.isNaN(t) ? null : t;
+}
+
+/** A sorted copy. Tasks missing the sorted-on value go last; ties keep their order. */
+export function sortTasks<T extends BoardTask>(tasks: T[], sort: TaskSort): T[] {
+  if (sort === "default") return tasks;
+  const due = (t: T) => time(t.dueAt ?? t.scheduledAt);
+  const created = (t: T) => time(t.createdAt);
+  const withNullsLast = (get: (t: T) => number | null, dir: 1 | -1) => (a: T, b: T) => {
+    const x = get(a);
+    const y = get(b);
+    if (x === null && y === null) return 0;
+    if (x === null) return 1;
+    if (y === null) return -1;
+    return (x - y) * dir;
+  };
+  const byTitle = (dir: 1 | -1) => (a: T, b: T) =>
+    a.title.localeCompare(b.title, undefined, { sensitivity: "base" }) * dir;
+  const compare: Record<Exclude<TaskSort, "default">, (a: T, b: T) => number> = {
+    due_asc: withNullsLast(due, 1),
+    due_desc: withNullsLast(due, -1),
+    created_desc: withNullsLast(created, -1),
+    created_asc: withNullsLast(created, 1),
+    title_asc: byTitle(1),
+    title_desc: byTitle(-1),
+    priority: (a, b) =>
+      (PRIORITY_RANK[a.priority ?? ""] ?? 3) - (PRIORITY_RANK[b.priority ?? ""] ?? 3) ||
+      withNullsLast(due, 1)(a, b),
+  };
+  // Array.sort is stable, so equal tasks keep the order they had.
+  return [...tasks].sort(compare[sort]);
 }
 
 export type PriorityFilter = "all" | "high" | "medium" | "low";
@@ -22,12 +84,14 @@ export interface TaskFilters {
   overdueOnly: boolean;
   /** Tasks carrying ANY of these tags (compared ignoring case); empty means all. */
   tags: string[];
+  /** How the list is ordered. */
+  sort: TaskSort;
 }
 
-export const NO_FILTERS: TaskFilters = { query: "", priority: "all", overdueOnly: false, tags: [] };
+export const NO_FILTERS: TaskFilters = { query: "", priority: "all", overdueOnly: false, tags: [], sort: "default" };
 
 export function filtersActive(filters: TaskFilters): boolean {
-  return filters.query.trim() !== "" || filters.priority !== "all" || filters.overdueOnly || filters.tags.length > 0;
+  return filters.query.trim() !== "" || filters.priority !== "all" || filters.overdueOnly || filters.tags.length > 0 || filters.sort !== "default";
 }
 
 const FINISHED = new Set(["approved", "closed", "cancelled"]);
@@ -75,13 +139,14 @@ export function filterTasks<T extends BoardTask>(
   extra: (task: T) => string = () => "",
   now: Date = new Date(),
 ): T[] {
-  return tasks.filter(
+  const matching = tasks.filter(
     (task) =>
       matchesQuery(task, filters.query, extra(task)) &&
       (filters.priority === "all" || task.priority === filters.priority) &&
       (!filters.overdueOnly || isOverdue(task, now)) &&
       hasAnyTag(task, filters.tags),
   );
+  return sortTasks(matching, filters.sort);
 }
 
 export interface BoardColumn {
