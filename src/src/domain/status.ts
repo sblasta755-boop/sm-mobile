@@ -18,6 +18,7 @@ export function toneForTask(status: TaskStatus): StatusTone {
     case "rework_required":
       return "warning";
     case "cancelled":
+    case "failed":
       return "destructive";
     default:
       return "neutral";

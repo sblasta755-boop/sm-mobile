@@ -119,6 +119,7 @@ export type TaskStatus =
   | "resubmitted"
   | "approved"
   | "closed"
+  | "failed"
   | "cancelled";
 
 export type InspectionStatus =

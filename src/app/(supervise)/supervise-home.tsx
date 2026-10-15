@@ -6,6 +6,8 @@ import { Screen } from "@/components/Screen";
 import { ActiveFiltersBar } from "@/components/ActiveFiltersBar";
 import { useTaskFilters } from "@/features/taskFilters";
 import { filterTasks } from "@/domain/taskBoard";
+import { focusTasks } from "@/domain/todayFocus";
+import { useNow } from "@/features/useNow";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { ActionTiles } from "@/components/ActionTiles";
@@ -53,14 +55,13 @@ export default function SuperviseHome() {
 
   // Tasks a manager gave THIS person to do (a "supervisor task"), as opposed
   // to work submitted by others waiting on their review.
+  // Only what can be acted on now, most pressing first: work under way, then
+  // what is overdue, then what is due or starting soon. Finished work and tasks
+  // for later stay off it (the full list is under "View all").
+  const now = useNow();
   const myTasks = useMemo(
-    () =>
-      state.tasks.filter(
-        (task) =>
-          task.assigneeId === currentUser?.id &&
-          ["assigned", "not_started", "in_progress", "rework_required"].includes(task.status),
-      ),
-    [state.tasks, currentUser],
+    () => focusTasks(state.tasks.filter((task) => task.assigneeId === currentUser?.id), now),
+    [state.tasks, currentUser, now],
   );
 
   // The filters set on the task lists apply here too, until they are changed.
@@ -171,7 +172,7 @@ export default function SuperviseHome() {
       {myTasks.length > 0 && (
         <>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>My tasks</Text>
+            <Text style={styles.sectionTitle}>Do now</Text>
             <Pressable accessibilityRole="button" onPress={() => router.push("/my-tasks")}>
               <Text style={styles.link}>View all</Text>
             </Pressable>

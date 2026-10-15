@@ -11,6 +11,8 @@ import { ActionTiles } from "@/components/ActionTiles";
 import { ActiveFiltersBar } from "@/components/ActiveFiltersBar";
 import { useTaskFilters } from "@/features/taskFilters";
 import { filterTasks } from "@/domain/taskBoard";
+import { focusTasks } from "@/domain/todayFocus";
+import { useNow } from "@/features/useNow";
 import { ProgressBar } from "@/components/ProgressBar";
 import { StatusBadge } from "@/components/StatusBadge";
 import { TaskRow } from "@/components/TaskRow";
@@ -82,7 +84,13 @@ export default function HomeScreen() {
   const done = myTasks.filter((t) => ["approved", "closed"].includes(t.status)).length;
   // The filters set on the task lists apply to this list too, until they are changed.
   const [taskFilters] = useTaskFilters();
-  const shownTasks = filterTasks(myTasks, taskFilters);
+  // For today, the list is what can be acted on right now, most pressing first
+  // (work under way, overdue, then due or starting soon); finished work and
+  // tasks for later stay off it. Another day picked on the strip lists that day.
+  const now = useNow();
+  const viewingToday = isSameDay(selectedDate, today);
+  const focus = viewingToday ? focusTasks(allMyTasks, now) : myTasks;
+  const shownTasks = filterTasks(focus, taskFilters);
   const openCA = state.correctiveActions.filter(
     (c) => c.assigneeId === currentUser?.id && c.status !== "closed",
   );
@@ -218,7 +226,7 @@ export default function HomeScreen() {
 
       <View style={styles.sectionHeaderRow}>
         <Text style={styles.sectionTitle}>
-          Assigned tasks
+          {viewingToday ? "Do now" : "Assigned tasks"}
           {!isSameDay(selectedDate, today)
             ? ` - ${selectedDate.toLocaleDateString("en-ZA", { weekday: "short", day: "numeric", month: "short" })}`
             : ""}
@@ -233,10 +241,12 @@ export default function HomeScreen() {
         </View>
       </View>
       <ActiveFiltersBar />
-      {myTasks.length === 0 && (
-        <Text style={styles.emptyTasks}>No tasks assigned for this day.</Text>
+      {focus.length === 0 && (
+        <Text style={styles.emptyTasks}>
+          {viewingToday ? "Nothing to do right now. You're all caught up." : "No tasks assigned for this day."}
+        </Text>
       )}
-      {myTasks.length > 0 && shownTasks.length === 0 && (
+      {focus.length > 0 && shownTasks.length === 0 && (
         <Text style={styles.emptyTasks}>No tasks match your filters.</Text>
       )}
       <View style={styles.list}>

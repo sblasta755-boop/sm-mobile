@@ -94,7 +94,7 @@ export function filtersActive(filters: TaskFilters): boolean {
   return filters.query.trim() !== "" || filters.priority !== "all" || filters.overdueOnly || filters.tags.length > 0 || filters.sort !== "default";
 }
 
-const FINISHED = new Set(["approved", "closed", "cancelled"]);
+const FINISHED = new Set(["approved", "closed", "cancelled", "failed"]);
 
 export function isOverdue(task: BoardTask, now: Date = new Date()): boolean {
   if (!task.dueAt || FINISHED.has(task.status)) return false;
@@ -162,6 +162,7 @@ export const BOARD_COLUMNS: BoardColumn[] = [
   { key: "review", label: "In review", statuses: ["submitted", "resubmitted", "awaiting_inspection"] },
   { key: "rework", label: "Rework", statuses: ["rework_required"] },
   { key: "done", label: "Done", statuses: ["approved", "closed"] },
+  { key: "failed", label: "Failed", statuses: ["failed"] },
 ];
 
 export function boardColumns<T extends BoardTask>(tasks: T[]): { column: BoardColumn; items: T[] }[] {

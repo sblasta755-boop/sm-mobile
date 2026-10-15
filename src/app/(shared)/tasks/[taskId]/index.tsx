@@ -14,6 +14,7 @@ import { useEvidenceQueue } from "@/features/evidenceQueue";
 import { enqueueMutation } from "@/features/outbox";
 import { drainQueue } from "@/features/evidenceUploader";
 import { mergeQueuedEvidence, waitingCount } from "@/domain/evidenceQueue";
+import { FINISHED_VIEW_STATUSES, TaskSummary } from "@/components/TaskSummary";
 import { TagChips } from "@/components/TagChip";
 import { StatusBadge, VerifiedBadge } from "@/components/StatusBadge";
 import { useSmartClean } from "@/features/store";
@@ -160,6 +161,19 @@ export default function TaskDetailScreen() {
   const destination = taskDestination(task, currentUser, state.inspections);
   if (destination.startsWith("/inspections/")) {
     return <Redirect href={destination as never} />;
+  }
+
+  // A finished task opens as a read-only record (details, checklist, notes and
+  // the photos that prove each item), never as a worksheet.
+  if (FINISHED_VIEW_STATUSES.includes(task.status)) {
+    return (
+      <TaskSummary
+        task={task}
+        doerName={state.users.find((u) => u.id === task.assigneeId)?.name}
+        inspection={state.inspections.find((i) => i.taskId === task.id)}
+        backTo={homePath}
+      />
+    );
   }
 
   // An hourly-compliance round this user was named a candidate for but
@@ -330,7 +344,7 @@ export default function TaskDetailScreen() {
     policy?.tasks.evidenceMode === "single" && policy.tasks.requireEvidence,
   );
   const stage = taskStage(task);
-  const checklistUnlocked = isChecklistUnlocked(stage);
+  const checklistUnlocked = isChecklistUnlocked(stage) && task.status !== "failed";
 
   const renderItem = (item: (typeof task.checklist)[number]) => (
       <Card key={item.id} style={item.done ? styles.checklistItemDone : styles.checklistItem}>
@@ -436,6 +450,18 @@ export default function TaskDetailScreen() {
               </>
             )}
           </Text>
+        </Card>
+      )}
+      {task.status === "failed" && (
+        <Card style={styles.failedCard}>
+          <Ionicons name="close-circle" size={20} color={colors.destructive} />
+          <View style={styles.failedText}>
+            <Text style={styles.failedTitle}>Not completed in time</Text>
+            <Text style={styles.mutedSmall}>
+              This task passed its due time and was marked failed. It can no longer be worked on. Your supervisor can
+              reopen it with a new due time.
+            </Text>
+          </View>
         </Card>
       )}
       <Card style={styles.headerCard}>
@@ -694,6 +720,16 @@ const styles = themedStyles(() => StyleSheet.create({
   sectionTitleRow: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
   sectionTitle: { fontSize: 14, fontWeight: "600", color: colors.foreground },
   sectionDone: { fontSize: 12, fontWeight: "600", color: colors.success },
+  failedCard: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+    borderColor: colors.destructive,
+    borderWidth: 1,
+  },
+  failedText: { flex: 1, gap: 2 },
+  failedTitle: { fontSize: typography.body, fontWeight: "700", color: colors.destructive },
   mutedSmall: {
     fontSize: typography.small,
     color: colors.mutedForeground,

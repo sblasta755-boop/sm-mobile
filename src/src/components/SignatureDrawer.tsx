@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from "react";
 import { Modal, PanResponder, Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from "react-native";
 import Svg, { Path } from "react-native-svg";
 import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Button } from "@/components/Button";
 import { strokesToPath, type Stroke } from "@/domain/signoff";
 import { colors, radius, spacing, themedStyles, typography, useThemeVersion } from "@/theme";
@@ -29,6 +30,9 @@ export function SignatureDrawer({
   onDone: (result: SignatureResult) => void;
 }) {
   useThemeVersion();
+  // The sheet is drawn edge to edge, so keep its bottom clear of the phone's
+  // navigation buttons or gesture bar.
+  const insets = useSafeAreaInsets();
   const [strokes, setStrokes] = useState<Stroke[]>(initial?.strokes ?? []);
   const [size, setSize] = useState({ width: 300, height: 220 });
   const sizeRef = useRef(size);
@@ -67,9 +71,16 @@ export function SignatureDrawer({
   const hasInk = strokes.some((s) => s.points.length > 1);
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      statusBarTranslucent
+      navigationBarTranslucent
+      onRequestClose={onClose}
+    >
       <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel="Close" />
-      <View style={styles.sheet}>
+      <View style={[styles.sheet, { paddingBottom: spacing.lg + Math.max(insets.bottom, spacing.xl) }]}>
         <View style={styles.header}>
           <Pressable accessibilityRole="button" accessibilityLabel="Cancel" onPress={onClose} hitSlop={8}>
             <Ionicons name="close" size={24} color={colors.foreground} />
