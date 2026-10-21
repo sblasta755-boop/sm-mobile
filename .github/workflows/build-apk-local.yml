@@ -9,7 +9,7 @@ name: Build signed Android APK
 #
 # One push builds ONE environment's app, chosen by the branch:
 #
-#   develop                -> dev         (installs as "Šoma360 DEV", id ...mobile.dev)
+#   dev (or develop)       -> dev         (installs as "Šoma360 DEV", id ...mobile.dev)
 #   qa                     -> qa          (installs as "Šoma360 QA",  id ...mobile.qa)
 #   subscription / main    -> production  (the normal app, unchanged)
 #
@@ -19,7 +19,7 @@ name: Build signed Android APK
 # see src/docs/ENVIRONMENTS.md.
 on:
   push:
-    branches: [develop, qa, subscription, main]
+    branches: [dev, develop, qa, subscription, main]
   workflow_dispatch:
     inputs:
       environment:
@@ -52,7 +52,7 @@ jobs:
           env_name="$CHOSEN"
           if [ -z "$env_name" ]; then
             case "$BRANCH" in
-              develop) env_name=dev ;;
+              dev|develop) env_name=dev ;;
               qa) env_name=qa ;;
               subscription|main) env_name=production ;;
               *) echo "::error::No environment is configured for branch '$BRANCH'"; exit 1 ;;

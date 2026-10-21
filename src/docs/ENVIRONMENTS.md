@@ -4,7 +4,7 @@ One push builds one environment's app, chosen by the branch. See `.github/workfl
 
 | Branch | Environment | Installs as | App id |
 |---|---|---|---|
-| `develop` | dev | Šoma360 DEV | `za.co.smartclean.mobile.dev` |
+| `dev` (or `develop`) | dev | Šoma360 DEV | `za.co.smartclean.mobile.dev` |
 | `qa` | qa | Šoma360 QA | `za.co.smartclean.mobile.qa` |
 | `subscription` or `main` | production | Šoma360 | `za.co.smartclean.mobile` (unchanged) |
 
