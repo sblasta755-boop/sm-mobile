@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from "react";
 import { router } from "expo-router";
 import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from "expo-camera";
 import { Ionicons } from "@expo/vector-icons";
 import { Screen } from "@/components/Screen";
@@ -81,6 +82,7 @@ function extractCode(raw: string): string {
  * routes that belong to the cleaner's own app and would be wrong here.
  */
 export default function SuperviseScan() {
+  const insets = useSafeAreaInsets();
   useThemeVersion(); // re-render with the new colours when the theme changes
   const { state, currentUser, dispatch, refreshBackendData } = useSmartClean();
   const branding = useTenantBranding();
@@ -503,7 +505,7 @@ export default function SuperviseScan() {
         onRequestClose={() => setDistanceMapOpen(false)}
       >
         <Pressable style={styles.mapBackdrop} onPress={() => setDistanceMapOpen(false)} />
-        <View style={styles.mapSheet}>
+        <View style={[styles.mapSheet, { paddingBottom: spacing.xl + insets.bottom }]}>
           <View style={styles.mapSheetHeader}>
             <Text style={styles.mapSheetTitle}>Too far from the site</Text>
             <Pressable onPress={() => setDistanceMapOpen(false)} accessibilityLabel="Close map" hitSlop={8}>

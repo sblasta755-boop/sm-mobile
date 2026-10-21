@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, radius, spacing, themedStyles, typography, useThemeVersion } from "@/theme";
 
 const MAX = 1000;
@@ -23,6 +24,8 @@ export function ItemNoteModal({
   onClose: () => void;
 }) {
   useThemeVersion();
+  // Keep the buttons above the phone's navigation bar / gesture area.
+  const insets = useSafeAreaInsets();
   const saved = note ?? "";
   const [text, setText] = useState(saved);
 
@@ -36,7 +39,7 @@ export function ItemNoteModal({
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.backdrop}>
         <Pressable accessibilityLabel="Close note" style={StyleSheet.absoluteFill} onPress={onClose} />
-        <View style={styles.sheet}>
+        <View style={[styles.sheet, { paddingBottom: spacing.md + insets.bottom }]}>
           <Text style={styles.title} numberOfLines={2}>
             {title}
           </Text>

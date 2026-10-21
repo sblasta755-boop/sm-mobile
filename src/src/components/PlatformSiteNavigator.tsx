@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { WebView } from "react-native-webview";
 import { Ionicons } from "@expo/vector-icons";
 import { getCurrentCoords, watchPosition, type DeviceCoords } from "@/services/geolocation";
@@ -39,6 +40,7 @@ const MIN_BEARING_DISTANCE_METERS = 8;
  * the app while driving, same as any real navigation app.
  */
 export function PlatformSiteNavigator({ site, onClose }: { site: PlatformSite; onClose: () => void }) {
+  const insets = useSafeAreaInsets();
   const webviewRef = useRef<WebView>(null);
   const webviewReadyRef = useRef(false);
   const [starting, setStarting] = useState(true);
@@ -296,7 +298,7 @@ export function PlatformSiteNavigator({ site, onClose }: { site: PlatformSite; o
       )}
 
       {live && !starting && !error && (
-        <Pressable style={styles.stopButton} onPress={onClose}>
+        <Pressable style={[styles.stopButton, { bottom: spacing.xxl + insets.bottom }]} onPress={onClose}>
           <Ionicons name="square" size={14} color={colors.white} />
           <Text style={styles.stopButtonText}>Stop navigation</Text>
         </Pressable>

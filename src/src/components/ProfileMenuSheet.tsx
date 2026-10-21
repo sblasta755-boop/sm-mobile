@@ -1,5 +1,6 @@
 import { router } from "expo-router";
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useSmartClean } from "@/features/store";
 import { Button } from "@/components/Button";
@@ -7,6 +8,7 @@ import { AppearanceRow } from "@/components/ProfilePreferences";
 import { colors, radius, spacing, typography, themedStyles } from "@/theme";
 
 export function ProfileMenuSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const insets = useSafeAreaInsets();
   const { state, currentUser, signOut } = useSmartClean();
   const site = state.sites.find((s) => currentUser?.siteIds.includes(s.id));
   const online = state.connectivity === "online";
@@ -20,7 +22,7 @@ export function ProfileMenuSheet({ visible, onClose }: { visible: boolean; onClo
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <Pressable style={styles.backdrop} onPress={onClose} />
-      <View style={styles.sheet}>
+      <View style={[styles.sheet, { paddingBottom: spacing.xl + insets.bottom }]}>
         <View style={styles.header}>
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>{currentUser?.initials ?? "SC"}</Text>
