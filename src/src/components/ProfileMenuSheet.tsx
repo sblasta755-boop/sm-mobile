@@ -2,6 +2,7 @@ import { router } from "expo-router";
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { useRoleLabel } from "@/features/roles";
 import { useSmartClean } from "@/features/store";
 import { Button } from "@/components/Button";
 import { AppearanceRow } from "@/components/ProfilePreferences";
@@ -10,6 +11,7 @@ import { colors, radius, spacing, typography, themedStyles } from "@/theme";
 export function ProfileMenuSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const insets = useSafeAreaInsets();
   const { state, currentUser, signOut } = useSmartClean();
+  const roleLabel = useRoleLabel();
   const site = state.sites.find((s) => currentUser?.siteIds.includes(s.id));
   const online = state.connectivity === "online";
 
@@ -30,7 +32,7 @@ export function ProfileMenuSheet({ visible, onClose }: { visible: boolean; onClo
           <View style={styles.headerText}>
             <Text style={styles.name}>{currentUser?.name ?? "Guest"}</Text>
             <Text style={styles.role}>
-              {currentUser?.role.replace(/_/g, " ")}
+              {roleLabel(currentUser?.role)}
               {site ? ` • ${site.name}` : ""}
             </Text>
           </View>

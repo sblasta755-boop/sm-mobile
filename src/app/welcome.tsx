@@ -2,11 +2,11 @@ import { router } from "expo-router";
 import { Image, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { resolveStaffRole } from "@/features/roles";
 import { useSmartClean } from "@/features/store";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
 import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
-import type { Role } from "@/types/smartclean";
 
 /**
  * The one-time screen a QR-onboarded account sees right after choosing
@@ -22,7 +22,7 @@ import type { Role } from "@/types/smartclean";
  * best-effort tells the backend, which is the real source of truth on
  * the next login or refresh.
  */
-const COPY: Record<Role, { icon: keyof typeof Ionicons.glyphMap; title: string; body: string }> = {
+const COPY: Record<string, { icon: keyof typeof Ionicons.glyphMap; title: string; body: string }> = {
   cleaner: {
     icon: "sparkles",
     title: "You're all set up",
@@ -67,9 +67,11 @@ const COPY: Record<Role, { icon: keyof typeof Ionicons.glyphMap; title: string; 
 
 export default function Welcome() {
   useThemeVersion(); // re-render with the new colours when the theme changes
-  const { currentUser, markWelcomeSeen } = useSmartClean();
+  const { state, currentUser, markWelcomeSeen } = useSmartClean();
   const insets = useSafeAreaInsets();
-  const copy = COPY[currentUser?.role ?? "cleaner"];
+  const staffRole = resolveStaffRole(state.staffRoles, currentUser?.role);
+  const base = COPY[currentUser?.role ?? ""] ?? (staffRole?.template === "table_service" ? COPY.waiter : COPY.cleaner);
+  const copy = { ...base, ...(staffRole?.welcomeCopy?.title ? { title: staffRole.welcomeCopy.title } : {}), ...(staffRole?.welcomeCopy?.body ? { body: staffRole.welcomeCopy.body } : {}) };
 
   const dismiss = () => {
     void markWelcomeSeen();

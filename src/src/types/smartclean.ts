@@ -1,26 +1,41 @@
-export type Role =
+/** Roles with their own app and security rules; fixed in code. */
+export type FixedRole =
   | "operations_manager"
   | "site_manager"
   | "supervisor"
-  | "cleaner"
-  // Identical UI/permissions to "cleaner" for every existing task/
-  // checklist/evidence flow, plus the table-session flow below (waiter
-  // table-grid, claim/takeover, clean-confirm) - see the backend's
-  // services/records.py VALID_ROLES comment. Every has_role(...,
-  // "cleaner") gate in the backend was updated alongside "waiter"
-  // rather than replaced, so nothing a cleaner could already do is
-  // restricted for a waiter.
-  | "waiter"
   | "client_auditor"
-  // The top role inside a customer organisation - was "system_admin"
-  // before migration 20260909_0018 renamed it (see the web app's
-  // types.ts for the full rationale).
+  // The top role inside a customer organisation (was "system_admin" before
+  // migration 20260909_0018 renamed it).
   | "org_admin"
-  // Šoma360's own operator staff (was "platform_owner" before the same
-  // rename). They administer organisations from the web console and
-  // never sign in here, but the union has to cover the value or parsing
-  // a user record would narrow wrongly.
+  // Šoma360's own operator staff. They administer organisations from the
+  // web console and never sign in here, but the union has to cover the
+  // value or parsing a user record would narrow wrongly.
   | "system_admin";
+
+/** A fixed role, or the key of a field-staff role from the backend's
+ * staff_roles table (cleaner, waiter, or any role a platform operator adds).
+ * The `& {}` keeps the fixed names autocompleting. */
+export type Role = FixedRole | (string & {});
+
+/** What a staff role's template switches on; tasks, scanning and the rest are common to all. */
+export interface StaffRoleFeatures {
+  tables: boolean;
+  actionsTab: boolean;
+  ratings: boolean;
+  reports: boolean;
+}
+
+/** A field-staff role definition, from bootstrap.staffRoles. */
+export interface StaffRole {
+  key: string;
+  label: string;
+  pluralLabel: string;
+  template: "standard" | "table_service" | string;
+  features: StaffRoleFeatures;
+  homeImageUrl?: string | null;
+  homeTitle?: string | null;
+  welcomeCopy?: { title?: string; body?: string; [key: string]: unknown };
+}
 
 export type SubscriptionTier = "trial" | "starter" | "professional" | "enterprise";
 

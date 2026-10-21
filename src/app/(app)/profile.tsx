@@ -13,7 +13,7 @@ import { BrokenGlassIcon } from "@/components/BrokenGlassIcon";
 import { AppearanceRow, FeedbackRow, ReportsRow } from "@/components/ProfilePreferences";
 import { BiometricLockRow } from "@/components/BiometricLockRow";
 import { useSmartClean } from "@/features/store";
-import { useCanManageSiteLayout } from "@/features/roles";
+import { useCanManageSiteLayout, useRoleLabel, useStaffRole } from "@/features/roles";
 import { fileUrl, getMyRatingSummary, toUserRecord, updateUser, uploadImage } from "@/api/client";
 import type { TableRatingSummary } from "@/types/smartclean";
 import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
@@ -38,7 +38,8 @@ export default function ProfileScreen() {
   // section can be rated too). Fetched once on mount rather than pulled
   // from the global store, since nothing else in the app needs it and
   // it's specific to this one screen.
-  const showsRating = currentUser?.role === "waiter" || currentUser?.role === "cleaner";
+  const roleLabel = useRoleLabel();
+  const showsRating = !!useStaffRole()?.features.ratings;
   const [ratingSummary, setRatingSummary] = useState<TableRatingSummary | null>(null);
   useEffect(() => {
     if (!showsRating || !state.accessToken) return;
@@ -116,7 +117,7 @@ export default function ProfileScreen() {
           <Text style={styles.profileName} numberOfLines={1}>
             {currentUser?.name}
           </Text>
-          <Text style={styles.profileRole}>{currentUser?.role.replace(/_/g, " ")}</Text>
+          <Text style={styles.profileRole}>{roleLabel(currentUser?.role)}</Text>
           {site && (
             <View style={styles.siteRow}>
               <Ionicons name="location" size={11} color={colors.mutedForeground} />

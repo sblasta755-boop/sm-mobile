@@ -3,6 +3,7 @@ import { router, usePathname } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHasCapability, useHasModule } from "@/features/modules";
+import { resolveStaffRole } from "@/features/roles";
 import { useSmartClean } from "@/features/store";
 import { colors, sizes, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 
@@ -72,13 +73,14 @@ export function RoleTabBar() {
       ];
       break;
     default: {
-      const isWaiter = role === "waiter" && !!state.tenant?.tableServiceEnabled;
+      const staffRole = resolveStaffRole(state.staffRoles, role);
+      const hasTables = !!staffRole?.features.tables && !!state.tenant?.tableServiceEnabled;
       tabs = [
         { label: "Home", to: "/home", icon: "home" },
         { label: "Shifts", to: "/shifts", icon: "calendar" },
         ...(hasQr ? [{ label: "Scan", to: "/scan", icon: "scan", primary: true } as Tab] : []),
-        ...(isWaiter ? [{ label: "Tables", to: "/tables", icon: "restaurant" } as Tab] : []),
-        ...(hasCorrectiveActions && role !== "waiter"
+        ...(hasTables ? [{ label: "Tables", to: "/tables", icon: "restaurant" } as Tab] : []),
+        ...(hasCorrectiveActions && staffRole?.features.actionsTab !== false
           ? [{ label: "Actions", to: "/corrective-actions", icon: "checkbox" } as Tab]
           : []),
         { label: "Profile", to: "/profile", icon: "person" },

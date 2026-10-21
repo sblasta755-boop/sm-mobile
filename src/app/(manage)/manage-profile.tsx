@@ -7,6 +7,7 @@ import { UpdateBanner } from "@/components/UpdateBanner";
 import { Button } from "@/components/Button";
 import { AppearanceRow, FeedbackRow, ReportsRow } from "@/components/ProfilePreferences";
 import { BiometricLockRow } from "@/components/BiometricLockRow";
+import { useRoleLabel } from "@/features/roles";
 import { useSmartClean } from "@/features/store";
 import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 import { APP_VERSION } from "@/constants/version";
@@ -23,6 +24,7 @@ import { APP_VERSION } from "@/constants/version";
 export default function ManageProfile() {
   useThemeVersion(); // re-render with the new colours when the theme changes
   const { state, currentUser, signOut } = useSmartClean();
+  const roleLabel = useRoleLabel();
 
   const mySites =
     (currentUser?.siteIds?.length ?? 0) > 0
@@ -39,7 +41,7 @@ export default function ManageProfile() {
         </View>
         <View style={styles.identityInfo}>
           <Text style={styles.name}>{currentUser?.name ?? "-"}</Text>
-          <Text style={styles.role}>{currentUser?.role.replace(/_/g, " ")}</Text>
+          <Text style={styles.role}>{roleLabel(currentUser?.role)}</Text>
           {currentUser?.email && <Text style={styles.muted}>{currentUser.email}</Text>}
         </View>
       </Card>

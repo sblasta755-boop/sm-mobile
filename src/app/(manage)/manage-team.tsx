@@ -6,6 +6,7 @@ import { Screen } from "@/components/Screen";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { StatusBadge } from "@/components/StatusBadge";
+import { useRoleLabel } from "@/features/roles";
 import { useSmartClean } from "@/features/store";
 import {
   fetchStaffOnboardingQrSvg,
@@ -42,6 +43,7 @@ function statusTone(status: string): StatusTone {
 export default function ManageTeam() {
   useThemeVersion(); // re-render with the new colours when the theme changes
   const { state, currentUser } = useSmartClean();
+  const roleLabel = useRoleLabel();
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<DemoUser | null>(null);
   const [grant, setGrant] = useState<StaffGrant | null>(null);
@@ -130,7 +132,7 @@ export default function ManageTeam() {
       <Screen title={selected.name} backTo="/manage-team">
         <Card style={styles.detailCard}>
           <View style={styles.detailHeader}>
-            <Text style={styles.detailRole}>{selected.role.replace(/_/g, " ")}</Text>
+            <Text style={styles.detailRole}>{roleLabel(selected.role)}</Text>
             <StatusBadge tone={statusTone(statusOf(selected))} label={statusOf(selected)} />
           </View>
           {selected.email && <Text style={styles.muted}>{selected.email}</Text>}
@@ -223,7 +225,7 @@ export default function ManageTeam() {
                   {user.name}
                 </Text>
                 <Text style={styles.muted} numberOfLines={1}>
-                  {user.role.replace(/_/g, " ")}
+                  {roleLabel(user.role)}
                 </Text>
               </View>
               <StatusBadge tone={statusTone(statusOf(user))} label={statusOf(user)} />

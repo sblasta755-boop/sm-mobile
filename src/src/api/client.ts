@@ -12,6 +12,7 @@ import type {
   QrCode,
   Site,
   SiteFloorPlanImage,
+  StaffRole,
   StockItem,
   SubscriptionState,
   Task,
@@ -67,6 +68,8 @@ export interface BackendBootstrap {
   subscription?: SubscriptionState;
   /** Organisation-chosen tag colours (lower-cased tag to colour name). */
   tagColors?: Record<string, string>;
+  /** Field-staff role definitions. Optional so a build running against an older backend still type-checks. */
+  staffRoles?: StaffRole[];
   users: DemoUser[];
   sites: Site[];
   locations: Location[];
@@ -818,6 +821,7 @@ function normalizeBootstrap(payload: Record<string, unknown>): BackendBootstrap 
     // RESOLVED module list, so there is nothing to derive here.
     subscription: payload.subscription as SubscriptionState | undefined,
     tagColors: (payload.tagColors as Record<string, string> | undefined) ?? {},
+    staffRoles: list(payload.staffRoles) as unknown as StaffRole[],
     users: list(payload.users).map(normalizeUser),
     sites: list(payload.sites).map((site) => ({
       clientId: "",

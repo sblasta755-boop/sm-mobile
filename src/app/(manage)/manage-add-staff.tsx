@@ -4,6 +4,7 @@ import { SvgXml } from "react-native-svg";
 import { Screen } from "@/components/Screen";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
+import { isFieldRole } from "@/features/roles";
 import { useSmartClean } from "@/features/store";
 import {
   createStaffOnboarding,
@@ -23,13 +24,9 @@ import { colors, radius, spacing, typography, themedStyles, useThemeVersion } fr
  * rule into a confusing error, so the list is filtered rather than the
  * failure explained afterwards.
  */
-const FIELD_ROLES = [
-  { value: "cleaner", label: "Cleaner" },
-  { value: "supervisor", label: "Supervisor" },
-];
+const SUPERVISOR_ROLE = { value: "supervisor", label: "Supervisor" };
 
-const ADMIN_ROLES = [
-  ...FIELD_ROLES,
+const ADMIN_ONLY_ROLES = [
   { value: "site_manager", label: "Site manager" },
   { value: "operations_manager", label: "Operations manager" },
   { value: "org_admin", label: "Administrator" },
@@ -38,7 +35,7 @@ const ADMIN_ROLES = [
 // Roles the backend refuses without a site, because is_site_scoped
 // filters their every list endpoint down to profile.siteIds - one
 // created site-less signs in to an app that correctly shows nothing.
-const SITE_REQUIRED = ["site_manager", "supervisor", "cleaner"];
+const SITE_REQUIRED = ["site_manager", "supervisor"];
 
 export default function ManageAddStaff() {
   useThemeVersion(); // re-render with the new colours when the theme changes
@@ -52,7 +49,14 @@ export default function ManageAddStaff() {
   const [grant, setGrant] = useState<StaffGrant | null>(null);
   const [qrSvg, setQrSvg] = useState<string | null>(null);
 
-  const roles = currentUser?.role === "org_admin" ? ADMIN_ROLES : FIELD_ROLES;
+  // Field-staff roles come from the backend, so a role a platform operator
+  // adds shows up here without an app update.
+  // A table-service role needs table service switched on for the organisation.
+  const staffRoleOptions = (state.staffRoles.length ? state.staffRoles : [{ key: "cleaner", label: "Cleaner", template: "standard" }])
+    .filter((item) => item.template !== "table_service" || !!state.tenant?.tableServiceEnabled)
+    .map((item) => ({ value: item.key, label: item.label }));
+  const fieldRoles = [...staffRoleOptions, SUPERVISOR_ROLE];
+  const roles = currentUser?.role === "org_admin" ? [...fieldRoles, ...ADMIN_ONLY_ROLES] : fieldRoles;
   // A site-scoped manager may only place staff at their own sites - the
   // server enforces it, this just avoids offering the refusal.
   const sites =
@@ -61,7 +65,8 @@ export default function ManageAddStaff() {
       : state.sites;
 
   const emailLooksValid = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim());
-  const siteSatisfied = !SITE_REQUIRED.includes(role) || !!siteId;
+  const needsSite = SITE_REQUIRED.includes(role) || isFieldRole(role);
+  const siteSatisfied = !needsSite || !!siteId;
   const canSubmit =
     displayName.trim().length >= 2 && emailLooksValid && siteSatisfied && !busy;
 
@@ -179,7 +184,7 @@ export default function ManageAddStaff() {
 
         <View style={styles.field}>
           <Text style={styles.label}>
-            Site{SITE_REQUIRED.includes(role) ? "" : " (optional)"}
+            Site{needsSite ? "" : " (optional)"}
           </Text>
           {sites.length === 0 ? (
             <Text style={styles.hint}>

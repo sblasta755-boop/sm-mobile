@@ -4,7 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHasCapability, useHasModule } from "@/features/modules";
 import { useSmartClean } from "@/features/store";
-import { isFieldRole } from "@/features/roles";
+import { isFieldRole, resolveStaffRole } from "@/features/roles";
 import { colors, sizes, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 
 export default function AppTabsLayout() {
@@ -18,7 +18,7 @@ export default function AppTabsLayout() {
   // also serves incidents and tables, but all of that is QR - with QR off
   // there is nothing left to scan. Fails open before bootstrap lands.
   const hasQr = useHasCapability("qr_codes");
-  // The table-grid tab is for the "waiter" role only. A cleaner CAN
+  // The table-grid tab is for roles on the table_service template (the waiter). A cleaner CAN
   // still operate a table session (the backend's _WAITER_ROLES allows
   // both, so a cleaner covering a waiter's section is never blocked) -
   // but they don't get a dedicated tab for it, to keep their bar the
@@ -30,7 +30,8 @@ export default function AppTabsLayout() {
   // Hiding the tab is presentation only; the backend enforces the real
   // gate on every table-session request regardless (require_table_service
   // in app/api/deps.py).
-  const isWaiter = currentUser?.role === "waiter" && !!state.tenant?.tableServiceEnabled;
+  const staffRole = resolveStaffRole(state.staffRoles, currentUser?.role);
+  const isWaiter = !!staffRole?.features.tables && !!state.tenant?.tableServiceEnabled;
 
   if (state.sessionRestored && !currentUser) {
     return <Redirect href="/login" />;
@@ -121,7 +122,7 @@ export default function AppTabsLayout() {
           // taps into one from Home - only the tab itself disappears.
           // Spread rather than `href: undefined`, which is not reliably
           // equivalent to omitting the prop.
-          ...(hasCorrectiveActions && currentUser?.role !== "waiter" ? {} : { href: null }),
+          ...(hasCorrectiveActions && staffRole?.features.actionsTab !== false ? {} : { href: null }),
         }}
       />
       <Tabs.Screen

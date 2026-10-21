@@ -1,3 +1,4 @@
+import type { StaffRole } from "@/types/smartclean";
 import { useSmartClean } from "./store";
 
 /**
@@ -68,4 +69,67 @@ export function useHomePath(): string {
 export function useScanPath(): string {
   const { currentUser } = useSmartClean();
   return scanPathForRole(currentUser?.role);
+}
+
+// ---- Field-staff role definitions ----
+//
+// Cleaner, waiter and any role a platform operator adds come from the
+// backend's staff_roles table (bootstrap.staffRoles). These two are the
+// fallback for an older backend, or a bootstrap that has not landed yet, so
+// the app never has to guess what a cleaner or waiter is.
+
+const STANDARD_FEATURES = { tables: false, actionsTab: true, ratings: true, reports: true };
+const TABLE_SERVICE_FEATURES = { tables: true, actionsTab: false, ratings: true, reports: false };
+
+const BUILTIN_STAFF_ROLES: Record<string, StaffRole> = {
+  cleaner: { key: "cleaner", label: "Cleaner", pluralLabel: "Cleaners", template: "standard", features: STANDARD_FEATURES },
+  waiter: {
+    key: "waiter",
+    label: "Waiter",
+    pluralLabel: "Waiters",
+    template: "table_service",
+    features: TABLE_SERVICE_FEATURES,
+  },
+};
+
+/** The definition for a field-staff role, or null for a management role. An unknown field role gets the standard template. */
+export function resolveStaffRole(staffRoles: StaffRole[], role: string | undefined): StaffRole | null {
+  if (!role || !isFieldRole(role)) return null;
+  return (
+    staffRoles.find((item) => item.key === role) ??
+    BUILTIN_STAFF_ROLES[role] ?? {
+      key: role,
+      label: role.replace(/_/g, " "),
+      pluralLabel: `${role.replace(/_/g, " ")}s`,
+      template: "standard",
+      features: STANDARD_FEATURES,
+    }
+  );
+}
+
+const REPORT_MANAGEMENT_ROLES = ["supervisor", "site_manager", "operations_manager", "org_admin", "client_auditor"];
+
+/** Who may produce a client-facing report: management, plus any staff role whose template allows it. */
+export function useCanMakeReports(): boolean {
+  const { state, currentUser } = useSmartClean();
+  if (!currentUser) return false;
+  if (REPORT_MANAGEMENT_ROLES.includes(currentUser.role)) return true;
+  return !!resolveStaffRole(state.staffRoles, currentUser.role)?.features.reports;
+}
+
+/** The signed-in person's role definition, or null when they are management. */
+export function useStaffRole(): StaffRole | null {
+  const { state, currentUser } = useSmartClean();
+  return resolveStaffRole(state.staffRoles, currentUser?.role);
+}
+
+/** A readable name for any role: the staff role's label, else the role key with underscores removed. */
+export function roleLabel(staffRoles: StaffRole[], role: string | undefined): string {
+  if (!role) return "";
+  return resolveStaffRole(staffRoles, role)?.label ?? role.replace(/_/g, " ");
+}
+
+export function useRoleLabel(): (role: string | undefined) => string {
+  const { state } = useSmartClean();
+  return (role) => roleLabel(state.staffRoles, role);
 }

@@ -5,7 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useSmartClean } from "@/features/store";
 import { usePullToRefresh } from "@/features/pullRefresh";
-import { homePathForRole } from "@/features/roles";
+import { homePathForRole, useRoleLabel } from "@/features/roles";
 import { ProfileMenuSheet } from "@/components/ProfileMenuSheet";
 import { SyncBanner } from "@/components/SyncBanner";
 import { colors, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
@@ -74,6 +74,7 @@ export function Screen({
 }) {
   useThemeVersion();
   const { state, currentUser } = useSmartClean();
+  const roleLabel = useRoleLabel();
   const insets = useSafeAreaInsets();
   const [menuOpen, setMenuOpen] = useState(false);
   const { refreshing, onRefresh } = usePullToRefresh();
@@ -127,7 +128,7 @@ export function Screen({
               <View style={styles.headerTextRow}>
                 {BackButton}
                 <View style={styles.headerText}>
-                  <Text style={styles.eyebrow}>{currentUser?.role.replace(/_/g, " ") ?? ""}</Text>
+                  <Text style={styles.eyebrow}>{roleLabel(currentUser?.role)}</Text>
                   <Text style={styles.username} numberOfLines={1}>
                     {currentUser?.name ?? "Guest"}
                   </Text>

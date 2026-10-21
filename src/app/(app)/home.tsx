@@ -20,6 +20,8 @@ import { DateStrip, isSameDay, startOfDay } from "@/components/DateStrip";
 import { useHasCapability, useHasModule } from "@/features/modules";
 import { clockIn as clockInRequest, clockOut as clockOutRequest } from "@/api/client";
 import { getCurrentCoords } from "@/services/geolocation";
+import { fileUrl } from "@/api/client";
+import { useStaffRole } from "@/features/roles";
 import { useSmartClean } from "@/features/store";
 import { toneForTask, humanStatus } from "@/domain/status";
 import { colors, radius, spacing, typography, themedStyles, status, useThemeVersion } from "@/theme";
@@ -28,6 +30,7 @@ import { appAlert } from "@/components/Dialog";
 export default function HomeScreen() {
   useThemeVersion(); // re-render with the new colours when the theme changes
   const { state, currentUser, refreshBackendData } = useSmartClean();
+  const staffRole = useStaffRole();
   // Entry points to the three gateable screens a cleaner can reach.
   // Hiding them is presentation only - the server 402s these routes for
   // an organisation whose plan excludes them - but offering a button
@@ -141,9 +144,11 @@ export default function HomeScreen() {
       <Card padded={false} style={styles.shiftCard}>
         <ImageBackground
           source={
-            currentUser?.role === "waiter"
-              ? require("../../assets/shift-clock-in-waiter.png")
-              : require("../../assets/shift-clock-in.png")
+            staffRole?.homeImageUrl
+              ? { uri: fileUrl(staffRole.homeImageUrl) ?? staffRole.homeImageUrl }
+              : staffRole?.template === "table_service"
+                ? require("../../assets/shift-clock-in-waiter.png")
+                : require("../../assets/shift-clock-in.png")
           }
           style={styles.shiftOverlay}
           imageStyle={styles.shiftImage}
@@ -156,7 +161,7 @@ export default function HomeScreen() {
           />
           <View style={styles.shiftTopRow}>
             <View style={styles.shiftInfo}>
-              <Text style={styles.shiftEyebrow}>Today&apos;s shift</Text>
+              <Text style={styles.shiftEyebrow}>{staffRole?.homeTitle || "Today's shift"}</Text>
               <Text style={styles.shiftTime}>
                 {site?.workingHours ? `${site.workingHours.start} - ${site.workingHours.end}` : "07:00 - 16:00"}
               </Text>

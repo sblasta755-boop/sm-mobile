@@ -1,11 +1,9 @@
 import { router } from "expo-router";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useCanMakeReports } from "@/features/roles";
 import { useSmartClean } from "@/features/store";
 import { colors, radius, spacing, themedStyles, typography, useTheme, type ThemePreference } from "@/theme";
-
-// The people who can produce a client report - same set as the report screen.
-const REPORT_ROLES = ["supervisor", "site_manager", "operations_manager", "org_admin", "client_auditor", "cleaner"];
 
 const OPTIONS: { value: ThemePreference; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
   { value: "light", label: "Light", icon: "sunny-outline" },
@@ -50,7 +48,8 @@ export function AppearanceRow() {
 /** A row that opens the report screen, for the roles that may make reports. */
 export function ReportsRow() {
   const { currentUser } = useSmartClean();
-  if (!currentUser || !REPORT_ROLES.includes(currentUser.role)) return null;
+  const canMakeReports = useCanMakeReports();
+  if (!currentUser || !canMakeReports) return null;
   return (
     <Pressable style={styles.linkRow} onPress={() => router.push("/management-report")}>
       <Ionicons name="document-text-outline" size={18} color={colors.foreground} />

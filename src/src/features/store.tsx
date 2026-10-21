@@ -31,6 +31,7 @@ import type {
   QrCode,
   Site,
   Location,
+  StaffRole,
   StockItem,
   SubscriptionState,
   Task,
@@ -68,6 +69,8 @@ interface State {
   subscription: SubscriptionState | null;
   /** Colours the organisation chose for task tags (lower-cased tag to colour name). */
   tagColors: Record<string, string>;
+  /** Field-staff role definitions (label, template, home image...). Empty until bootstrap lands; see features/roles.ts for the fallbacks. */
+  staffRoles: StaffRole[];
   /** A restored session that is being withheld until the user passes a
    * Face ID / fingerprint prompt.
    *
@@ -173,6 +176,7 @@ function initial(): State {
     attendance: {},
     subscription: null,
     tagColors: {},
+    staffRoles: [],
     locked: false,
     mustChangePassword: false,
     hasSeenWelcome: true,
@@ -207,6 +211,7 @@ function bootstrapState(bootstrap: BackendBootstrap): Partial<State> {
     assets: bootstrap.assets ?? [],
     subscription: bootstrap.subscription ?? null,
     tagColors: bootstrap.tagColors ?? {},
+    staffRoles: bootstrap.staffRoles ?? [],
   };
 }
 
