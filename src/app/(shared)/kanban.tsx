@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { router } from "expo-router";
-import { Pressable, ScrollView, StyleSheet, Switch, Text, View, useWindowDimensions } from "react-native";
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Switch, Text, View, useWindowDimensions } from "react-native";
 import { Screen } from "@/components/Screen";
 import { useTaskFilters } from "@/features/taskFilters";
 import { Card } from "@/components/Card";
@@ -12,6 +12,7 @@ import { taskDestination } from "@/domain/inspections";
 import { boardColumns, filterTasks, isOverdue, tagsOf } from "@/domain/taskBoard";
 import { isOnToday } from "@/domain/todayFocus";
 import { useNow } from "@/features/useNow";
+import { usePullToRefresh } from "@/features/pullRefresh";
 import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 
 /**
@@ -32,6 +33,7 @@ export default function KanbanScreen() {
   // on, so they only appear when asked for.
   const [allDays, setAllDays] = useState(false);
   const now = useNow();
+  const { refreshing, onRefresh } = usePullToRefresh();
 
   const tasks = useMemo(
     () =>
@@ -97,7 +99,11 @@ export default function KanbanScreen() {
                 <Text style={styles.countText}>{items.length}</Text>
               </View>
             </View>
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.cards}>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.cards}
+              refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />}
+            >
               {items.length === 0 ? (
                 <Text style={styles.empty}>Nothing here.</Text>
               ) : (

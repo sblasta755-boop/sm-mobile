@@ -1,9 +1,10 @@
 import { useState, type ReactNode } from "react";
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import { router, usePathname } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useSmartClean } from "@/features/store";
+import { usePullToRefresh } from "@/features/pullRefresh";
 import { homePathForRole } from "@/features/roles";
 import { ProfileMenuSheet } from "@/components/ProfileMenuSheet";
 import { SyncBanner } from "@/components/SyncBanner";
@@ -75,6 +76,7 @@ export function Screen({
   const { state, currentUser } = useSmartClean();
   const insets = useSafeAreaInsets();
   const [menuOpen, setMenuOpen] = useState(false);
+  const { refreshing, onRefresh } = usePullToRefresh();
   const site = state.sites.find((s) => currentUser?.siteIds.includes(s.id));
   const pathname = usePathname();
   const showBack = !TAB_ROOT_PATHS.has(pathname);
@@ -144,6 +146,20 @@ export function Screen({
       <Content
         style={styles.content}
         contentContainerStyle={scroll ? styles.contentContainer : undefined}
+        // Pull down to refresh, on every screen that scrolls.
+        {...(scroll
+          ? {
+              alwaysBounceVertical: true,
+              refreshControl: (
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={onRefresh}
+                  tintColor={colors.primary}
+                  colors={[colors.primary]}
+                />
+              ),
+            }
+          : {})}
       >
         {children}
       </Content>

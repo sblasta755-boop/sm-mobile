@@ -8,6 +8,7 @@
 // they prove and the number taken is the number required. The server
 // enforces the same rule (TaskController.add_evidence).
 
+import { groupChecklist } from "./checklistSections";
 import type { TaskStage } from "./status";
 
 export type SlotKind = "before" | "after" | "evidence" | "issue";
@@ -37,7 +38,9 @@ interface SlotTask {
     label: string;
     type: string;
     photoCount?: number;
+    sectionId?: string;
     sectionName?: string;
+    sectionOrder?: number;
   }[];
   evidence: { kind: string; checklistItemId?: string | null }[];
 }
@@ -55,7 +58,11 @@ const kindCount = (
 ): number => evidence.filter((e) => e.checklistItemId === itemId && (kind === null || e.kind === kind)).length;
 
 export function evidenceSlots(task: SlotTask, stage: TaskStage): EvidenceSlot[] {
-  const itemsWithPhotos = task.checklist.filter((item) => item.type === "photo_required" && item.photoCount);
+  // Section order first (as the checklist itself shows it), so photos are asked
+  // for in the same order the work is done, not the order items were stored.
+  const itemsWithPhotos = groupChecklist(task.checklist)
+    .flatMap((group) => group.items)
+    .filter((item) => item.type === "photo_required" && item.photoCount);
   const before = !!task.requiresBeforeAfter;
   const itemOwned = itemsWithPhotos.length > 0;
   const started = stage !== "scan";

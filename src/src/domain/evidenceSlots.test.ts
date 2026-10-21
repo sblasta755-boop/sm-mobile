@@ -24,6 +24,27 @@ describe("evidenceSlots", () => {
     expect(evidenceForSlot(task.evidence, slots[0])).toHaveLength(0);
   });
 
+  it("asks for photos in section order, not stored order", () => {
+    const item = (id: string, sectionId: string, sectionOrder: number) => ({
+      ...photoItem(id, 1),
+      sectionId,
+      sectionName: sectionId,
+      sectionOrder,
+    });
+    const task = {
+      requiresBeforeAfter: false,
+      checklist: [item("chip", "cold", 2), item("hot-1", "hot", 1), item("cold-2", "cold", 2), item("hot-2", "hot", 1)],
+      evidence: [],
+    };
+    expect(evidenceSlots(task, "working").map((s) => s.key)).toEqual([
+      "item:hot-1",
+      "item:hot-2",
+      "item:chip",
+      "item:cold-2",
+      "issue",
+    ]);
+  });
+
   it("offers a single Evidence slot, and no Before, when there are no photo items", () => {
     const slots = evidenceSlots({ requiresBeforeAfter: false, checklist: [], evidence: [] }, "working");
     expect(slots.map((s) => [s.key, s.label])).toEqual([

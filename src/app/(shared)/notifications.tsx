@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Animated, Easing, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { Animated, Easing, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Screen } from "@/components/Screen";
 import { toneColors, type DialogTone } from "@/components/Dialog";
 import { useSmartClean } from "@/features/store";
+import { usePullToRefresh } from "@/features/pullRefresh";
 import { markNotificationRead, markNotificationsRead } from "@/api/client";
 import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 import type { Notification } from "@/types/smartclean";
@@ -26,6 +27,7 @@ const toneOf = (n: Notification): DialogTone =>
 export default function NotificationsScreen() {
   useThemeVersion(); // re-render with the new colours when the theme changes
   const { state, dispatch } = useSmartClean();
+  const { refreshing, onRefresh } = usePullToRefresh();
   const [filter, setFilter] = useState<Filter>("all");
   const all = state.notifications;
   const unread = all.filter((n) => !n.read);
@@ -110,6 +112,7 @@ export default function NotificationsScreen() {
     <Screen title="Notifications" scroll={false}>
       <FlatList
         data={rows}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />}
         keyExtractor={(row) => row.key}
         ListHeaderComponent={header}
         contentContainerStyle={styles.list}
