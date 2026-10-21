@@ -6,10 +6,30 @@ name: Build signed Android APK
 # normal npm dependencies), then Gradle builds and signs a release APK.
 #
 # One-time setup (keystore + secrets): src/docs/ANDROID_APK_BUILD.md
+#
+# One push builds ONE environment's app, chosen by the branch:
+#
+#   develop                -> dev         (installs as "Šoma360 DEV", id ...mobile.dev)
+#   qa                     -> qa          (installs as "Šoma360 QA",  id ...mobile.qa)
+#   subscription / main    -> production  (the normal app, unchanged)
+#
+# The three install side by side on one phone and each talks to its own backend.
+# Each GitHub Environment (dev, qa, production) holds that environment's own
+# EXPO_PUBLIC_API_BASE_URL, RELEASES_REPO, APP_RELEASE_TOKEN and Firebase file;
+# see src/docs/ENVIRONMENTS.md.
 on:
   push:
-    branches: [main, subscription]
+    branches: [develop, qa, subscription, main]
   workflow_dispatch:
+    inputs:
+      environment:
+        description: "Build the selected branch for this environment"
+        type: choice
+        options:
+          - dev
+          - qa
+          - production
+        required: true
 
 # A newer push supersedes a build still running for the same branch.
 concurrency:
@@ -17,8 +37,38 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  target:
+    name: Pick the environment
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.pick.outputs.environment }}
+      app_env: ${{ steps.pick.outputs.app_env }}
+    steps:
+      - id: pick
+        env:
+          CHOSEN: ${{ inputs.environment }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          env_name="$CHOSEN"
+          if [ -z "$env_name" ]; then
+            case "$BRANCH" in
+              develop) env_name=dev ;;
+              qa) env_name=qa ;;
+              subscription|main) env_name=production ;;
+              *) echo "::error::No environment is configured for branch '$BRANCH'"; exit 1 ;;
+            esac
+          fi
+          app_env="$env_name"
+          if [ "$env_name" = "production" ]; then app_env=prod; fi
+          echo "environment=$env_name" >> "$GITHUB_OUTPUT"
+          echo "app_env=$app_env" >> "$GITHUB_OUTPUT"
+          echo "Building $BRANCH for $env_name"
+
   build-apk:
-    name: Gradle release build
+    name: Gradle release build (${{ needs.target.outputs.environment }})
+    needs: target
+    # Holds this build's variables and secrets (API address, release repo, Firebase file).
+    environment: ${{ needs.target.outputs.environment }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
@@ -31,6 +81,8 @@ jobs:
       # Baked into the app at bundle time (read via process.env in
       # src/api/client.ts). Set it as a repository *variable*.
       EXPO_PUBLIC_API_BASE_URL: ${{ vars.EXPO_PUBLIC_API_BASE_URL }}
+      # dev | qa | prod: read by app.config.js to name the app and set its id.
+      APP_ENV: ${{ needs.target.outputs.app_env }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v5
@@ -41,6 +93,9 @@ jobs:
       - name: Compute version
         run: |
           version="$(git describe --tags --always)"
+          # Non-production builds say so in their version, so a screenshot or a
+          # support request shows which build it was.
+          if [ "$APP_ENV" != "prod" ]; then version="${APP_ENV}-${version}"; fi
           echo "APP_VERSION_NAME=$version" >> "$GITHUB_ENV"
           echo "App version: $version"
 
@@ -61,7 +116,7 @@ jobs:
         id: firebase
         run: |
           # google-services.json is the Firebase *client* config for this Android app
-          # (package za.co.smartclean.mobile). It is a secret here, not a committed file.
+          # (package za.co.smartclean.mobile, plus .dev or .qa for those builds). It is a secret here, not a committed file.
           if [ -z "$GOOGLE_SERVICES_JSON_BASE64" ]; then
             echo "::warning::GOOGLE_SERVICES_JSON_BASE64 is not set - this APK will build but cannot receive push notifications (see src/docs/ANDROID_APK_BUILD.md)."
             echo "enabled=false" >> "$GITHUB_OUTPUT"
@@ -72,8 +127,11 @@ jobs:
           # Wrong file (e.g. the service-account/admin-SDK key) or wrong app = silent push failure later.
           jq -e '.project_info.project_id and (.client | length > 0)' google-services.json > /dev/null \
             || { echo "::error::That is not a google-services.json (the Android client file from Firebase console > Project settings > Your apps). A service-account key will not work here."; exit 1; }
-          jq -e '[.client[].client_info.android_client_info.package_name] | index("za.co.smartclean.mobile")' google-services.json > /dev/null \
-            || { echo "::error::google-services.json has no Android app with package za.co.smartclean.mobile. Register that package in Firebase and download the file again."; exit 1; }
+          # The id this build installs as: dev and qa builds add a suffix (see app.config.js).
+          package="za.co.smartclean.mobile"
+          if [ "$APP_ENV" != "prod" ]; then package="${package}.${APP_ENV}"; fi
+          jq -e --arg package "$package" '[.client[].client_info.android_client_info.package_name] | index($package)' google-services.json > /dev/null \
+            || { echo "::error::google-services.json has no Android app with package $package. Register that package in Firebase and download the file again."; exit 1; }
           echo "Firebase project: $(jq -r .project_info.project_id google-services.json)"
           echo "enabled=true" >> "$GITHUB_OUTPUT"
         env:
@@ -166,6 +224,7 @@ jobs:
         id: release
         run: |
           tag="build-${{ github.run_number }}"
+          if [ "$APP_ENV" != "prod" ]; then tag="${APP_ENV}-${tag}"; fi
           gh release create "$tag" "${{ steps.apk.outputs.name }}" \
             --repo "$GITHUB_REPOSITORY" --prerelease \
             --title "Šoma360 ${{ steps.apk.outputs.version }} (build ${{ github.run_number }})" \
@@ -190,6 +249,7 @@ jobs:
           RELEASES_REPO="${RELEASES_REPO%.git}"
           RELEASES_REPO="${RELEASES_REPO%/}"
           tag="build-${{ github.run_number }}"
+          if [ "$APP_ENV" != "prod" ]; then tag="${APP_ENV}-${tag}"; fi
           gh release create "$tag" "${{ steps.apk.outputs.name }}" \
             --repo "$RELEASES_REPO" \
             --title "Šoma360 ${{ steps.apk.outputs.version }} (build ${{ github.run_number }})" \

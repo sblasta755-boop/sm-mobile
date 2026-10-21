@@ -21,14 +21,34 @@ function appVersion(fallback) {
   }
 }
 
+// Which environment this build is for: dev, qa or prod (the default, so a build
+// with no APP_ENV is the normal production app). Non-production builds get their
+// own app id and name, so dev, qa and production install side by side on one
+// phone and never overwrite each other, and each is a separate app to Android.
+// The Firebase file used for a non-production build must be registered under
+// the matching id (see docs/ENVIRONMENTS.md).
+const APP_ENV = (process.env.APP_ENV || "prod").toLowerCase();
+const NON_PROD = APP_ENV !== "prod";
+const ID_SUFFIX = NON_PROD ? `.${APP_ENV}` : "";
+const NAME_LABEL = NON_PROD ? ` ${APP_ENV.toUpperCase()}` : "";
+
 module.exports = ({ config }) => {
   const hasFirebase = fs.existsSync(path.join(__dirname, "google-services.json"));
   return {
     ...config,
+    name: `${config.name}${NAME_LABEL}`,
+    // The link scheme is per app too, so two installs never fight over one link.
+    scheme: NON_PROD ? `${config.scheme}-${APP_ENV}` : config.scheme,
     version: appVersion(config.version),
+    ios: {
+      ...config.ios,
+      ...(config.ios?.bundleIdentifier ? { bundleIdentifier: `${config.ios.bundleIdentifier}${ID_SUFFIX}` } : {}),
+    },
     android: {
       ...config.android,
+      package: `${config.android.package}${ID_SUFFIX}`,
       ...(hasFirebase ? { googleServicesFile: "./google-services.json" } : {}),
     },
+    extra: { ...config.extra, appEnv: APP_ENV },
   };
 };
