@@ -17,6 +17,8 @@ import { colors, radius, spacing, typography, themedStyles, useThemeVersion } fr
 import { appAlert } from "@/components/Dialog";
 import { prepareEvidencePhoto } from "@/services/photoPrep";
 import { drainQueue } from "@/features/evidenceUploader";
+import { enqueueMutation } from "@/features/outbox";
+import { ItemNoteModal } from "@/components/ItemNoteModal";
 import { enqueuePhoto, keepPhoto, useEvidenceQueue } from "@/features/evidenceQueue";
 import { mergeQueuedEvidence, type QueuedPhoto } from "@/domain/evidenceQueue";
 
@@ -46,6 +48,8 @@ export default function EvidenceScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const [cameraSlotKey, setCameraSlotKey] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // The checklist item whose note popup is open.
+  const [noteItemId, setNoteItemId] = useState<string | null>(null);
   // Photos on the phone waiting to upload (see features/evidenceQueue).
   const queue = useEvidenceQueue();
   const cameraRef = useRef<CameraView | null>(null);
@@ -164,6 +168,23 @@ export default function EvidenceScreen() {
     setCameraSlotKey(slot.key);
   }
 
+  // Same rule as the note on the task screen: the assignee, while the task is open.
+  const canNote =
+    currentTask.assigneeId === currentUser?.id &&
+    ["assigned", "not_started", "in_progress", "rework_required"].includes(currentTask.status);
+  const noteItem = noteItemId ? currentTask.checklist.find((c) => c.id === noteItemId) : undefined;
+
+  async function saveItemNote(itemId: string, text: string) {
+    if (!currentUser) return;
+    await enqueueMutation({
+      userId: currentUser.id,
+      kind: "task.checklist",
+      taskId: currentTask.id,
+      payload: { itemId, note: text },
+    });
+    void drainQueue();
+  }
+
   async function capture() {
     if (!cameraRef.current || busy || !state.accessToken || !currentUser || !cameraSlot) return;
     const slot = cameraSlot;
@@ -229,6 +250,20 @@ export default function EvidenceScreen() {
               {group.title}
             </Text>
             {group.subtitle && <Text style={styles.mutedSmall}>{group.subtitle}</Text>}
+            {group.itemId && canNote && (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`${currentTask.checklist.find((c) => c.id === group.itemId)?.note ? "Edit" : "Add"} note for ${group.title}`}
+                onPress={() => setNoteItemId(group.itemId ?? null)}
+                style={styles.noteLink}
+              >
+                <Ionicons name="create-outline" size={14} color={colors.primary} />
+                <Text style={styles.noteLinkText}>
+                  {currentTask.checklist.find((c) => c.id === group.itemId)?.note ? "Note" : "Add a note"}
+                </Text>
+                {!!currentTask.checklist.find((c) => c.id === group.itemId)?.note && <View style={styles.noteDot} />}
+              </Pressable>
+            )}
           </View>
           <View style={styles.tiles}>
             {group.slots.map((slot) => {
@@ -310,6 +345,14 @@ export default function EvidenceScreen() {
         Done
       </Button>
 
+      <ItemNoteModal
+        visible={noteItem !== undefined && canNote}
+        title={noteItem?.label ?? "Note"}
+        note={noteItem?.note}
+        onSave={(text) => noteItem && void saveItemNote(noteItem.id, text)}
+        onClose={() => setNoteItemId(null)}
+      />
+
       <Modal visible={cameraSlot !== null} animationType="slide" onRequestClose={() => setCameraSlotKey(null)}>
         <View style={styles.cameraScreen}>
           {cameraSlot && (
@@ -363,6 +406,9 @@ const styles = themedStyles(() => StyleSheet.create({
   group: { marginBottom: spacing.md, gap: spacing.sm },
   groupHighlight: { borderColor: colors.primary, borderWidth: 2 },
   groupHeader: { gap: 2 },
+  noteLink: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", paddingVertical: 4 },
+  noteLinkText: { fontSize: typography.small, fontWeight: "600", color: colors.primary },
+  noteDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: colors.primary },
   groupTitle: { fontSize: typography.body, fontWeight: "700", color: colors.foreground },
   tiles: { flexDirection: "row", gap: spacing.sm },
   tile: {
