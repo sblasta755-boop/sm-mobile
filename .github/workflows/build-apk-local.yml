@@ -124,6 +124,9 @@ jobs:
           fi
           printf '%s' "$GOOGLE_SERVICES_JSON_BASE64" | tr -d '[:space:]' | base64 --decode > google-services.json \
             || { echo "::error::GOOGLE_SERVICES_JSON_BASE64 is not valid base64. Re-create it with: base64 -w0 google-services.json"; exit 1; }
+          # A cut-off paste decodes to JSON that stops part way: say so, it is a different mistake from a wrong file.
+          jq empty google-services.json 2>/dev/null \
+            || { echo "::error::GOOGLE_SERVICES_JSON_BASE64 decodes to an INCOMPLETE file ($(wc -c < google-services.json) bytes, not valid JSON). The secret was probably cut off when pasted. Re-create it on one line with: base64 -w0 google-services.json, and set it again on the '${{ needs.target.outputs.environment }}' environment."; exit 1; }
           # Wrong file (e.g. the service-account/admin-SDK key) or wrong app = silent push failure later.
           jq -e '.project_info.project_id and (.client | length > 0)' google-services.json > /dev/null \
             || { echo "::error::That is not a google-services.json (the Android client file from Firebase console > Project settings > Your apps). A service-account key will not work here."; exit 1; }
@@ -184,11 +187,27 @@ jobs:
       - name: Build release APK
         working-directory: src/android
         run: |
-          ./gradlew assembleRelease \
-            --init-script "$GITHUB_WORKSPACE/src/scripts/android-signing.init.gradle" \
-            -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=1g" \
-            -PreactNativeArchitectures=arm64-v8a,armeabi-v7a \
-            --no-daemon
+          # Dependencies come from Google's and Maven's servers, which now and then
+          # stall on a shared runner (a "Read timed out" on a library download is
+          # not a problem with the app). Fail a stalled download in 2 minutes
+          # instead of hanging, and try the whole build up to three times; files
+          # already downloaded are kept between attempts.
+          for attempt in 1 2 3; do
+            if ./gradlew assembleRelease \
+              --init-script "$GITHUB_WORKSPACE/src/scripts/android-signing.init.gradle" \
+              -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=1g" \
+              -Dorg.gradle.internal.http.connectionTimeout=60000 \
+              -Dorg.gradle.internal.http.socketTimeout=120000 \
+              -Dorg.gradle.internal.repository.max.retries=5 \
+              -PreactNativeArchitectures=arm64-v8a,armeabi-v7a \
+              --no-daemon; then
+              exit 0
+            fi
+            echo "::warning::Gradle build attempt $attempt failed"
+            [ "$attempt" -lt 3 ] && sleep 30
+          done
+          echo "::error::The release build failed three times. If the log shows 'Read timed out' or 'Could not GET', it is a download problem: re-run the workflow."
+          exit 1
         env:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
