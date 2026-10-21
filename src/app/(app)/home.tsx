@@ -131,8 +131,9 @@ export default function HomeScreen() {
     }
   }
   const canClockWithoutScan = canManualClock || canGeofenceClock;
-  // No card at all when this organisation does not clock people in this way.
-  const showShiftCard = hasAttendance && ((canScanClock && hasQr) || canClockWithoutScan);
+  // The image card is always there. Only the clocking parts of it (the status
+  // badge and the buttons) go when this organisation does not clock people in this way.
+  const showClockControls = hasAttendance && ((canScanClock && hasQr) || canClockWithoutScan);
 
   return (
     <Screen
@@ -140,7 +141,6 @@ export default function HomeScreen() {
         <DateStrip today={today} selectedDate={selectedDate} onSelect={setSelectedDate} />
       }
     >
-      {showShiftCard && (
       <Card padded={false} style={styles.shiftCard}>
         <ImageBackground
           source={
@@ -171,10 +171,12 @@ export default function HomeScreen() {
               </View>
               {supervisor && <Text style={styles.shiftMeta}>Supervisor: {supervisor.name}</Text>}
             </View>
-            <StatusBadge tone={clocked ? "success" : "neutral"} label={clocked ? "Clocked in" : "Not clocked in"} />
+            {showClockControls && (
+              <StatusBadge tone={clocked ? "success" : "neutral"} label={clocked ? "Clocked in" : "Not clocked in"} />
+            )}
           </View>
 
-          {!clocked ? (
+          {!showClockControls ? null : !clocked ? (
             <View style={styles.clockedActions}>
               {canScanClock && hasQr && (
                 <Button icon={<Ionicons name="scan" size={18} color={colors.primaryForeground} />} onPress={() => router.push("/scan")}>
@@ -217,7 +219,6 @@ export default function HomeScreen() {
           )}
         </ImageBackground>
       </Card>
-      )}
 
       <Card style={styles.progressCard}>
         <View style={styles.progressHeader}>
