@@ -107,12 +107,14 @@ export default function ManagementReportScreen() {
         (done, total) => total && setStage(`Preparing photos... ${done} of ${total}`),
       );
       const photoData = new Map(photos.map((p, i) => [p.id, embedded[i]]));
+      // The logo is embedded too: the print engine may not fetch it in time.
+      const logoData = branding.logoUrl ? await photoDataUri(branding.logoUrl).catch(() => null) : null;
       setStage("Building the report...");
       const html = buildManagementReportHtml({
         report,
         reportName: name,
         clientName: branding.name,
-        clientLogoUrl: branding.logoUrl,
+        clientLogoUrl: logoData ?? branding.logoUrl,
         generatedAtLabel: `${longDate(dayKey(now)).toUpperCase()} | ${pad(now.getHours())}:${pad(now.getMinutes())}`,
         reviewerName: currentUser?.name ?? "",
         reviewDateLabel: longDate(dayKey(now)),

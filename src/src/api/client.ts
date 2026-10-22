@@ -43,6 +43,9 @@ export const API_BASE_URL = (
 
 export function fileUrl(filePath: string | undefined): string | undefined {
   if (!filePath) return undefined;
+  // Files in object storage (R2) are saved as their full public address; files on
+  // the server's own disk as "images/<name>". Both have to work, at any time.
+  if (/^https?:\/\//i.test(filePath) || filePath.startsWith("data:")) return filePath;
   return `${API_BASE_URL}/${filePath.replace(/^\/+/, "")}`;
 }
 
@@ -50,7 +53,9 @@ export function fileUrl(filePath: string | undefined): string | undefined {
  * backend's /thumbs). Anything that is not an upload falls back to the original. */
 export function thumbUrl(filePath: string | undefined, width = 640): string | undefined {
   if (!filePath) return undefined;
-  const match = /^\/?images\/([^/?#]+)$/.exec(filePath);
+  // Either the server-disk form ("images/<name>") or the bucket's full address;
+  // the backend's /thumbs finds the file wherever it is stored.
+  const match = /^(?:https?:\/\/[^?#]+)?\/?images\/([^/?#]+)$/.exec(filePath);
   return match ? `${API_BASE_URL}/thumbs/${match[1]}?w=${width}` : fileUrl(filePath);
 }
 
