@@ -78,6 +78,8 @@ export interface WorkflowPolicy {
     signoffRequireNameMatch?: boolean;
   };
   qr: { enabled: boolean };
+  /** Which staff roles (by key) this organisation lets handle stock. */
+  stock?: { issueRoles: string[]; storekeeperRoles: string[] };
 }
 
 export interface SubscriptionState {
@@ -541,7 +543,110 @@ export interface StockItem {
   unit: string;
   siteId: string;
   lastTx?: string;
+  category?: string | null;
+  packUnit?: string | null;
+  packSize?: number;
+  unitCost?: number | null;
 }
+
+export interface StockLocation {
+  id: string;
+  siteId: string;
+  name: string;
+  type: "store" | "cart" | "cupboard";
+  parentId?: string | null;
+  assigneeIds: string[];
+  active: boolean;
+}
+
+export interface StockLevel {
+  itemId: string;
+  locationId: string;
+  qty: number;
+  parMin?: number | null;
+  parMax?: number | null;
+}
+
+export interface StockMovement {
+  id: string;
+  itemId: string;
+  locationId: string;
+  type: string;
+  qty: number;
+  /** This movement took the location below zero. */
+  negative: boolean;
+}
+
+export interface StockTransfer {
+  id: string;
+  siteId: string;
+  itemId: string;
+  fromLocationId: string;
+  toLocationId: string;
+  qty: number;
+  status: "in_transit" | "received";
+}
+
+export interface StockRestockTask {
+  id: string;
+  siteId: string;
+  itemId: string;
+  locationId: string;
+  qty: number;
+  status: "open" | "done" | "cancelled";
+}
+
+export interface StockCountLine {
+  id: string;
+  sessionId: string;
+  itemId: string;
+  locationId: string;
+  /** Null until the count is submitted - counting is blind. */
+  expected?: number | null;
+  counted?: number | null;
+  variance?: number | null;
+  varianceCost?: number | null;
+  reasonCode?: string | null;
+  status: "pending" | "counted" | "needs_reason" | "awaiting_approval" | "approved" | "rejected" | "ok";
+}
+
+export interface StockCountSession {
+  id: string;
+  siteId: string;
+  countDate: string;
+  status: "open" | "submitted" | "closed";
+  lines: StockCountLine[];
+  openIssues: number;
+}
+
+/** [code, label] pairs for explaining a count variance. */
+export const STOCK_COUNT_REASONS: readonly (readonly [string, string])[] = [
+  ["spoilage_expiry", "Spoilage or expiry"],
+  ["damage", "Damage"],
+  ["spill", "Spill"],
+  ["unrecorded_issue", "Unrecorded issue"],
+  ["unrecorded_transfer", "Unrecorded transfer"],
+  ["receiving_error", "Receiving error"],
+  ["wrong_unit", "Wrong unit entered"],
+  ["suspected_theft", "Suspected theft"],
+  ["unknown", "Unknown"],
+];
+
+/** A unit an item can be received in (a case of 12). */
+export interface StockConversion {
+  itemId: string;
+  unit: string;
+  baseQty: number;
+}
+
+/** What the signed-in person may do with stock. */
+export interface StockAccess {
+  issue: boolean;
+  keep: boolean;
+  manage: boolean;
+}
+
+export const STOCK_WASTE_REASONS = ["Damaged", "Expired", "Spilled", "Lost", "Contaminated", "Other"] as const;
 
 export interface Asset {
   id: string;

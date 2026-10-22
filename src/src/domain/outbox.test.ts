@@ -4,6 +4,8 @@ import {
   applyCorrectiveUpdates,
   applyInspectionDecisions,
   applyMutations,
+  applyStockCount,
+  pendingStockUse,
   type OutboxMutation,
 } from "./outbox";
 
@@ -120,5 +122,51 @@ describe("item notes", () => {
     expect(queue[0].payload).toEqual({ itemId: "a", done: true, note: "Sticky floor" });
     const [out] = applyMutations([task], queue);
     expect(out.checklist[0]).toMatchObject({ done: true, note: "Sticky floor" });
+  });
+});
+
+describe("offline stock counts", () => {
+  const count = { id: "c1", status: "open", lines: [{ id: "l1", counted: null, status: "pending" }, { id: "l2", counted: null, status: "pending" }] };
+  const enter = (over: Partial<OutboxMutation>) =>
+    mut({ kind: "stock.count.enter", taskId: undefined, payload: { countId: "c1", lineId: "l1", counted: 5 }, ...over });
+
+  it("counting the same line again replaces the earlier figure, other lines are kept", () => {
+    let queue = addMutation([], enter({ id: "a" }));
+    queue = addMutation(queue, enter({ id: "b", payload: { countId: "c1", lineId: "l2", counted: 7 } }));
+    queue = addMutation(queue, enter({ id: "c", payload: { countId: "c1", lineId: "l1", counted: 9 } }));
+    expect(queue.map((m) => m.id).sort()).toEqual(["b", "c"]);
+  });
+
+  it("shows offline figures on the count and whether a submission is waiting", () => {
+    const entered = enter({ id: "a", payload: { countId: "c1", lineId: "l1", counted: 5 } });
+    const submit = mut({ id: "s", kind: "stock.count.submit", taskId: undefined, payload: { countId: "c1" } });
+    const { session, submitPending } = applyStockCount(count, [entered, submit], "u1");
+    expect(session.lines[0]).toMatchObject({ counted: 5, status: "counted" });
+    expect(session.lines[1].counted).toBeNull();
+    expect(submitPending).toBe(true);
+    expect(applyStockCount(count, [entered], "u2").session).toBe(count); // someone else's work
+  });
+
+  it("ignores refused figures and counts the server has already moved on", () => {
+    const refused = enter({ status: "rejected" });
+    expect(applyStockCount(count, [refused], "u1").session).toBe(count);
+    const submitted = { ...count, status: "submitted" };
+    expect(applyStockCount(submitted, [enter({})], "u1").session).toBe(submitted);
+  });
+});
+
+describe("offline stock issues and waste", () => {
+  const issue = (id: string, qty: number, kind: OutboxMutation["kind"] = "stock.issue") =>
+    mut({ id, kind, taskId: undefined, payload: { itemId: "i1", locationId: "l1", qty, clientRef: id } });
+
+  it("keeps every issue as its own change", () => {
+    const queue = addMutation(addMutation([], issue("a", 2)), issue("b", 3));
+    expect(queue.map((m) => m.id).sort()).toEqual(["a", "b"]);
+  });
+
+  it("totals what is waiting, per item and place, and skips refused ones", () => {
+    const used = pendingStockUse([issue("a", 2), issue("b", 3, "stock.waste"), { ...issue("c", 9), status: "rejected" }], "u1");
+    expect(used.get("i1|l1")).toBe(5);
+    expect(pendingStockUse([issue("a", 2)], "u2").size).toBe(0);
   });
 });

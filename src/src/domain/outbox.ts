@@ -13,7 +13,11 @@ export type OutboxKind =
   | "attendance.clock"
   | "inspection.decide"
   | "corrective.update"
-  | "incident.create";
+  | "incident.create"
+  | "stock.issue"
+  | "stock.waste"
+  | "stock.count.enter"
+  | "stock.count.submit";
 
 export interface OutboxMutation {
   /** Also the idempotency handle: replaying the same change is harmless. */
@@ -124,6 +128,14 @@ export function supersedes(incoming: OutboxMutation, existing: OutboxMutation): 
   ) {
     return false;
   }
+  // Every issue or waste is its own event: two of the same item are two uses.
+  if (incoming.kind === "stock.issue" || incoming.kind === "stock.waste") return false;
+  // Counting the same line again replaces the earlier figure; a count is
+  // submitted once.
+  if (incoming.kind === "stock.count.enter") {
+    return incoming.payload.countId === existing.payload.countId && incoming.payload.lineId === existing.payload.lineId;
+  }
+  if (incoming.kind === "stock.count.submit") return incoming.payload.countId === existing.payload.countId;
   // Deciding the same inspection again replaces the earlier choice.
   if (incoming.kind === "inspection.decide") return incoming.payload.inspectionId === existing.payload.inspectionId;
   return true;
@@ -214,4 +226,52 @@ export function applyCorrectiveUpdates<T extends CorrectiveLike>(actions: T[], m
     const m = last.get(action.id);
     return m ? { ...action, status: String(m.payload.status) } : action;
   });
+}
+
+
+interface StockCountLike {
+  id: string;
+  status: string;
+  lines: { id: string; counted?: number | null; status: string }[];
+}
+
+/**
+ * Shows a cycle count with the figures entered offline on top of what the
+ * server last sent, and whether a submission is still waiting to go. Counting
+ * is blind, so nothing here ever needs the expected quantity.
+ */
+export function applyStockCount<T extends StockCountLike>(
+  session: T,
+  mutations: OutboxMutation[],
+  userId: string,
+): { session: T; submitPending: boolean } {
+  const mine = mutations.filter((m) => m.userId === userId && m.status !== "rejected" && m.payload.countId === session.id);
+  const entries = new Map<string, number>();
+  for (const m of mine.filter((x) => x.kind === "stock.count.enter").sort((a, b) => a.createdAt.localeCompare(b.createdAt))) {
+    entries.set(String(m.payload.lineId), Number(m.payload.counted));
+  }
+  const submitPending = mine.some((m) => m.kind === "stock.count.submit");
+  if (entries.size === 0 || session.status !== "open") return { session, submitPending };
+  return {
+    session: {
+      ...session,
+      lines: session.lines.map((line) =>
+        entries.has(line.id) ? { ...line, counted: entries.get(line.id), status: "counted" } : line,
+      ),
+    },
+    submitPending,
+  };
+}
+
+/** Stock issued or wasted on this phone and not yet sent, per item and place -
+ * taken off the on-hand figure shown, so a second use offline is not judged
+ * against a number that no longer holds. */
+export function pendingStockUse(mutations: OutboxMutation[], userId: string): Map<string, number> {
+  const used = new Map<string, number>();
+  for (const m of mutations) {
+    if (m.userId !== userId || m.status === "rejected" || (m.kind !== "stock.issue" && m.kind !== "stock.waste")) continue;
+    const key = `${m.payload.itemId}|${m.payload.locationId}`;
+    used.set(key, (used.get(key) ?? 0) + Number(m.payload.qty ?? 0));
+  }
+  return used;
 }

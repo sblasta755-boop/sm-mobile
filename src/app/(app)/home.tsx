@@ -22,6 +22,7 @@ import { clockIn as clockInRequest, clockOut as clockOutRequest } from "@/api/cl
 import { getCurrentCoords } from "@/services/geolocation";
 import { fileUrl } from "@/api/client";
 import { useStaffRole } from "@/features/roles";
+import { useCanOpenStock } from "@/features/stock";
 import { useSmartClean } from "@/features/store";
 import { toneForTask, humanStatus } from "@/domain/status";
 import { colors, radius, spacing, typography, themedStyles, status, useThemeVersion } from "@/theme";
@@ -39,6 +40,8 @@ export default function HomeScreen() {
   const hasHourlyCompliance = useHasModule("hourly_compliance");
   const hasCorrectiveActions = useHasModule("corrective_actions");
   const hasIncidents = useHasModule("incidents");
+  // Stock is offered only to staff roles the organisation has switched on.
+  const canOpenStock = useCanOpenStock();
   // How this organisation lets people clock. Defaults (before bootstrap, or
   // from an older backend) are the original QR-only flow - see
   // useHasCapability. Presentation only; the server authorises the method.
@@ -298,6 +301,19 @@ export default function HomeScreen() {
           <Ionicons name="arrow-forward" size={16} color={colors.foreground} />
         </Card>
       </Pressable>
+      )}
+
+      {canOpenStock && (
+        <Pressable onPress={() => router.push("/stock" as never)}>
+          <Card style={styles.hourlyCard}>
+            <Ionicons name="cube" size={20} color={colors.primary} />
+            <View style={styles.taskInfo}>
+              <Text style={styles.taskTitle}>Stock</Text>
+              <Text style={styles.mutedSmall}>Issue to a job, log waste, restock</Text>
+            </View>
+            <Ionicons name="arrow-forward" size={16} color={colors.foreground} />
+          </Card>
+        </Pressable>
       )}
 
       {hasCorrectiveActions && openCA.length > 0 && (

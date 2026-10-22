@@ -12,6 +12,10 @@ const KIND_LABEL: Record<string, string> = {
   "task.note": "a note",
   "task.submit": "a submission",
   "incident.create": "an incident report",
+  "stock.issue": "stock issued to a job",
+  "stock.waste": "logged waste",
+  "stock.count.enter": "a stock count entry",
+  "stock.count.submit": "a stock count",
 };
 
 /**

@@ -14,6 +14,7 @@ import { ActionTiles } from "@/components/ActionTiles";
 import { StatusBadge } from "@/components/StatusBadge";
 import { TaskRow } from "@/components/TaskRow";
 import { useSmartClean } from "@/features/store";
+import { useCanOpenStock } from "@/features/stock";
 import { useHasCapability, useHasModule } from "@/features/modules";
 import { toneForTask, humanStatus } from "@/domain/status";
 import { taskDestination } from "@/domain/inspections";
@@ -31,6 +32,7 @@ import { colors, radius, spacing, typography, themedStyles, useThemeVersion } fr
 export default function SuperviseHome() {
   useThemeVersion(); // re-render with the new colours when the theme changes
   const { state, currentUser } = useSmartClean();
+  const canOpenStock = useCanOpenStock();
   const wayfindingOn = useHasModule("wayfinding");
   const hasAttendance = useHasModule("attendance");
   const canScanClock = useHasCapability("qr_attendance");
@@ -158,6 +160,9 @@ export default function SuperviseHome() {
         items={[
           { key: "board", label: "Task board", icon: <Ionicons name="albums-outline" size={20} color={colors.primary} />, onPress: () => router.push("/kanban") },
           { key: "report", label: "Management report", icon: <Ionicons name="document-text-outline" size={20} color={colors.primary} />, onPress: () => router.push("/management-report") },
+          ...(canOpenStock
+            ? [{ key: "stock", label: "Stock", icon: <Ionicons name="cube-outline" size={20} color={colors.primary} />, onPress: () => router.push("/stock" as never) }]
+            : []),
           ...(wayfindingOn
             ? [
                 { key: "signs", label: "Wayfinding signs", icon: <Ionicons name="compass-outline" size={20} color={colors.primary} />, onPress: () => router.push("/install-beacon" as never) },

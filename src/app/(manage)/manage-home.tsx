@@ -7,6 +7,7 @@ import { Card } from "@/components/Card";
 import { ActionTiles } from "@/components/ActionTiles";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useSmartClean } from "@/features/store";
+import { useCanOpenStock } from "@/features/stock";
 import { useHasModule } from "@/features/modules";
 import { colors, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 
@@ -23,6 +24,7 @@ import { colors, spacing, typography, themedStyles, useThemeVersion } from "@/th
 export default function ManageHome() {
   useThemeVersion(); // re-render with the new colours when the theme changes
   const { state, currentUser } = useSmartClean();
+  const canOpenStock = useCanOpenStock();
   const wayfindingOn = useHasModule("wayfinding");
 
   const mySites = useMemo(() => {
@@ -73,6 +75,9 @@ export default function ManageHome() {
       <ActionTiles
         items={[
           { key: "report", label: "Management report", icon: <Ionicons name="document-text-outline" size={20} color={colors.primary} />, onPress: () => router.push("/management-report") },
+          ...(canOpenStock
+            ? [{ key: "stock", label: "Stock", icon: <Ionicons name="cube-outline" size={20} color={colors.primary} />, onPress: () => router.push("/stock" as never) }]
+            : []),
           ...(wayfindingOn
             ? [
                 { key: "signs", label: "Wayfinding signs", icon: <Ionicons name="compass-outline" size={20} color={colors.primary} />, onPress: () => router.push("/install-beacon" as never) },

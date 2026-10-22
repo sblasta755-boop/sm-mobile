@@ -13,7 +13,15 @@ import type {
   Site,
   SiteFloorPlanImage,
   StaffRole,
+  StockAccess,
+  StockConversion,
+  StockCountSession,
   StockItem,
+  StockLevel,
+  StockLocation,
+  StockMovement,
+  StockRestockTask,
+  StockTransfer,
   SubscriptionState,
   Task,
   TableRatingSummary,
@@ -1543,3 +1551,81 @@ export function sendFeedback(accessToken: string, payload: FeedbackPayload) {
     accessToken,
   );
 }
+
+
+// ---- Stock ----
+// The server decides who may do what (role, and the organisation's stock
+// policy); these only carry the request.
+
+const stockRequest = <T,>(accessToken: string, path: string, body?: unknown, method = body === undefined ? "GET" : "POST") =>
+  request<T>(`/stock${path}`, { method, ...(body === undefined ? {} : { body: JSON.stringify(body) }) }, accessToken);
+
+export const getStockAccess = (accessToken: string) => stockRequest<StockAccess>(accessToken, "/access");
+
+export const listStockLocations = (accessToken: string, siteId: string) =>
+  stockRequest<StockLocation[]>(accessToken, `/locations?siteId=${encodeURIComponent(siteId)}`);
+
+export const listStockLevels = (accessToken: string, siteId: string) =>
+  stockRequest<StockLevel[]>(accessToken, `/levels?siteId=${encodeURIComponent(siteId)}`);
+
+export const listStockRestockTasks = (accessToken: string, siteId: string) =>
+  stockRequest<StockRestockTask[]>(accessToken, `/restock-tasks?siteId=${encodeURIComponent(siteId)}`);
+
+export const listStockTransfersInTransit = (accessToken: string, siteId: string) =>
+  stockRequest<StockTransfer[]>(accessToken, `/transfers?status=in_transit&siteId=${encodeURIComponent(siteId)}`);
+
+export const issueStock = (
+  accessToken: string,
+  payload: {
+    itemId: string;
+    locationId: string;
+    qty: number;
+    referenceType: "task" | "round" | "location";
+    referenceId: string;
+    /** Set on a queued request: a replay returns the first result instead of booking twice. */
+    clientRef?: string;
+    /** When it really happened (a request queued offline). */
+    occurredAt?: string;
+  },
+) => stockRequest<StockMovement>(accessToken, "/issue", payload);
+
+export const logStockWaste = (
+  accessToken: string,
+  payload: { itemId: string; locationId: string; qty: number; reasonCode: string; clientRef?: string; occurredAt?: string },
+) => stockRequest<StockMovement>(accessToken, "/waste", payload);
+
+export const receiveStockDelivery = (
+  accessToken: string,
+  payload: {
+    locationId: string;
+    supplier: string;
+    deliveryRef?: string;
+    /** unit: "base", "pack", or the name of one of the item's units. */
+    lines: { itemId: string; qty: number; unit: string; ordered?: number }[];
+  },
+) => stockRequest<StockMovement[]>(accessToken, "/receive", payload);
+
+export const receiveStockTransfer = (accessToken: string, id: string) =>
+  stockRequest<StockTransfer>(accessToken, `/transfers/${id}/receive`, {});
+
+export const completeStockRestockTask = (accessToken: string, id: string) =>
+  stockRequest<StockRestockTask>(accessToken, `/restock-tasks/${id}/complete`, {});
+
+// Cycle counts: blind until submitted (the server withholds the expected figure).
+export const startStockCount = (accessToken: string, siteId: string) =>
+  stockRequest<StockCountSession>(accessToken, "/counts", { siteId });
+
+export const enterStockCount = (accessToken: string, countId: string, lineId: string, counted: number) =>
+  stockRequest<StockCountSession>(accessToken, `/counts/${countId}/lines/${lineId}`, { counted }, "PUT");
+
+export const submitStockCount = (accessToken: string, countId: string) =>
+  stockRequest<StockCountSession>(accessToken, `/counts/${countId}/submit`, {});
+
+export const giveStockCountReason = (accessToken: string, countId: string, lineId: string, reasonCode: string) =>
+  stockRequest<StockCountSession>(accessToken, `/counts/${countId}/lines/${lineId}/reason`, { reasonCode });
+
+export const decideStockCountLine = (accessToken: string, countId: string, lineId: string, approve: boolean) =>
+  stockRequest<StockCountSession>(accessToken, `/counts/${countId}/lines/${lineId}/decision`, { approve });
+
+export const listStockConversions = (accessToken: string, siteId: string) =>
+  stockRequest<StockConversion[]>(accessToken, `/conversions?siteId=${encodeURIComponent(siteId)}`);

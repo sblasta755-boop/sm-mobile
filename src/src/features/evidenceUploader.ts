@@ -8,6 +8,10 @@ import {
   clockOut,
   createIncident,
   decideInspection,
+  enterStockCount,
+  issueStock,
+  logStockWaste,
+  submitStockCount,
   resolveQr,
   updateCorrectiveAction,
   saveTaskNote,
@@ -91,6 +95,36 @@ async function sendMutation(ctx: Context, m: OutboxMutation): Promise<Task | nul
       ctx.onStale();
       return null;
     }
+    case "stock.issue":
+      await issueStock(ctx.token, {
+        itemId: String(m.payload.itemId),
+        locationId: String(m.payload.locationId),
+        qty: Number(m.payload.qty),
+        referenceType: m.payload.referenceType as "task" | "round" | "location",
+        referenceId: String(m.payload.referenceId),
+        clientRef: String(m.payload.clientRef),
+        occurredAt: String(m.payload.occurredAt ?? m.createdAt),
+      });
+      ctx.onStale();
+      return null;
+    case "stock.waste":
+      await logStockWaste(ctx.token, {
+        itemId: String(m.payload.itemId),
+        locationId: String(m.payload.locationId),
+        qty: Number(m.payload.qty),
+        reasonCode: String(m.payload.reasonCode),
+        clientRef: String(m.payload.clientRef),
+        occurredAt: String(m.payload.occurredAt ?? m.createdAt),
+      });
+      ctx.onStale();
+      return null;
+    case "stock.count.enter":
+      await enterStockCount(ctx.token, String(m.payload.countId), String(m.payload.lineId), Number(m.payload.counted));
+      return null;
+    case "stock.count.submit":
+      await submitStockCount(ctx.token, String(m.payload.countId));
+      ctx.onStale();
+      return null;
     case "attendance.clock": {
       const body = {
         siteId: String(m.payload.siteId),
