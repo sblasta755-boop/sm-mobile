@@ -128,3 +128,19 @@ Each build is then released there as `build-<run number>` and registered at
 signing key and a higher version code (the run number) to install over the old one. Until
 `RELEASES_REPO` is set the step is skipped and nothing changes. To force an update, use
 Platform > App releases > "Require this build or newer".
+
+### The landing page's Download button
+
+The landing page lives inside the web app (`/`, `/privacy`, `/terms` for signed-out visitors), and its
+**Download for Android** button needs no link of its own. It asks the backend for the newest
+registered build and points at the stable address
+
+    /api/v1/app/download/android/latest
+
+which counts the download (Platform > App releases shows the count per build) and redirects to the
+newest build's APK. Registering a new build, as above, is all it takes: nothing to copy into a
+setting or rebuild. The same address can go in an email or on a poster.
+
+If no build is registered yet the button reads "Android app coming soon". Two optional overrides
+exist for unusual setups: `VITE_APK_URL` pins the button to one address, and an APK placed in the
+web app's `public/downloads/` is used as a last resort.

@@ -7,6 +7,7 @@ import { BrokenGlassIcon } from "@/components/BrokenGlassIcon";
 import { Screen } from "@/components/Screen";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
+import { ProgressCard } from "@/components/ProgressCard";
 import { ActionTiles } from "@/components/ActionTiles";
 import { ActiveFiltersBar } from "@/components/ActiveFiltersBar";
 import { useTaskFilters } from "@/features/taskFilters";
@@ -222,6 +223,8 @@ export default function HomeScreen() {
           )}
         </ImageBackground>
       </Card>
+
+      <ProgressCard />
 
       <Card style={styles.progressCard}>
         <View style={styles.progressHeader}>

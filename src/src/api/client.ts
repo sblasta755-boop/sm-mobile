@@ -1629,3 +1629,45 @@ export const decideStockCountLine = (accessToken: string, countId: string, lineI
 
 export const listStockConversions = (accessToken: string, siteId: string) =>
   stockRequest<StockConversion[]>(accessToken, `/conversions?siteId=${encodeURIComponent(siteId)}`);
+
+// ---- Gamification ----
+
+export type GamificationPeriod = "week" | "month";
+
+export interface PointsBreakdownLine {
+  label: string;
+  count: number | null;
+  points: number;
+}
+
+export interface GamificationBadge {
+  key: string;
+  label: string;
+  description: string;
+  earnedAt: string;
+}
+
+export type MyProgress =
+  | { enabled: false }
+  | {
+      enabled: true;
+      period: GamificationPeriod;
+      siteId: string;
+      siteName: string;
+      rank: number | null;
+      of: number;
+      streak: number;
+      longestStreak: number;
+      badges: GamificationBadge[];
+      points: number;
+      tasks: number;
+      onTime: number;
+      punctualShifts: number;
+      breakdown: PointsBreakdownLine[];
+    };
+
+/** The caller's own points, position, streak and badges. Self-service: the server only ever
+ * returns the signed-in person's own numbers - never another person's name or points. */
+export function getMyProgress(accessToken: string, period: GamificationPeriod) {
+  return request<MyProgress>(`/gamification/me?period=${period}`, {}, accessToken);
+}

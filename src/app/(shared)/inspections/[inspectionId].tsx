@@ -1,6 +1,15 @@
+import { timeSpentLabel } from "@/domain/timeSpent";
 import { useMemo, useState } from "react";
 import { router, useLocalSearchParams } from "expo-router";
-import { Image, Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import {
+  Image,
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Screen } from "@/components/Screen";
 import { Card } from "@/components/Card";
@@ -22,7 +31,14 @@ import {
   PASS_SCORE,
   TASK_CATEGORIES,
 } from "@/domain/inspections";
-import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
+import {
+  colors,
+  radius,
+  spacing,
+  typography,
+  themedStyles,
+  useThemeVersion,
+} from "@/theme";
 import type { ChecklistItem } from "@/types/smartclean";
 import { appAlert } from "@/components/Dialog";
 
@@ -40,32 +56,46 @@ export default function InspectionScreen() {
   const homePath = useHomePath();
   const insp = state.inspections.find((i) => i.id === inspectionId);
   const task = insp ? state.tasks.find((t) => t.id === insp.taskId) : undefined;
-  const doer = task ? state.users.find((u) => u.id === task.assigneeId) : undefined;
-  const categories = task?.isInvestigation ? INVESTIGATION_CATEGORIES : TASK_CATEGORIES;
+  const doer = task
+    ? state.users.find((u) => u.id === task.assigneeId)
+    : undefined;
+  const categories = task?.isInvestigation
+    ? INVESTIGATION_CATEGORIES
+    : TASK_CATEGORIES;
   const [scores, setScores] = useState<Record<string, number>>(() =>
     Object.fromEntries(categories.map((c) => [c, 85])),
   );
   const [comments, setComments] = useState("");
   const [reason, setReason] = useState("");
   const [deciding, setDeciding] = useState<"approve" | "reject" | null>(null);
-  const [viewing, setViewing] = useState<{ uri: string; label: string } | null>(null);
+  const [viewing, setViewing] = useState<{ uri: string; label: string } | null>(
+    null,
+  );
 
   const overall = useMemo(() => overallScore(scores), [scores]);
-  const backToList = currentUser?.role === "supervisor" ? "/supervise-inspections" : homePath;
+  const backToList =
+    currentUser?.role === "supervisor" ? "/supervise-inspections" : homePath;
 
   if (!insp || !task) {
     return (
       <Screen title="Inspection" backTo={backToList}>
-        <Text style={styles.muted}>This inspection isn&apos;t available. It may have been decided already.</Text>
+        <Text style={styles.muted}>
+          This inspection isn&apos;t available. It may have been decided
+          already.
+        </Text>
       </Screen>
     );
   }
 
-  const decided = !["pending", "in_progress", "reinspection_required"].includes(insp.status);
+  const decided = !["pending", "in_progress", "reinspection_required"].includes(
+    insp.status,
+  );
   const selfApproval = currentUser?.id === task.assigneeId;
   // A task a supervisor did themselves is reviewed above them.
-  const needsManager = !!task.isSupervisorTask && !canReviewSupervisorTask(currentUser?.role);
-  const allowed = canInspectRole(currentUser?.role) && !selfApproval && !needsManager;
+  const needsManager =
+    !!task.isSupervisorTask && !canReviewSupervisorTask(currentUser?.role);
+  const allowed =
+    canInspectRole(currentUser?.role) && !selfApproval && !needsManager;
 
   const finish = async (decision: "approve" | "reject") => {
     if (!currentUser) return;
@@ -95,7 +125,10 @@ export default function InspectionScreen() {
       );
       router.replace(backToList as never);
     } catch (error) {
-      appAlert("Could not save the inspection", error instanceof Error ? error.message : "Please try again.");
+      appAlert(
+        "Could not save the inspection",
+        error instanceof Error ? error.message : "Please try again.",
+      );
       setDeciding(null);
     }
   };
@@ -119,7 +152,11 @@ export default function InspectionScreen() {
   // Each photo sits under the checklist item it proves; the rest are "Other photos".
   const { byItem, loose } = evidenceByItem(task.checklist, task.evidence);
   const caption = (e: { kind: string; label: string }) =>
-    e.kind === "before" ? "Before" : e.kind === "after" ? "After" : e.label || e.kind;
+    e.kind === "before"
+      ? "Before"
+      : e.kind === "after"
+        ? "After"
+        : e.label || e.kind;
   const thumb = (e: (typeof task.evidence)[number]) => {
     const uri = fileUrl(e.filePath) ?? e.uri;
     return (
@@ -130,7 +167,11 @@ export default function InspectionScreen() {
         onPress={() => uri && setViewing({ uri, label: caption(e) })}
         style={styles.thumbWrap}
       >
-        {uri ? <Image source={{ uri }} style={styles.thumb} /> : <View style={[styles.thumb, styles.thumbEmpty]} />}
+        {uri ? (
+          <Image source={{ uri }} style={styles.thumb} />
+        ) : (
+          <View style={[styles.thumb, styles.thumbEmpty]} />
+        )}
         <Text style={styles.thumbLabel} numberOfLines={2}>
           {caption(e)}
         </Text>
@@ -148,12 +189,20 @@ export default function InspectionScreen() {
           color={item.done ? colors.success : colors.mutedForeground}
         />
         <View style={styles.flex}>
-          <Text style={[styles.checkLabel, !item.done && styles.muted]}>{item.label}</Text>
-          {!!item.value && <Text style={styles.checkValue}>&ldquo;{item.value}&rdquo;</Text>}
-          {!!item.note && <Text style={styles.checkValue}>Note: {item.note}</Text>}
+          <Text style={[styles.checkLabel, !item.done && styles.muted]}>
+            {item.label}
+          </Text>
+          {!!item.value && (
+            <Text style={styles.checkValue}>&ldquo;{item.value}&rdquo;</Text>
+          )}
+          {!!item.note && (
+            <Text style={styles.checkValue}>Note: {item.note}</Text>
+          )}
         </View>
       </View>
-      {(byItem[item.id] ?? []).length > 0 && <View style={styles.itemThumbs}>{byItem[item.id].map(thumb)}</View>}
+      {(byItem[item.id] ?? []).length > 0 && (
+        <View style={styles.itemThumbs}>{byItem[item.id].map(thumb)}</View>
+      )}
     </View>
   );
 
@@ -168,22 +217,38 @@ export default function InspectionScreen() {
         <View style={styles.badges}>
           {task.qrVerified && <VerifiedBadge label="Room QR" />}
           {!task.qrVerified && task.startMethod === "manual" && (
-            <StatusBadge tone="neutral" label="Started manually - no area scan" />
+            <StatusBadge
+              tone="neutral"
+              label="Started manually - no area scan"
+            />
           )}
-          {task.isSupervisorTask && <StatusBadge tone="info" label="Supervisor task" />}
-          {task.evidence.some((e) => e.offlineOriginated) && <StatusBadge tone="warning" label="Offline-originated" />}
+          {task.isSupervisorTask && (
+            <StatusBadge tone="info" label="Supervisor task" />
+          )}
+          {task.evidence.some((e) => e.offlineOriginated) && (
+            <StatusBadge tone="warning" label="Offline-originated" />
+          )}
         </View>
         {task.startedAt && (
-          <Text style={styles.muted}>Started {new Date(task.startedAt).toLocaleString("en-ZA")}</Text>
+          <Text style={styles.muted}>
+            Started {new Date(task.startedAt).toLocaleString("en-ZA")}
+          </Text>
         )}
         {task.submittedAt && (
-          <Text style={styles.muted}>Submitted {new Date(task.submittedAt).toLocaleString("en-ZA")}</Text>
+          <Text style={styles.muted}>
+            Submitted {new Date(task.submittedAt).toLocaleString("en-ZA")}
+          </Text>
+        )}
+        {!!timeSpentLabel(task) && (
+          <Text style={styles.muted}>Time spent {timeSpentLabel(task)}</Text>
         )}
       </Card>
 
       {!!task.note && (
         <Card style={styles.card}>
-          <Text style={styles.sectionTitle}>Note from {doer?.name ?? "the cleaner"}</Text>
+          <Text style={styles.sectionTitle}>
+            Note from {doer?.name ?? "the cleaner"}
+          </Text>
           <Text style={styles.noteText}>{task.note}</Text>
         </Card>
       )}
@@ -194,9 +259,13 @@ export default function InspectionScreen() {
           ? groupChecklist(task.checklist).map((group) => (
               <View key={group.key || "general"} style={styles.group}>
                 <View style={styles.groupHeader}>
-                  <Text style={styles.groupTitle}>{group.name ?? "General"}</Text>
+                  <Text style={styles.groupTitle}>
+                    {group.name ?? "General"}
+                  </Text>
                   <Text style={group.complete ? styles.done : styles.muted}>
-                    {group.complete ? "Complete" : `${group.done} of ${group.total} complete`}
+                    {group.complete
+                      ? "Complete"
+                      : `${group.done} of ${group.total} complete`}
                   </Text>
                 </View>
                 {group.items.map(row)}
@@ -205,7 +274,9 @@ export default function InspectionScreen() {
           : task.checklist.map(row)}
       </Card>
 
-      {task.evidence.length === 0 && <Text style={styles.muted}>No evidence was captured.</Text>}
+      {task.evidence.length === 0 && (
+        <Text style={styles.muted}>No evidence was captured.</Text>
+      )}
       {loose.length > 0 && (
         <>
           <Text style={styles.sectionTitle}>Other photos ({loose.length})</Text>
@@ -222,11 +293,17 @@ export default function InspectionScreen() {
                 tone={insp.status === "passed" ? "success" : "destructive"}
                 label={insp.status === "passed" ? "Passed" : "Sent back"}
               />
-              {insp.score !== undefined && <Text style={styles.taskTitle}>{insp.score}</Text>}
+              {insp.score !== undefined && (
+                <Text style={styles.taskTitle}>{insp.score}</Text>
+              )}
             </View>
-            {insp.comments ? <Text style={styles.checkLabel}>{insp.comments}</Text> : null}
+            {insp.comments ? (
+              <Text style={styles.checkLabel}>{insp.comments}</Text>
+            ) : null}
             {insp.decidedAt && (
-              <Text style={styles.muted}>Decided {new Date(insp.decidedAt).toLocaleString("en-ZA")}</Text>
+              <Text style={styles.muted}>
+                Decided {new Date(insp.decidedAt).toLocaleString("en-ZA")}
+              </Text>
             )}
           </Card>
         </>
@@ -239,12 +316,21 @@ export default function InspectionScreen() {
                 key={category}
                 label={category}
                 value={scores[category] ?? 0}
-                onChange={(next) => setScores((current) => ({ ...current, [category]: next }))}
+                onChange={(next) =>
+                  setScores((current) => ({ ...current, [category]: next }))
+                }
               />
             ))}
             <View style={styles.overall}>
               <Text style={styles.muted}>Overall (pass ≥ {PASS_SCORE})</Text>
-              <Text style={[styles.overallValue, overall < PASS_SCORE && { color: colors.destructive }]}>{overall}</Text>
+              <Text
+                style={[
+                  styles.overallValue,
+                  overall < PASS_SCORE && { color: colors.destructive },
+                ]}
+              >
+                {overall}
+              </Text>
             </View>
           </Card>
 
@@ -267,17 +353,20 @@ export default function InspectionScreen() {
 
           {selfApproval && (
             <Text style={styles.warning}>
-              You did this task, so you can&apos;t inspect it - another person has to.
+              You did this task, so you can&apos;t inspect it - another person
+              has to.
             </Text>
           )}
           {needsManager && !selfApproval && (
             <Text style={styles.warning}>
-              This is a supervisor&apos;s own task, so a site manager (or above) has to review it.
+              This is a supervisor&apos;s own task, so a site manager (or above)
+              has to review it.
             </Text>
           )}
           {allowed && overall < PASS_SCORE && (
             <Text style={styles.hint}>
-              Approve needs an overall score of {PASS_SCORE} or more. Raise the scores, or send it back.
+              Approve needs an overall score of {PASS_SCORE} or more. Raise the
+              scores, or send it back.
             </Text>
           )}
           {allowed && !reason.trim() && (
@@ -306,9 +395,23 @@ export default function InspectionScreen() {
         </>
       )}
 
-      <Modal visible={viewing !== null} transparent animationType="fade" onRequestClose={() => setViewing(null)}>
-        <Pressable style={styles.viewerBackdrop} onPress={() => setViewing(null)}>
-          {viewing && <Image source={{ uri: viewing.uri }} style={styles.viewerImage} resizeMode="contain" />}
+      <Modal
+        visible={viewing !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setViewing(null)}
+      >
+        <Pressable
+          style={styles.viewerBackdrop}
+          onPress={() => setViewing(null)}
+        >
+          {viewing && (
+            <Image
+              source={{ uri: viewing.uri }}
+              style={styles.viewerImage}
+              resizeMode="contain"
+            />
+          )}
           <Text style={styles.viewerLabel}>{viewing?.label}</Text>
           <Text style={styles.viewerHint}>Tap anywhere to close</Text>
         </Pressable>
@@ -317,89 +420,163 @@ export default function InspectionScreen() {
   );
 }
 
-const styles = themedStyles(() => StyleSheet.create({
-  flex: { flex: 1 },
-  card: { gap: spacing.sm, marginBottom: spacing.md },
-  muted: { fontSize: typography.small, color: colors.mutedForeground },
-  noteText: { fontSize: typography.body, color: colors.foreground, lineHeight: 20 },
-  taskTitle: { fontSize: typography.body, fontWeight: "700", color: colors.foreground },
-  badges: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: spacing.xs },
-  sectionTitle: {
-    fontSize: typography.small,
-    fontWeight: "700",
-    textTransform: "uppercase",
-    letterSpacing: 0.4,
-    color: colors.mutedForeground,
-    marginBottom: spacing.xs,
-  },
-  group: { gap: spacing.xs, marginBottom: spacing.xs },
-  groupHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  groupTitle: { fontSize: typography.small, fontWeight: "700", color: colors.foreground },
-  done: { fontSize: typography.small, fontWeight: "600", color: colors.success },
-  checkBlock: { gap: spacing.xs },
-  itemThumbs: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, paddingLeft: 24, paddingBottom: spacing.xs },
-  checkRow: { flexDirection: "row", alignItems: "flex-start", gap: spacing.sm },
-  checkLabel: { fontSize: typography.small, color: colors.foreground },
-  checkValue: { fontSize: typography.small, fontStyle: "italic", color: colors.mutedForeground },
-  thumbs: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginBottom: spacing.md },
-  thumbWrap: { width: 96, gap: 2 },
-  thumb: { width: 96, height: 96, borderRadius: radius.md },
-  thumbEmpty: { backgroundColor: colors.neutral },
-  thumbLabel: { fontSize: typography.tiny, color: colors.foreground },
-  dup: { fontSize: typography.tiny, color: colors.warningForeground },
-  scoreRow: { gap: 6 },
-  scoreHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  stepper: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
-  stepButton: {
-    width: 32,
-    height: 32,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.card,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  scoreValue: { minWidth: 28, textAlign: "center", fontSize: typography.body, fontWeight: "700", color: colors.foreground },
-  overall: {
-    marginTop: spacing.xs,
-    padding: spacing.md,
-    borderRadius: radius.md,
-    backgroundColor: colors.muted,
-    alignItems: "center",
-  },
-  overallValue: { fontSize: 28, fontWeight: "800", color: colors.foreground },
-  input: {
-    minHeight: 72,
-    textAlignVertical: "top",
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    backgroundColor: colors.card,
-    padding: spacing.md,
-    fontSize: typography.body,
-    color: colors.foreground,
-    marginBottom: spacing.sm,
-  },
-  warning: {
-    padding: spacing.sm,
-    borderRadius: radius.md,
-    backgroundColor: colors.warningSoft,
-    fontSize: typography.small,
-    color: colors.warningForeground,
-    marginBottom: spacing.sm,
-  },
-  hint: { fontSize: typography.small, color: colors.mutedForeground, marginBottom: spacing.sm },
-  actions: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.sm, marginBottom: spacing.xl },
-  action: { flex: 1 },
-  viewerBackdrop: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.92)",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: spacing.lg,
-  },
-  viewerImage: { width: "100%", height: "75%" },
-  viewerLabel: { color: colors.white, marginTop: spacing.md, fontSize: typography.body, fontWeight: "600" },
-  viewerHint: { color: "rgba(255,255,255,0.6)", marginTop: 4, fontSize: typography.tiny },
-}));
+const styles = themedStyles(() =>
+  StyleSheet.create({
+    flex: { flex: 1 },
+    card: { gap: spacing.sm, marginBottom: spacing.md },
+    muted: { fontSize: typography.small, color: colors.mutedForeground },
+    noteText: {
+      fontSize: typography.body,
+      color: colors.foreground,
+      lineHeight: 20,
+    },
+    taskTitle: {
+      fontSize: typography.body,
+      fontWeight: "700",
+      color: colors.foreground,
+    },
+    badges: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      alignItems: "center",
+      gap: spacing.xs,
+    },
+    sectionTitle: {
+      fontSize: typography.small,
+      fontWeight: "700",
+      textTransform: "uppercase",
+      letterSpacing: 0.4,
+      color: colors.mutedForeground,
+      marginBottom: spacing.xs,
+    },
+    group: { gap: spacing.xs, marginBottom: spacing.xs },
+    groupHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+    },
+    groupTitle: {
+      fontSize: typography.small,
+      fontWeight: "700",
+      color: colors.foreground,
+    },
+    done: {
+      fontSize: typography.small,
+      fontWeight: "600",
+      color: colors.success,
+    },
+    checkBlock: { gap: spacing.xs },
+    itemThumbs: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: spacing.sm,
+      paddingLeft: 24,
+      paddingBottom: spacing.xs,
+    },
+    checkRow: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: spacing.sm,
+    },
+    checkLabel: { fontSize: typography.small, color: colors.foreground },
+    checkValue: {
+      fontSize: typography.small,
+      fontStyle: "italic",
+      color: colors.mutedForeground,
+    },
+    thumbs: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: spacing.sm,
+      marginBottom: spacing.md,
+    },
+    thumbWrap: { width: 96, gap: 2 },
+    thumb: { width: 96, height: 96, borderRadius: radius.md },
+    thumbEmpty: { backgroundColor: colors.neutral },
+    thumbLabel: { fontSize: typography.tiny, color: colors.foreground },
+    dup: { fontSize: typography.tiny, color: colors.warningForeground },
+    scoreRow: { gap: 6 },
+    scoreHead: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+    },
+    stepper: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+    stepButton: {
+      width: 32,
+      height: 32,
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    scoreValue: {
+      minWidth: 28,
+      textAlign: "center",
+      fontSize: typography.body,
+      fontWeight: "700",
+      color: colors.foreground,
+    },
+    overall: {
+      marginTop: spacing.xs,
+      padding: spacing.md,
+      borderRadius: radius.md,
+      backgroundColor: colors.muted,
+      alignItems: "center",
+    },
+    overallValue: { fontSize: 28, fontWeight: "800", color: colors.foreground },
+    input: {
+      minHeight: 72,
+      textAlignVertical: "top",
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: radius.md,
+      backgroundColor: colors.card,
+      padding: spacing.md,
+      fontSize: typography.body,
+      color: colors.foreground,
+      marginBottom: spacing.sm,
+    },
+    warning: {
+      padding: spacing.sm,
+      borderRadius: radius.md,
+      backgroundColor: colors.warningSoft,
+      fontSize: typography.small,
+      color: colors.warningForeground,
+      marginBottom: spacing.sm,
+    },
+    hint: {
+      fontSize: typography.small,
+      color: colors.mutedForeground,
+      marginBottom: spacing.sm,
+    },
+    actions: {
+      flexDirection: "row",
+      gap: spacing.sm,
+      marginTop: spacing.sm,
+      marginBottom: spacing.xl,
+    },
+    action: { flex: 1 },
+    viewerBackdrop: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.92)",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: spacing.lg,
+    },
+    viewerImage: { width: "100%", height: "75%" },
+    viewerLabel: {
+      color: colors.white,
+      marginTop: spacing.md,
+      fontSize: typography.body,
+      fontWeight: "600",
+    },
+    viewerHint: {
+      color: "rgba(255,255,255,0.6)",
+      marginTop: 4,
+      fontSize: typography.tiny,
+    },
+  }),
+);

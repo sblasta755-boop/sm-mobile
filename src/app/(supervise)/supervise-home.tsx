@@ -10,6 +10,7 @@ import { focusTasks } from "@/domain/todayFocus";
 import { useNow } from "@/features/useNow";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
+import { ProgressCard } from "@/components/ProgressCard";
 import { ActionTiles } from "@/components/ActionTiles";
 import { StatusBadge } from "@/components/StatusBadge";
 import { TaskRow } from "@/components/TaskRow";
@@ -91,6 +92,7 @@ export default function SuperviseHome() {
 
   return (
     <Screen title="Today">
+      <ProgressCard />
       {!noSites && hasAttendance && canScanClock && hasQr && (
         <Card padded={false} style={styles.shiftCard}>
           <View style={styles.shiftOverlay}>

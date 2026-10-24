@@ -1,7 +1,8 @@
 import { useEffect, useRef } from "react";
 import * as Battery from "expo-battery";
 import * as Device from "expo-device";
-import { reportDeviceHealth } from "@/api/client";
+import { SubscriptionError, reportDeviceHealth } from "@/api/client";
+import { useHasModule } from "@/features/modules";
 import { useSmartClean } from "@/features/store";
 
 // 20 minutes: frequent enough that a supervisor's audit view reflects
@@ -31,6 +32,8 @@ export async function reportBatteryOnce(accessToken: string): Promise<void> {
       osVersion: Device.osVersion ?? undefined,
     });
   } catch (error) {
+    // 402: this organisation has the Device health module switched off. Not a failure.
+    if (error instanceof SubscriptionError) return;
     console.warn("[device-health] Failed to report battery", error);
   }
 }
@@ -47,6 +50,8 @@ export async function reportBatteryOnce(accessToken: string): Promise<void> {
  * whose app isn't running. */
 export function useDeviceHealthReporting() {
   const { state, currentUser } = useSmartClean();
+  // Stops sampling when an operator has switched Device health off for this organisation.
+  const enabled = useHasModule("device_health");
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -54,7 +59,7 @@ export function useDeviceHealthReporting() {
       clearInterval(timerRef.current);
       timerRef.current = null;
     }
-    if (!currentUser || !state.accessToken) return;
+    if (!currentUser || !state.accessToken || !enabled) return;
 
     void reportBatteryOnce(state.accessToken);
     timerRef.current = setInterval(() => {
@@ -64,5 +69,5 @@ export function useDeviceHealthReporting() {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [currentUser, state.accessToken]);
+  }, [currentUser, state.accessToken, enabled]);
 }
