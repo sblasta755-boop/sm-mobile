@@ -1,10 +1,22 @@
-import { useState, type ReactNode } from "react";
-import { Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useRef, useState, type ReactNode } from "react";
+import {
+  Image,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  type LayoutChangeEvent,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+} from "react-native";
 import { router, usePathname } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useSmartClean } from "@/features/store";
 import { usePullToRefresh } from "@/features/pullRefresh";
+import { rememberScroll, savedScrollFor } from "@/features/lastLocationStore";
 import { homePathForRole, useRoleLabel } from "@/features/roles";
 import { ProfileMenuSheet } from "@/components/ProfileMenuSheet";
 import { SyncBanner } from "@/components/SyncBanner";
@@ -84,6 +96,27 @@ export function Screen({
 
   const unreadCount = state.notifications.filter((n) => !n.read).length;
   const Content = scroll ? ScrollView : View;
+
+  // Put the person back at the same spot after a lock or a closed app. The saved offset is
+  // applied once the content is tall enough to reach it (lists fill in after the screen opens),
+  // and recording starts only after that, so the first scroll events cannot overwrite it.
+  const scrollRef = useRef<ScrollView | null>(null);
+  const restoreY = useRef(scroll ? savedScrollFor(pathname, currentUser?.id) : 0);
+  const viewportH = useRef(0);
+  const [restoring, setRestoring] = useState(restoreY.current > 0);
+  const stopRestoring = () => {
+    restoreY.current = 0;
+    setRestoring(false);
+  };
+  const onContentSizeChange = (_w: number, h: number) => {
+    if (restoreY.current > 0 && h >= restoreY.current + viewportH.current) {
+      scrollRef.current?.scrollTo({ y: restoreY.current, animated: false });
+      stopRestoring();
+    }
+  };
+  const onScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    if (!restoring) rememberScroll(pathname, event.nativeEvent.contentOffset.y);
+  };
   // Same two header buttons as the web app: notifications (with an unread
   // badge) and the profile menu.
   const HeaderActions = (
@@ -145,6 +178,19 @@ export function Screen({
       <SyncBanner />
 
       <Content
+        {...(scroll
+          ? {
+              ref: scrollRef,
+              scrollEventThrottle: 250,
+              onScroll,
+              // Their own scrolling wins over a pending restore.
+              onScrollBeginDrag: stopRestoring,
+              onContentSizeChange,
+              onLayout: (event: LayoutChangeEvent) => {
+                viewportH.current = event.nativeEvent.layout.height;
+              },
+            }
+          : {})}
         style={styles.content}
         contentContainerStyle={scroll ? styles.contentContainer : undefined}
         // Pull down to refresh, on every screen that scrolls.

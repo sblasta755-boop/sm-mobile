@@ -1,3 +1,6 @@
+import { loadEvidenceView } from "@/features/evidenceView";
+import { loadLastSynced, markSynced } from "@/features/lastSynced";
+import { clearLastLocation } from "@/features/lastLocationStore";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import NetInfo from "@react-native-community/netinfo";
 import {
@@ -439,6 +442,7 @@ export function SmartCleanProvider({ children }: { children: ReactNode }) {
     try {
       const bootstrap = await loadBackendBootstrap(state.accessToken);
       dispatch({ type: "HYDRATE", bootstrap });
+      markSynced();
     } catch (error) {
       dispatch({ type: "SET_LOADING", loading: false, error: error instanceof Error ? error.message : "Backend refresh failed" });
     }
@@ -501,6 +505,8 @@ export function SmartCleanProvider({ children }: { children: ReactNode }) {
     const { accessToken, refreshToken } = state;
     // A different person on this phone should not inherit the last one's filters.
     resetTaskFilters();
+    // ...nor inherit where they were.
+    clearLastLocation();
     await SecureSessionService.clear();
     dispatch({ type: "SIGN_OUT" });
     if (accessToken && refreshToken) {
@@ -590,6 +596,8 @@ export function SmartCleanProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     void loadOutbox();
     void loadTaskFilters();
+    void loadEvidenceView();
+    void loadLastSynced();
   }, []);
   const shownState = useMemo(
     () =>

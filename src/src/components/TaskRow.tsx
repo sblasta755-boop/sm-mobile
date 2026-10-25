@@ -5,6 +5,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { TagChips } from "@/components/TagChip";
 import { humanStatus, toneForTask } from "@/domain/status";
 import { colors, radius, spacing, typography, themedStyles } from "@/theme";
+import { startsAtLabel, timeWindowLabel } from "@/domain/homeTasks";
 import type { Task } from "@/types/smartclean";
 
 /**
@@ -14,6 +15,8 @@ import type { Task } from "@/types/smartclean";
  * about the card changes.
  */
 export function TaskRow({ task, onPress }: { task: Task; onPress: () => void }) {
+  const window = timeWindowLabel(task);
+  const starts = startsAtLabel(task);
   return (
     <Pressable accessibilityRole="button" onPress={onPress}>
       <Card style={styles.card}>
@@ -25,8 +28,9 @@ export function TaskRow({ task, onPress }: { task: Task; onPress: () => void }) 
             {task.title}
           </Text>
           <Text style={styles.meta} numberOfLines={1}>
-            {task.locationName ?? "Whole site"} • Due {task.dueTime}
+            {task.locationName ?? "Whole site"} • {window ? window : `Due ${task.dueTime}`}
           </Text>
+          {starts && <Text style={styles.starts}>{starts}</Text>}
           <TagChips tags={task.tags} />
         </View>
         <View style={styles.badges}>
@@ -51,6 +55,7 @@ const styles = themedStyles(() => StyleSheet.create({
   },
   info: { flex: 1, minWidth: 0, gap: 2 },
   title: { fontSize: typography.body, fontWeight: "600", color: colors.foreground },
+  starts: { fontSize: typography.tiny, fontWeight: "700", color: colors.primary },
   meta: { fontSize: typography.small, color: colors.mutedForeground },
   badges: { alignItems: "flex-end", gap: 4 },
 }));

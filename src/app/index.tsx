@@ -1,8 +1,17 @@
-import { useEffect, useState } from "react";
-import { Redirect } from "expo-router";
+import { useEffect, useRef, useState } from "react";
+import { Redirect, router } from "expo-router";
 import * as NativeSplashScreen from "expo-splash-screen";
 import { SplashScreen } from "@/components/SplashScreen";
 import { useSmartClean } from "@/features/store";
+import {
+  freshLocation,
+  worthRestoring,
+  type SavedLocation,
+} from "@/domain/lastLocation";
+import {
+  holdRestoredLocation,
+  loadLastLocation,
+} from "@/features/lastLocationStore";
 import { useThemeVersion } from "@/theme";
 
 /**
@@ -32,11 +41,22 @@ const SPLASH_MIN_MS = 1800;
 // Only the first launch of the app process holds the splash; reaching this
 // screen again later (sign out, a redirect) must not show it again.
 let splashHeld = false;
+// The saved place is used once per launch, so signing out and in again starts at home.
+let restoredThisLaunch = false;
 
 export default function Index() {
   useThemeVersion(); // re-render with the new colours when the theme changes
   const { state, currentUser } = useSmartClean();
   const [holding, setHolding] = useState(!splashHeld);
+  const plan = useRef<SavedLocation | null | undefined>(undefined);
+  // undefined: still reading the saved place; null: nothing to go back to.
+  const [saved, setSaved] = useState<SavedLocation | null | undefined>(
+    undefined,
+  );
+
+  useEffect(() => {
+    void loadLastLocation().then(setSaved);
+  }, []);
 
   useEffect(() => {
     if (!holding) return;
@@ -55,7 +75,7 @@ export default function Index() {
     NativeSplashScreen.hideAsync().catch(() => {});
   }, []);
 
-  if (!state.sessionRestored || holding) {
+  if (!state.sessionRestored || holding || saved === undefined) {
     return <SplashScreen />;
   }
 
@@ -91,10 +111,26 @@ export default function Index() {
     return <Redirect href="/welcome" />;
   }
 
-  switch (currentUser.role) {
+  const home = homeFor(currentUser.role);
+  // Decided once: later renders (the restore itself changes state) must not cancel it.
+  if (plan.current === undefined) {
+    plan.current = restoredThisLaunch
+      ? null
+      : freshLocation(saved, currentUser.id, Date.now());
+  }
+  const place = plan.current;
+  if (worthRestoring(place, home)) {
+    return <RestoreLocation home={home} place={place} />;
+  }
+  return <Redirect href={home as never} />;
+}
+
+/** The app's first screen for a role: which of the four apps this person gets. */
+function homeFor(role: string): string {
+  switch (role) {
     // Šoma360's own operator staff.
     case "system_admin":
-      return <Redirect href="/platform-dashboard" />;
+      return "/platform-dashboard";
 
     // The management app. Three roles share it because ROLE_ACCESS gives
     // them near-identical surfaces; what differs is SCOPE, and the
@@ -104,12 +140,12 @@ export default function Index() {
     case "org_admin":
     case "operations_manager":
     case "site_manager":
-      return <Redirect href="/manage-home" />;
+      return "/manage-home";
 
     // Field quality assurance: inspects others' work rather than being
     // assigned any.
     case "supervisor":
-      return <Redirect href="/supervise-home" />;
+      return "/supervise-home";
 
     // An external client-side reviewer: reads the record, writes
     // nothing. They used to fall through to the cleaner's app below,
@@ -118,13 +154,33 @@ export default function Index() {
     // empty task list. ROLE_ACCESS gives them dashboard/reports/quality
     // and nothing else (see permissions.ts on the web).
     case "client_auditor":
-      return <Redirect href="/audit-home" />;
+      return "/audit-home";
 
     // cleaner, plus anything a newer backend adds that this build has
     // not heard of. Falling through to the field app is the safe
     // default: it is the least-privileged surface, and every screen in
     // it fails closed against the server's own checks.
     default:
-      return <Redirect href="/home" />;
+      return "/home";
   }
+}
+
+/** Goes to the person's home, then on to where they were, so Back still leads somewhere sensible. */
+function RestoreLocation({
+  home,
+  place,
+}: {
+  home: string;
+  place: SavedLocation;
+}) {
+  useEffect(() => {
+    if (restoredThisLaunch) return;
+    restoredThisLaunch = true;
+    holdRestoredLocation(place);
+    router.replace(home as never);
+    // Not cleared on unmount: replacing to home unmounts this screen, and the second step
+    // must still happen. A short wait lets the home screen mount first, underneath.
+    setTimeout(() => router.push(place.path as never), 100);
+  }, [home, place]);
+  return <SplashScreen />;
 }

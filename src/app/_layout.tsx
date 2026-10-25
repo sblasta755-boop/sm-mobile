@@ -10,6 +10,7 @@ import { useAppUpdateWatcher } from "@/features/appUpdate";
 import { usePushRegistration } from "@/features/pushNotifications";
 import { useDeviceHealthReporting } from "@/features/deviceHealth";
 import { useEvidenceUploader } from "@/features/evidenceUploader";
+import { useRememberLocation } from "@/features/lastLocation";
 
 // Keep the native splash image up until our animated in-app splash
 // (rendered from app/index.tsx while the session restores) has actually
@@ -44,6 +45,8 @@ function PushNotificationsBridge() {
   useEvidenceUploader();
   // Looks for a newer app build at launch, on resume and when back online.
   useAppUpdateWatcher();
+  // Remembers the screen and scroll position so a lock or a closed app puts the person back.
+  useRememberLocation();
   return null;
 }
 

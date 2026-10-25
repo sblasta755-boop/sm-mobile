@@ -9,6 +9,8 @@ export type ActionTile = {
   onPress: () => void;
   /** A small line under the label, e.g. a count. */
   hint?: string;
+  /** A count pill on the tile, for something that needs attention. */
+  badge?: number;
 };
 
 /**
@@ -31,7 +33,14 @@ export function ActionTiles({ items }: { items: ActionTile[] }) {
             onPress={item.onPress}
             style={({ pressed }) => [styles.tile, alone && styles.tileWide, pressed && styles.pressed]}
           >
-            <View style={styles.disc}>{item.icon}</View>
+            <View style={styles.disc}>
+              {item.icon}
+              {item.badge ? (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>{item.badge > 9 ? "9+" : item.badge}</Text>
+                </View>
+              ) : null}
+            </View>
             <View style={styles.text}>
               <Text style={styles.label} numberOfLines={2}>
                 {item.label}
@@ -47,6 +56,8 @@ export function ActionTiles({ items }: { items: ActionTile[] }) {
 
 const styles = themedStyles(() =>
   StyleSheet.create({
+    badge: { position: "absolute", top: -4, right: -4, minWidth: 16, height: 16, paddingHorizontal: 3, borderRadius: 8, backgroundColor: colors.destructive, alignItems: "center", justifyContent: "center" },
+    badgeText: { fontSize: 10, fontWeight: "800", color: colors.white },
     grid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
     tile: {
       flexBasis: "48%",

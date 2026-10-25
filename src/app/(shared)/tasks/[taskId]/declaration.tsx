@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useDraft } from "@/features/drafts";
 import { router, useLocalSearchParams } from "expo-router";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import Svg, { Path } from "react-native-svg";
@@ -33,7 +34,8 @@ export default function DeclarationScreen() {
   const policy = useWorkflowPolicy();
   const task = state.tasks.find((t) => t.id === taskId);
   const [agree, setAgree] = useState(false);
-  const [signature, setSignature] = useState("");
+  // The typed name is kept on the phone, so a lock or a closed app does not lose it.
+  const [signature, setSignature, clearSignature] = useDraft(`declaration:${taskId}:name`, "");
   const [busy, setBusy] = useState(false);
   const [drawn, setDrawn] = useState<SignatureResult | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -75,6 +77,7 @@ export default function DeclarationScreen() {
         },
       });
       void drainQueue();
+      clearSignature();
       if (state.connectivity === "offline") {
         appAlert(
           "Submitted on this phone",

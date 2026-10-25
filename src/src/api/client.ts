@@ -231,6 +231,8 @@ export async function request<T>(
   if (!response.ok) {
     await throwForStatus(response);
   }
+  // A 204 has no body (deletes, fire-and-forget logs).
+  if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
 }
 
@@ -1671,3 +1673,186 @@ export type MyProgress =
 export function getMyProgress(accessToken: string, period: GamificationPeriod) {
   return request<MyProgress>(`/gamification/me?period=${period}`, {}, accessToken);
 }
+
+
+// ---- Pay runs (organisation administrators and operations managers only) ----
+
+export interface PayRuleRecord {
+  id: string;
+  name: string;
+  description: string;
+}
+
+export interface PayAdjustment {
+  label: string;
+  amount: string;
+}
+
+export interface PayDay {
+  manual?: boolean;
+  label?: string;
+  hoursEntered?: string | null;
+  dayId: string;
+  date: string | null;
+  clockInAt: string | null;
+  clockOutAt: string | null;
+  workedMinutes: number | null;
+  counted: boolean;
+  reason: string | null;
+  fraction: string;
+  multiplier: string;
+  baseHours: string;
+  paidHours: string;
+}
+
+export interface PayPerson {
+  /** False for someone deliberately left out of this run. */
+  included?: boolean;
+  userId: string;
+  name: string;
+  hasRate: boolean;
+  rate: string;
+  daysCounted: string;
+  daysExcluded: number;
+  unapprovedDays?: number;
+  paidHours: string;
+  earned: string;
+  adjustments: PayAdjustment[];
+  adjustmentTotal: string;
+  gross: string;
+  days: PayDay[];
+}
+
+export interface PayTotals {
+  people: number;
+  daysCounted: string;
+  daysExcluded: number;
+  paidHours: string;
+  earned: string;
+  adjustments: string;
+  gross: string;
+}
+
+export interface PayManualEntry {
+  label: string;
+  date: string | null;
+  days: string;
+  hours: string | null;
+}
+
+export interface PayHoliday {
+  date: string;
+  multiplier: string;
+  label?: string;
+}
+
+export interface PayRunInput {
+  title: string;
+  siteIds: string[];
+  start: string;
+  end: string;
+  ruleId: string | null;
+  rule: Record<string, never> | null;
+  holidays: PayHoliday[];
+  rates: Record<string, string | null>;
+  adjustments: Record<string, PayAdjustment[]>;
+  manual: Record<string, PayManualEntry[]>;
+  includeUserIds: string[];
+  /** Left out on purpose, for a run covering one person or a chosen few. */
+  excludeUserIds: string[];
+  notes: string | null;
+}
+
+export interface PayPreview {
+  ruleName: string;
+  ruleDescription: string;
+  people: PayPerson[];
+  totals: PayTotals;
+  lastRates: Record<string, string>;
+  candidates: { userId: string; name: string; role: string }[];
+}
+
+export interface PayRun {
+  id: string;
+  title: string;
+  siteIds: string[];
+  siteNames: string[];
+  periodStart: string;
+  periodEnd: string;
+  ruleId: string | null;
+  excludedUserIds: string[];
+  ruleName: string;
+  ruleDescription: string;
+  holidays: PayHoliday[];
+  currency: string;
+  status: "draft" | "final" | "void";
+  totals: PayTotals;
+  notes: string | null;
+  createdByName: string;
+  finalisedByName: string | null;
+  finalisedAt: string | null;
+  voidReason: string | null;
+  people?: PayPerson[];
+}
+
+export const listPayRules = (t: string) => request<PayRuleRecord[]>("/payroll/rules", {}, t);
+export const previewPayRun = (t: string, input: PayRunInput) =>
+  request<PayPreview>("/payroll/runs/preview", { method: "POST", body: JSON.stringify(input) }, t);
+export const listPayRuns = (t: string) => request<PayRun[]>("/payroll/runs", {}, t);
+export const getPayRun = (t: string, id: string) => request<PayRun>(`/payroll/runs/${id}`, {}, t);
+export const createPayRun = (t: string, input: PayRunInput) =>
+  request<PayRun>("/payroll/runs", { method: "POST", body: JSON.stringify(input) }, t);
+export const updatePayRun = (t: string, id: string, input: PayRunInput) =>
+  request<PayRun>(`/payroll/runs/${id}`, { method: "PUT", body: JSON.stringify(input) }, t);
+export const finalisePayRun = (t: string, id: string) =>
+  request<PayRun>(`/payroll/runs/${id}/finalise`, { method: "POST" }, t);
+export const voidPayRun = (t: string, id: string, reason: string) =>
+  request<PayRun>(`/payroll/runs/${id}/void`, { method: "POST", body: JSON.stringify({ reason }) }, t);
+export const deletePayRunDraft = (t: string, id: string) =>
+  request<void>(`/payroll/runs/${id}`, { method: "DELETE" }, t);
+export const logPayRunExport = (t: string, id: string, document: string, person?: string) =>
+  request<void>(
+    `/payroll/runs/${id}/exports`,
+    { method: "POST", body: JSON.stringify({ document, person: person ?? null }) },
+    t,
+  );
+
+// ---- Staff scheduling ----
+export type BookingSite = { id: string; name: string; address: string; latitude: number | null; longitude: number | null };
+export type StaffBooking = {
+  id: string;
+  siteId: string;
+  site: BookingSite;
+  userId: string;
+  userName: string;
+  date: string;
+  startTime: string | null;
+  endTime: string | null;
+  instructions: string;
+  status: "booked" | "cancelled";
+  notified: string[];
+  bookedBy: string;
+  tasks: { id: string; title: string; status: string }[];
+};
+export type BookStaffInput = {
+  siteId: string;
+  userIds: string[];
+  dates: string[];
+  startTime: string | null;
+  endTime: string | null;
+  instructions: string;
+};
+export const listMyBookings = (t: string, start: string, end: string) =>
+  request<StaffBooking[]>(`/schedule/mine?start=${start}&end=${end}`, {}, t);
+export const listSiteBookings = (t: string, start: string, end: string) =>
+  request<StaffBooking[]>(`/schedule/bookings?start=${start}&end=${end}`, {}, t);
+export const listBookablePeople = (t: string, siteId: string) =>
+  request<{ id: string; name: string; role: string }[]>(`/schedule/people?siteId=${encodeURIComponent(siteId)}`, {}, t);
+export const bookStaff = (t: string, input: BookStaffInput) =>
+  request<{ created: StaffBooking[]; skipped: { userId: string; userName: string; date: string }[] }>(
+    "/schedule/bookings",
+    { method: "POST", body: JSON.stringify(input) },
+    t,
+  );
+export const cancelBooking = (t: string, id: string) =>
+  request<StaffBooking>(`/schedule/bookings/${id}/cancel`, { method: "POST" }, t);

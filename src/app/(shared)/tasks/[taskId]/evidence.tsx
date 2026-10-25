@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { router, useLocalSearchParams } from "expo-router";
-import { ActivityIndicator, Image, Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -19,6 +19,8 @@ import { prepareEvidencePhoto } from "@/services/photoPrep";
 import { drainQueue } from "@/features/evidenceUploader";
 import { enqueueMutation } from "@/features/outbox";
 import { ItemNoteModal } from "@/components/ItemNoteModal";
+import { ALL, filterBySection, initialSection, sectionOptions } from "@/domain/evidenceSections";
+import { taskSectionChoice, useEvidenceViewMode } from "@/features/evidenceView";
 import { enqueuePhoto, keepPhoto, useEvidenceQueue } from "@/features/evidenceQueue";
 import { mergeQueuedEvidence, type QueuedPhoto } from "@/domain/evidenceQueue";
 
@@ -48,6 +50,10 @@ export default function EvidenceScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const [cameraSlotKey, setCameraSlotKey] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Which section of the photos is showing. Starts from the standing preference (Settings) and
+  // changes only for this task when a person picks another chip.
+  const [evidenceViewMode] = useEvidenceViewMode();
+  const [sectionChoice, setSectionChoice] = useState<string | null>(() => (taskId ? (taskSectionChoice.get(taskId) ?? null) : null));
   // The checklist item whose note popup is open.
   const [noteItemId, setNoteItemId] = useState<string | null>(null);
   // Photos on the phone waiting to upload (see features/evidenceQueue).
@@ -128,7 +134,10 @@ export default function EvidenceScreen() {
   const stage = taskStage(currentTask);
   const slots = evidenceSlots(currentTask, stage);
   const issueSlot = slots.find((slot) => slot.kind === "issue");
-  const photoSlots = slots.filter((slot) => slot.kind !== "issue");
+  const sections = sectionOptions(slots);
+  const section = sectionChoice ?? initialSection(evidenceViewMode, requestedItem, slots);
+  const photoSlots = filterBySection(slots, section).filter((slot) => slot.kind !== "issue");
+  const sectionLabel = sections.find((option) => option.key === section)?.label;
 
   // One card per checklist item (its Before / After tiles side by side); photos
   // that belong to the task as a whole share a card of their own.
@@ -237,8 +246,31 @@ export default function EvidenceScreen() {
     <Screen title="Capture evidence" backTo={`/tasks/${currentTask.id}`}>
       <Text style={styles.helpText}>
         Live capture only. Tap a photo to take it.
-        {requiredTotal > 0 ? `  ${takenTotal} of ${requiredTotal} taken.` : ""}
+        {requiredTotal > 0 ? `  ${takenTotal} of ${requiredTotal} taken${sectionLabel ? ` in ${sectionLabel}` : ""}.` : ""}
       </Text>
+
+      {sections.length > 0 && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips} style={styles.chipsRow}>
+          {[{ key: ALL, label: "All" }, ...sections].map((option) => {
+            const selected = option.key === section;
+            return (
+              <Pressable
+                key={option.key}
+                accessibilityRole="button"
+                accessibilityState={{ selected }}
+                accessibilityLabel={`Show ${option.label}`}
+                onPress={() => {
+                  setSectionChoice(option.key);
+                  if (taskId) taskSectionChoice.set(taskId, option.key);
+                }}
+                style={[styles.chip, selected && styles.chipSelected]}
+              >
+                <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{option.label}</Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      )}
 
       {groups.map((group) => (
         <Card
@@ -403,6 +435,19 @@ export default function EvidenceScreen() {
 const styles = themedStyles(() => StyleSheet.create({
   mutedSmall: { fontSize: typography.small, color: colors.mutedForeground },
   helpText: { fontSize: typography.small, color: colors.mutedForeground, marginBottom: spacing.md },
+  chipsRow: { flexGrow: 0, marginBottom: spacing.md },
+  chips: { gap: spacing.sm },
+  chip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.card,
+  },
+  chipSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
+  chipText: { fontSize: typography.small, fontWeight: "600", color: colors.mutedForeground },
+  chipTextSelected: { color: colors.white },
   group: { marginBottom: spacing.md, gap: spacing.sm },
   groupHighlight: { borderColor: colors.primary, borderWidth: 2 },
   groupHeader: { gap: 2 },

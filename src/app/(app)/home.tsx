@@ -7,14 +7,17 @@ import { BrokenGlassIcon } from "@/components/BrokenGlassIcon";
 import { Screen } from "@/components/Screen";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
-import { ProgressCard } from "@/components/ProgressCard";
+import { useMyProgress } from "@/components/ProgressCard";
+import { useUpcomingBooking } from "@/components/UpcomingBookingCard";
+import { TodayCard } from "@/components/TodayCard";
 import { ActionTiles } from "@/components/ActionTiles";
 import { ActiveFiltersBar } from "@/components/ActiveFiltersBar";
 import { useTaskFilters } from "@/features/taskFilters";
-import { filterTasks } from "@/domain/taskBoard";
 import { focusTasks } from "@/domain/todayFocus";
+import { homeTaskView } from "@/domain/homeTasks";
+import { homeTiles } from "@/domain/homeTiles";
+import { useScheduleOn } from "@/features/schedule";
 import { useNow } from "@/features/useNow";
-import { ProgressBar } from "@/components/ProgressBar";
 import { StatusBadge } from "@/components/StatusBadge";
 import { TaskRow } from "@/components/TaskRow";
 import { DateStrip, isSameDay, startOfDay } from "@/components/DateStrip";
@@ -41,6 +44,10 @@ export default function HomeScreen() {
   const hasHourlyCompliance = useHasModule("hourly_compliance");
   const hasCorrectiveActions = useHasModule("corrective_actions");
   const hasIncidents = useHasModule("incidents");
+  const scheduleOn = useScheduleOn();
+  const nextBooking = useUpcomingBooking();
+  const progress = useMyProgress();
+  const [showActions, setShowActions] = useState(false);
   // Stock is offered only to staff roles the organisation has switched on.
   const canOpenStock = useCanOpenStock();
   // How this organisation lets people clock. Defaults (before bootstrap, or
@@ -97,7 +104,9 @@ export default function HomeScreen() {
   const now = useNow();
   const viewingToday = isSameDay(selectedDate, today);
   const focus = viewingToday ? focusTasks(allMyTasks, now) : myTasks;
-  const shownTasks = filterTasks(focus, taskFilters);
+  // A saved filter can narrow what is due, but never hides it without saying so (see homeTasks.ts).
+  const taskView = homeTaskView(focus, taskFilters);
+  const shownTasks = taskView.list;
   const openCA = state.correctiveActions.filter(
     (c) => c.assigneeId === currentUser?.id && c.status !== "closed",
   );
@@ -224,17 +233,7 @@ export default function HomeScreen() {
         </ImageBackground>
       </Card>
 
-      <ProgressCard />
-
-      <Card style={styles.progressCard}>
-        <View style={styles.progressHeader}>
-          <Text style={styles.sectionTitle}>Task progress</Text>
-          <Text style={styles.mutedSmall}>
-            {done}/{myTasks.length} completed
-          </Text>
-        </View>
-        <ProgressBar value={myTasks.length ? (done / myTasks.length) * 100 : 0} />
-      </Card>
+      <TodayCard done={done} total={myTasks.length} next={nextBooking} progress={progress} />
 
       <View style={styles.sectionHeaderRow}>
         <Text style={styles.sectionTitle}>
@@ -252,7 +251,7 @@ export default function HomeScreen() {
           </Pressable>
         </View>
       </View>
-      <ActiveFiltersBar />
+      <ActiveFiltersBar hiddenCount={taskView.hiddenCount} relaxed={taskView.relaxed} scope={viewingToday ? "due now" : "on this day"} />
       {focus.length === 0 && (
         <Text style={styles.emptyTasks}>
           {viewingToday ? "Nothing to do right now. You're all caught up." : "No tasks assigned for this day."}
@@ -293,33 +292,38 @@ export default function HomeScreen() {
         </View>
       )}
 
-      {hasHourlyCompliance && (
-      <Pressable onPress={() => router.push("/hourly-compliance")}>
-        <Card style={styles.hourlyCard}>
-          <Ionicons name="shield-checkmark" size={20} color={colors.primary} />
-          <View style={styles.taskInfo}>
-            <Text style={styles.taskTitle}>My hourly compliance rounds</Text>
-            <Text style={styles.mutedSmall}>See the checklist items assigned to you today</Text>
-          </View>
-          <Ionicons name="arrow-forward" size={16} color={colors.foreground} />
-        </Card>
-      </Pressable>
-      )}
+      {/* Everything else is one tile each, so a new feature adds a tile (see domain/homeTiles.ts),
+          not another full-width card above the day's tasks. */}
+      <ActionTiles
+        items={homeTiles({
+          hourlyCompliance: hasHourlyCompliance,
+          roundsToClaim: candidateRounds.filter((t) => !t.hourlyComplianceClaimed).length,
+          correctiveActions: hasCorrectiveActions,
+          openCorrective: { count: openCA.length, onlyId: openCA.length === 1 ? openCA[0].id : undefined },
+          stock: canOpenStock,
+          incidents: hasIncidents,
+          hasQr,
+          schedule: scheduleOn,
+          progress: !!progress,
+        }).map((tile) => ({
+          key: tile.key,
+          label: tile.label,
+          hint: tile.hint,
+          badge: tile.badge,
+          icon:
+            tile.key === "incident" ? (
+              <BrokenGlassIcon size={20} color={colors.primary} />
+            ) : (
+              <Ionicons name={tile.icon as keyof typeof Ionicons.glyphMap} size={20} color={colors.primary} />
+            ),
+          onPress: () =>
+            tile.action.kind === "route"
+              ? router.push(tile.action.path as never)
+              : setShowActions((open) => !open),
+        }))}
+      />
 
-      {canOpenStock && (
-        <Pressable onPress={() => router.push("/stock" as never)}>
-          <Card style={styles.hourlyCard}>
-            <Ionicons name="cube" size={20} color={colors.primary} />
-            <View style={styles.taskInfo}>
-              <Text style={styles.taskTitle}>Stock</Text>
-              <Text style={styles.mutedSmall}>Issue to a job, log waste, restock</Text>
-            </View>
-            <Ionicons name="arrow-forward" size={16} color={colors.foreground} />
-          </Card>
-        </Pressable>
-      )}
-
-      {hasCorrectiveActions && openCA.length > 0 && (
+      {hasCorrectiveActions && showActions && openCA.length > 0 && (
         <View style={styles.caSection}>
           <Text style={styles.caSectionTitle}>Open corrective actions</Text>
           {openCA.map((c) => (
@@ -341,30 +345,6 @@ export default function HomeScreen() {
           ))}
         </View>
       )}
-
-      {/* Incidents are always tied to a scanned room/zone now, so this sends the
-          cleaner to Scan first rather than straight to the report form - see
-          app/(app)/incidents/new.tsx. */}
-      <ActionTiles
-        items={[
-          ...(hasIncidents
-            ? [
-                {
-                  key: "incident",
-                  label: "Report incident",
-                  icon: <BrokenGlassIcon size={20} color={colors.primary} />,
-                  onPress: () => router.push(hasQr ? "/scan" : "/incidents/new"),
-                },
-              ]
-            : []),
-          {
-            key: "sync",
-            label: "Sync status",
-            icon: <Ionicons name="sync-outline" size={20} color={colors.primary} />,
-            onPress: () => router.push("/profile"),
-          },
-        ]}
-      />
     </Screen>
   );
 }

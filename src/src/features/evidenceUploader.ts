@@ -21,6 +21,7 @@ import {
   uploadImage,
 } from "@/api/client";
 import type { OutboxMutation } from "@/domain/outbox";
+import { markSynced } from "@/features/lastSynced";
 import { getOutbox, loadOutbox, removeMutation, subscribeOutbox, updateMutation } from "@/features/outbox";
 import type { Task } from "@/types/smartclean";
 import { getQueue, loadQueue, removePhoto, subscribeQueue, updatePhoto } from "@/features/evidenceQueue";
@@ -252,9 +253,19 @@ async function drainOnce(): Promise<void> {
 /** Starts an upload pass, or joins the one already running. */
 export function drainQueue(): Promise<void> {
   if (!running) {
-    running = drainOnce().finally(() => {
-      running = null;
-    });
+    running = drainOnce()
+      .then(() => {
+        // A pass that left nothing waiting for this person is a successful sync.
+        const ctx = context;
+        if (!ctx || !ctx.online()) return;
+        const left =
+          getQueue().filter((p) => p.userId === ctx.userId && p.status !== "rejected").length +
+          getOutbox().filter((m) => m.userId === ctx.userId && m.status !== "rejected").length;
+        if (left === 0) markSynced();
+      })
+      .finally(() => {
+        running = null;
+      });
   }
   return running;
 }

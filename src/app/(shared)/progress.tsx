@@ -15,6 +15,7 @@ import {
   type MyProgress,
 } from "@/api/client";
 import { ALL_BADGES, PERIOD_LABEL, rankLabel } from "@/domain/gamification";
+import { useHomePath } from "@/features/roles";
 import { useSmartClean } from "@/features/store";
 import {
   colors,
@@ -28,6 +29,7 @@ import {
 /** My points, position, streak and badges. Only the person's own numbers: the server never
  * sends anyone else's name or points (managers see the named leaderboard on the web). */
 export default function ProgressScreen() {
+  const homePath = useHomePath();
   useThemeVersion(); // re-render with the new colours when the theme changes
   const { state } = useSmartClean();
   const [period, setPeriod] = useState<GamificationPeriod>("week");
@@ -49,7 +51,7 @@ export default function ProgressScreen() {
   }, [state.accessToken, period, offline]);
 
   return (
-    <Screen title="My progress" backTo="/home">
+    <Screen title="My progress" backTo={homePath}>
       <View style={styles.periods}>
         {(["week", "month"] as const).map((p) => (
           <Pressable

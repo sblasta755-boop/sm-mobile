@@ -4,19 +4,8 @@ import { useSmartClean } from "@/features/store";
 import { removeMutation, useOutbox } from "@/features/outbox";
 import { removePhoto, useEvidenceQueue } from "@/features/evidenceQueue";
 import { drainQueue } from "@/features/evidenceUploader";
+import { KIND_LABEL } from "@/domain/syncStatus";
 import { colors, spacing, themedStyles, typography, useThemeVersion } from "@/theme";
-
-const KIND_LABEL: Record<string, string> = {
-  "task.start": "starting a task",
-  "task.checklist": "a checklist tick",
-  "task.note": "a note",
-  "task.submit": "a submission",
-  "incident.create": "an incident report",
-  "stock.issue": "stock issued to a job",
-  "stock.waste": "logged waste",
-  "stock.count.enter": "a stock count entry",
-  "stock.count.submit": "a stock count",
-};
 
 /**
  * What is waiting to reach the server, and anything it refused. Shown on every

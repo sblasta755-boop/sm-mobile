@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useDraft } from "@/features/drafts";
 import { router } from "expo-router";
 import { Image, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -25,8 +26,9 @@ const MAX_PHOTOS = 5;
 export default function FeedbackScreen() {
   useThemeVersion(); // re-render with the new colours when the theme changes
   const { state } = useSmartClean();
-  const [category, setCategory] = useState<FeedbackPayload["category"]>("bug");
-  const [message, setMessage] = useState("");
+  // What has been typed is kept on the phone, so a lock or a closed app does not lose it.
+  const [category, setCategory, clearCategory] = useDraft<FeedbackPayload["category"]>("feedback:category", "bug");
+  const [message, setMessage, clearMessage] = useDraft("feedback:message", "");
   const [photos, setPhotos] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const offline = state.connectivity === "offline";
@@ -80,7 +82,8 @@ export default function FeedbackScreen() {
       appAlert("Thank you", "Your feedback was sent to the Šoma360 team.", [
         { text: "OK", onPress: () => router.back() },
       ]);
-      setMessage("");
+      clearMessage();
+      clearCategory();
       setPhotos([]);
     } catch (error) {
       // The draft is kept so nothing has to be typed again.

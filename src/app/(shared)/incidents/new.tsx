@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { useDraft } from "@/features/drafts";
 import { router, useLocalSearchParams } from "expo-router";
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -47,15 +48,17 @@ export default function NewIncidentScreen() {
   // chosen from a list instead. Fails open (QR) before bootstrap lands.
   const qrAvailable = useHasCapability("qr_codes");
   const [pickedLabel, setPickedLabel] = useState("");
-  const [category, setCategory] = useState(CATEGORIES[0]);
-  const [priority, setPriority] = useState<IncidentPriority>("medium");
-  const [description, setDescription] = useState("");
+  // What has been typed is kept on the phone, so a lock or a closed app does not lose the report.
+  const draftKey = `incident:${taskId ?? linkedLocationId ?? "new"}`;
+  const [category, setCategory, clearCategory] = useDraft(`${draftKey}:category`, CATEGORIES[0]);
+  const [priority, setPriority, clearPriority] = useDraft<IncidentPriority>(`${draftKey}:priority`, "medium");
+  const [description, setDescription, clearDescription] = useDraft(`${draftKey}:description`, "");
   const [photoPaths, setPhotoPaths] = useState<string[]>([]);
   // Optional - a reporter who already knows what needs doing can jot it
   // down here to pre-fill the checklist if a supervisor assigns a task
   // directly off this incident instead of sending someone to investigate
   // first. See IncidentCreateRequest.suggestedSteps on the backend.
-  const [suggestedSteps, setSuggestedSteps] = useState<string[]>([]);
+  const [suggestedSteps, setSuggestedSteps, clearSteps] = useDraft<string[]>(`${draftKey}:steps`, []);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [busy, setBusy] = useState(false);
   // Live capture only, same as every other evidence path in this app
@@ -156,6 +159,10 @@ export default function NewIncidentScreen() {
         },
       });
       void drainQueue();
+      clearCategory();
+      clearPriority();
+      clearDescription();
+      clearSteps();
       if (state.connectivity === "offline") {
         appAlert("Report saved", "There is no connection right now. Your report is saved on this phone and will be sent automatically.");
       }

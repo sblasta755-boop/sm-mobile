@@ -8,6 +8,8 @@ import { ActionTiles } from "@/components/ActionTiles";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useSmartClean } from "@/features/store";
 import { useCanOpenStock } from "@/features/stock";
+import { useCanUsePayroll } from "@/features/payroll";
+import { useScheduleOn } from "@/features/schedule";
 import { useHasModule } from "@/features/modules";
 import { colors, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 
@@ -25,6 +27,8 @@ export default function ManageHome() {
   useThemeVersion(); // re-render with the new colours when the theme changes
   const { state, currentUser } = useSmartClean();
   const canOpenStock = useCanOpenStock();
+  const canUsePayroll = useCanUsePayroll();
+  const scheduleOn = useScheduleOn();
   const wayfindingOn = useHasModule("wayfinding");
 
   const mySites = useMemo(() => {
@@ -75,6 +79,12 @@ export default function ManageHome() {
       <ActionTiles
         items={[
           { key: "report", label: "Management report", icon: <Ionicons name="document-text-outline" size={20} color={colors.primary} />, onPress: () => router.push("/management-report") },
+          ...(scheduleOn
+            ? [{ key: "schedule", label: "Schedule", icon: <Ionicons name="calendar-outline" size={20} color={colors.primary} />, onPress: () => router.push("/schedule" as never) }]
+            : []),
+          ...(canUsePayroll
+            ? [{ key: "payruns", label: "Pay runs", icon: <Ionicons name="cash-outline" size={20} color={colors.primary} />, onPress: () => router.push("/pay-runs" as never) }]
+            : []),
           ...(canOpenStock
             ? [{ key: "stock", label: "Stock", icon: <Ionicons name="cube-outline" size={20} color={colors.primary} />, onPress: () => router.push("/stock" as never) }]
             : []),

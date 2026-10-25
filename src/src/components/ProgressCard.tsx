@@ -16,10 +16,11 @@ import {
   useThemeVersion,
 } from "@/theme";
 
-/** A person's own points, position, streak and badges this week. Renders nothing unless the
- * organisation has switched gamification on for their site and they take part. */
-export function ProgressCard() {
-  useThemeVersion(); // re-render with the new colours when the theme changes
+/** A person's own progress this week, or null when gamification is off, they do not take part, or
+ * it has not loaded. Shared by the points card and the Today card. */
+export type ActiveProgress = Extract<MyProgress, { enabled: true }>;
+
+export function useMyProgress(): ActiveProgress | null {
   const { state } = useSmartClean();
   const enabledForOrg = useModules().has("gamification");
   const [progress, setProgress] = useState<MyProgress | null>(null);
@@ -40,7 +41,16 @@ export function ProgressCard() {
     };
   }, [enabledForOrg, state.accessToken, state.connectivity]);
 
-  if (!progress || !progress.enabled) return null;
+  return progress && progress.enabled ? (progress as ActiveProgress) : null;
+}
+
+/** A person's own points, position, streak and badges this week. Renders nothing unless the
+ * organisation has switched gamification on for their site and they take part. */
+export function ProgressCard() {
+  useThemeVersion(); // re-render with the new colours when the theme changes
+  const progress = useMyProgress();
+
+  if (!progress) return null;
   return (
     <Pressable
       accessibilityRole="button"

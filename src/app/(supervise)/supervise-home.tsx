@@ -5,12 +5,15 @@ import { Ionicons } from "@expo/vector-icons";
 import { Screen } from "@/components/Screen";
 import { ActiveFiltersBar } from "@/components/ActiveFiltersBar";
 import { useTaskFilters } from "@/features/taskFilters";
-import { filterTasks } from "@/domain/taskBoard";
 import { focusTasks } from "@/domain/todayFocus";
+import { homeTaskView } from "@/domain/homeTasks";
 import { useNow } from "@/features/useNow";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
-import { ProgressCard } from "@/components/ProgressCard";
+import { useMyProgress } from "@/components/ProgressCard";
+import { useUpcomingBooking } from "@/components/UpcomingBookingCard";
+import { TodayCard } from "@/components/TodayCard";
+import { useScheduleOn } from "@/features/schedule";
 import { ActionTiles } from "@/components/ActionTiles";
 import { StatusBadge } from "@/components/StatusBadge";
 import { TaskRow } from "@/components/TaskRow";
@@ -69,7 +72,8 @@ export default function SuperviseHome() {
 
   // The filters set on the task lists apply here too, until they are changed.
   const [taskFilters] = useTaskFilters();
-  const shownTasks = useMemo(() => filterTasks(myTasks, taskFilters), [myTasks, taskFilters]);
+  const taskView = useMemo(() => homeTaskView(myTasks, taskFilters), [myTasks, taskFilters]);
+  const shownTasks = taskView.list;
 
   const reworkOut = useMemo(
     () => state.tasks.filter((task) => task.status === "rework_required"),
@@ -88,11 +92,14 @@ export default function SuperviseHome() {
     [state.correctiveActions, currentUser],
   );
 
+  const scheduleOn = useScheduleOn();
+  const nextBooking = useUpcomingBooking();
+  const progress = useMyProgress();
   const noSites = (currentUser?.siteIds?.length ?? 0) === 0;
 
   return (
     <Screen title="Today">
-      <ProgressCard />
+      <TodayCard showTasks={false} next={nextBooking} progress={progress} />
       {!noSites && hasAttendance && canScanClock && hasQr && (
         <Card padded={false} style={styles.shiftCard}>
           <View style={styles.shiftOverlay}>
@@ -162,6 +169,12 @@ export default function SuperviseHome() {
         items={[
           { key: "board", label: "Task board", icon: <Ionicons name="albums-outline" size={20} color={colors.primary} />, onPress: () => router.push("/kanban") },
           { key: "report", label: "Management report", icon: <Ionicons name="document-text-outline" size={20} color={colors.primary} />, onPress: () => router.push("/management-report") },
+          ...(scheduleOn
+            ? [{ key: "schedule", label: "My schedule", icon: <Ionicons name="calendar-outline" size={20} color={colors.primary} />, onPress: () => router.push("/schedule" as never) }]
+            : []),
+          ...(progress
+            ? [{ key: "progress", label: "My progress", icon: <Ionicons name="trophy-outline" size={20} color={colors.primary} />, onPress: () => router.push("/progress" as never) }]
+            : []),
           ...(canOpenStock
             ? [{ key: "stock", label: "Stock", icon: <Ionicons name="cube-outline" size={20} color={colors.primary} />, onPress: () => router.push("/stock" as never) }]
             : []),
@@ -174,7 +187,7 @@ export default function SuperviseHome() {
         ]}
       />
 
-      <ActiveFiltersBar />
+      <ActiveFiltersBar hiddenCount={taskView.hiddenCount} relaxed={taskView.relaxed} />
 
       {myTasks.length > 0 && (
         <>
