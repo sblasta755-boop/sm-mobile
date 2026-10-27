@@ -751,6 +751,9 @@ export function toUserRecord(user: DemoUser, overrides: Record<string, unknown> 
     profilePhotoDataUrl: user.profilePhotoDataUrl,
     phone: user.phone,
     siteIds: user.siteIds,
+    // The backend replaces the whole stored profile on every save, so a save
+    // that leaves this out (a photo upload, say) would wipe the alert choices.
+    notificationPrefs: user.notificationPrefs,
     ...overrides,
   };
 }

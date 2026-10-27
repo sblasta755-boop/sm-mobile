@@ -105,6 +105,16 @@ export interface SubscriptionState {
   billingEmail?: string | null;
 }
 
+/** Which alerts this person wants pushed to their phone. A missing key means "on". */
+export interface NotificationPrefs {
+  push: boolean;
+  incidents: boolean;
+  taskAssignments: boolean;
+  correctiveActions: boolean;
+  tableService: boolean;
+  reports: boolean;
+}
+
 export interface DemoUser {
   id: string;
   name: string;
@@ -118,6 +128,7 @@ export interface DemoUser {
   // toUserRecord.
   phone?: string;
   profilePhotoDataUrl?: string;
+  notificationPrefs?: Partial<NotificationPrefs> & Record<string, unknown>;
   // ISO timestamp of account creation - always sent by the backend
   // (user_to_record reads it straight off the live User.created_at
   // column) but optional here since older cached state predates this

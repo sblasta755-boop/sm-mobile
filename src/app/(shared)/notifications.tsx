@@ -89,6 +89,16 @@ export default function NotificationsScreen() {
         )}
       </View>
 
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => router.push("/notification-settings" as never)}
+        style={styles.settingsLink}
+      >
+        <Ionicons name="options-outline" size={18} color={colors.foreground} />
+        <Text style={styles.settingsLinkText}>Notification settings</Text>
+        <Ionicons name="chevron-forward" size={16} color={colors.mutedForeground} />
+      </Pressable>
+
       <View style={styles.chips}>
         {FILTERS.map((f) => {
           const selected = filter === f.value;
@@ -271,6 +281,19 @@ const styles = themedStyles(() =>
       backgroundColor: colors.accent,
     },
     markAllText: { fontSize: typography.small, fontWeight: "600", color: colors.primary },
+    settingsLink: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.md,
+      minHeight: 44,
+      paddingHorizontal: spacing.md,
+      marginBottom: spacing.md,
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card,
+    },
+    settingsLinkText: { flex: 1, fontSize: typography.body, fontWeight: "500", color: colors.foreground },
     chips: { flexDirection: "row", gap: spacing.sm, marginBottom: spacing.md },
     chip: {
       paddingHorizontal: spacing.md,
