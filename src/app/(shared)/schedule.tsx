@@ -8,7 +8,7 @@ import { Button } from "@/components/Button";
 import { ScheduleMap } from "@/components/ScheduleMap";
 import { appAlert } from "@/components/Dialog";
 import { cancelBooking, listMyBookings, listSiteBookings, type StaffBooking } from "@/api/client";
-import { addDays, bookingTime, isPastDay, mondayOf, dateKey, dayHeading, groupByDay, mapsUrl, parseDateKey } from "@/domain/schedule";
+import { addDays, bookingShifts, bookingTime, isPastDay, mondayOf, dateKey, dayHeading, groupByDay, mapsUrl, parseDateKey } from "@/domain/schedule";
 import { useCanBook, useScheduleOn } from "@/features/schedule";
 import { useHomePath } from "@/features/roles";
 import { useSmartClean } from "@/features/store";
@@ -88,6 +88,7 @@ export default function ScheduleScreen() {
                   <Text style={styles.site}>{b.site.name}</Text>
                   <Text style={styles.time}>{bookingTime(b)}</Text>
                 </View>
+                {bookingShifts(b) !== "" && <Text style={styles.muted}>{bookingShifts(b)}</Text>}
                 {scope === "all" && <Text style={styles.person}>{b.userName}</Text>}
                 {!!b.site.address && <Text style={styles.muted}>{b.site.address}</Text>}
                 {!!b.instructions && (

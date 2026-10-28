@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Screen } from "@/components/Screen";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { SelectField } from "@/components/SelectField";
+import { ProgressBar } from "@/components/ProgressBar";
+import { AssignHelpers, HandoverReportView, HandoverStart, useSiteShifts } from "@/components/StockHandover";
 import { appAlert } from "@/components/Dialog";
 import { useSmartClean } from "@/features/store";
 import { useStockAccess } from "@/features/stock";
@@ -41,7 +43,7 @@ import {
 } from "@/types/smartclean";
 import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 
-type Mode = "issue" | "waste" | "restock" | "receive" | "count";
+type Mode = "issue" | "waste" | "restock" | "receive" | "count" | "report";
 
 const MODE_LABELS: Record<Mode, string> = {
   issue: "Issue",
@@ -49,6 +51,25 @@ const MODE_LABELS: Record<Mode, string> = {
   restock: "Restock",
   receive: "Receive",
   count: "Count",
+  report: "Handovers",
+};
+
+const MODE_ICONS: Record<Mode, keyof typeof Ionicons.glyphMap> = {
+  issue: "arrow-up-circle-outline",
+  waste: "trash-outline",
+  restock: "cart-outline",
+  receive: "download-outline",
+  count: "clipboard-outline",
+  report: "stats-chart-outline",
+};
+
+const MODE_HINTS: Record<Mode, string> = {
+  issue: "Take stock out for a task, round or room.",
+  waste: "Record anything spoiled, broken or lost.",
+  restock: "Bring these to the carts and stores that are running low.",
+  receive: "Book a supplier delivery into the main store.",
+  count: "Count at the start of a shift, checked against the last one.",
+  report: "How handovers are going: done, missed and what did not match.",
 };
 
 const errorMessage = (error: unknown) => (error instanceof Error ? error.message : "Something went wrong");
@@ -72,8 +93,14 @@ export default function StockScreen() {
   }, [sites, siteId]);
 
   const modes = useMemo<Mode[]>(
-    () => [...(access.issue ? (["issue", "waste"] as Mode[]) : []), ...(access.keep ? (["restock", "receive", "count"] as Mode[]) : [])],
-    [access.issue, access.keep],
+    () => [
+      ...(access.issue ? (["issue", "waste"] as Mode[]) : []),
+      ...(access.keep ? (["restock", "receive"] as Mode[]) : []),
+      // A helper with issue access can count the lines a supervisor gave them.
+      ...(access.keep || access.issue ? (["count"] as Mode[]) : []),
+      ...(access.manage ? (["report"] as Mode[]) : []),
+    ],
+    [access.issue, access.keep, access.manage],
   );
   const [mode, setMode] = useState<Mode>("issue");
   useEffect(() => {
@@ -140,6 +167,13 @@ export default function StockScreen() {
   const itemUnit = (id: string) => items.find((i) => i.id === id)?.unit ?? "";
   const locationName = (id: string) => locations.find((l) => l.id === id)?.name ?? id;
 
+  const outbox = useOutbox();
+  const waitingToSend = outbox.filter((m) => m.userId === (currentUser?.id ?? "") && m.status !== "rejected" && m.kind.startsWith("stock.")).length;
+  const summary = [
+    ...(access.keep ? [{ label: "To restock", value: restock.length }, { label: "On the way", value: transfers.length }] : []),
+    ...(waitingToSend > 0 ? [{ label: "Waiting to send", value: waitingToSend }] : []),
+  ];
+
   if (modes.length === 0) {
     return (
       <Screen title="Stock">
@@ -160,22 +194,40 @@ export default function StockScreen() {
           onChange={(name) => setSiteId(sites.find((s) => s.name === name)?.id ?? siteId)}
         />
       )}
-      <View style={styles.chips}>
-        {modes.map((m) => (
-          <Pressable
-            key={m}
-            accessibilityRole="button"
-            accessibilityState={{ selected: mode === m }}
-            onPress={() => setMode(m)}
-            style={[styles.chip, mode === m && styles.chipSelected]}
-          >
-            <Text style={[styles.chipText, mode === m && styles.chipTextSelected]}>
-              {MODE_LABELS[m]}
-              {m === "restock" && restock.length > 0 ? ` (${restock.length})` : ""}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabs}>
+        {modes.map((m) => {
+          const selected = mode === m;
+          const badge = m === "restock" ? restock.length : 0;
+          return (
+            <Pressable
+              key={m}
+              accessibilityRole="tab"
+              accessibilityState={{ selected }}
+              onPress={() => setMode(m)}
+              style={[styles.tab, selected && styles.tabSelected]}
+            >
+              <Ionicons name={MODE_ICONS[m]} size={18} color={selected ? colors.primaryForeground : colors.mutedForeground} />
+              <Text style={[styles.tabText, selected && styles.tabTextSelected]}>{MODE_LABELS[m]}</Text>
+              {badge > 0 && (
+                <View style={[styles.tabBadge, selected && styles.tabBadgeSelected]}>
+                  <Text style={[styles.tabBadgeText, selected && styles.tabBadgeTextSelected]}>{badge}</Text>
+                </View>
+              )}
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+      <Text style={styles.modeHint}>{MODE_HINTS[mode]}</Text>
+      {summary.length > 0 && (
+        <View style={styles.statRow}>
+          {summary.map((stat) => (
+            <View key={stat.label} style={styles.stat}>
+              <Text style={styles.statValue}>{stat.value}</Text>
+              <Text style={styles.statLabel}>{stat.label}</Text>
+            </View>
+          ))}
+        </View>
+      )}
 
       {(mode === "issue" || mode === "waste") && (
         <IssueForm
@@ -190,15 +242,20 @@ export default function StockScreen() {
 
       {mode === "restock" && (
         <View style={styles.stack}>
-          <Text style={styles.heading}>Restock list</Text>
-          {restock.length === 0 && <Text style={styles.muted}>Nothing to restock right now.</Text>}
+          <SectionTitle icon="cart-outline" title="Restock list" count={restock.length} />
+          {restock.length === 0 && <EmptyState icon="checkmark-done-circle-outline" text="Nothing to restock right now." />}
           {restock.map((task) => (
             <Card key={task.id} style={styles.row}>
+              <View style={styles.qtyBubble}>
+                <Text style={styles.qtyBubbleValue}>{task.qty}</Text>
+                <Text style={styles.qtyBubbleUnit} numberOfLines={1}>{itemUnit(task.itemId)}</Text>
+              </View>
               <View style={styles.rowText}>
                 <Text style={styles.rowTitle}>{itemName(task.itemId)}</Text>
-                <Text style={styles.muted}>
-                  {locationName(task.locationId)} - bring {task.qty} {itemUnit(task.itemId)}
-                </Text>
+                <View style={styles.placeLine}>
+                  <Ionicons name="location-outline" size={13} color={colors.mutedForeground} />
+                  <Text style={styles.muted}>Bring to {locationName(task.locationId)}</Text>
+                </View>
               </View>
               <Button
                 fullWidth={false}
@@ -215,14 +272,16 @@ export default function StockScreen() {
               </Button>
             </Card>
           ))}
-          <Text style={styles.heading}>In transit</Text>
-          {transfers.length === 0 && <Text style={styles.muted}>No stock is on the way.</Text>}
+          <SectionTitle icon="swap-horizontal-outline" title="On the way" count={transfers.length} />
+          {transfers.length === 0 && <EmptyState icon="car-outline" text="No stock is on the way." />}
           {transfers.map((transfer) => (
             <Card key={transfer.id} style={styles.row}>
+              <View style={[styles.qtyBubble, styles.qtyBubbleInfo]}>
+                <Text style={[styles.qtyBubbleValue, styles.qtyBubbleValueInfo]}>{transfer.qty}</Text>
+                <Text style={[styles.qtyBubbleUnit, styles.qtyBubbleValueInfo]} numberOfLines={1}>{itemUnit(transfer.itemId)}</Text>
+              </View>
               <View style={styles.rowText}>
-                <Text style={styles.rowTitle}>
-                  {transfer.qty} {itemUnit(transfer.itemId)} {itemName(transfer.itemId)}
-                </Text>
+                <Text style={styles.rowTitle}>{itemName(transfer.itemId)}</Text>
                 <Text style={styles.muted}>
                   {locationName(transfer.fromLocationId)} → {locationName(transfer.toLocationId)}
                 </Text>
@@ -246,10 +305,104 @@ export default function StockScreen() {
         </View>
       )}
 
-      {mode === "count" && <CountView siteId={siteId} locations={locations} items={items} canApprove={access.manage} onDone={reload} />}
+      {mode === "report" && <HandoverReportView siteId={siteId} />}
+
+      {mode === "count" && <CountView siteId={siteId} locations={locations} items={items} canApprove={access.manage} canSubmit={access.keep} onDone={reload} />}
 
       {mode === "receive" && <ReceiveForm locations={locations} items={items} conversions={conversions} onDone={reload} />}
     </Screen>
+  );
+}
+
+function SectionTitle({ icon, title, count }: { icon: keyof typeof Ionicons.glyphMap; title: string; count?: number }) {
+  return (
+    <View style={styles.sectionTitle}>
+      <Ionicons name={icon} size={18} color={colors.primary} />
+      <Text style={styles.heading}>{title}</Text>
+      {count ? (
+        <View style={styles.countPill}>
+          <Text style={styles.countPillText}>{count}</Text>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+function EmptyState({ icon, text }: { icon: keyof typeof Ionicons.glyphMap; text: string }) {
+  return (
+    <View style={styles.empty}>
+      <Ionicons name={icon} size={28} color={colors.mutedForeground} />
+      <Text style={styles.muted}>{text}</Text>
+    </View>
+  );
+}
+
+/** A titled group of fields, so a long form reads as a few small steps. */
+function FormSection({ step, title, children }: { step: number; title: string; children: React.ReactNode }) {
+  return (
+    <Card style={styles.section}>
+      <View style={styles.sectionHead}>
+        <View style={styles.stepDot}>
+          <Text style={styles.stepDotText}>{step}</Text>
+        </View>
+        <Text style={styles.sectionHeadText}>{title}</Text>
+      </View>
+      <View style={styles.stack}>{children}</View>
+    </Card>
+  );
+}
+
+function Segmented<T extends string>({ value, options, onChange }: { value: T; options: { value: T; label: string }[]; onChange: (v: T) => void }) {
+  return (
+    <View style={styles.segmented}>
+      {options.map((option) => {
+        const on = option.value === value;
+        return (
+          <Pressable
+            key={option.value}
+            accessibilityRole="button"
+            accessibilityState={{ selected: on }}
+            onPress={() => onChange(option.value)}
+            style={[styles.segment, on && styles.segmentOn]}
+          >
+            <Text style={[styles.segmentText, on && styles.segmentTextOn]}>{option.label}</Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+/** Big plus and minus buttons so a quantity never needs the keyboard. */
+function QtyStepper({ label, value, onChange, hint, tone }: { label: string; value: string; onChange: (v: string) => void; hint?: string; tone?: "ok" | "low" }) {
+  const n = Number(value) || 0;
+  return (
+    <View style={styles.field}>
+      <View style={styles.stepperHead}>
+        <Text style={styles.label}>{label}</Text>
+        {hint ? (
+          <View style={[styles.hintPill, tone === "low" && styles.hintPillLow]}>
+            <Text style={[styles.hintPillText, tone === "low" && styles.hintPillTextLow]}>{hint}</Text>
+          </View>
+        ) : null}
+      </View>
+      <View style={styles.stepper}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Less" onPress={() => onChange(String(Math.max(0, n - 1)))} style={styles.stepBtn}>
+          <Ionicons name="remove" size={22} color={colors.primary} />
+        </Pressable>
+        <TextInput
+          style={styles.stepInput}
+          keyboardType="number-pad"
+          value={value}
+          onChangeText={(text) => onChange(text.replace(/[^0-9]/g, ""))}
+          placeholderTextColor={colors.mutedForeground}
+          selectTextOnFocus
+        />
+        <Pressable accessibilityRole="button" accessibilityLabel="More" onPress={() => onChange(String(n + 1))} style={styles.stepBtn}>
+          <Ionicons name="add" size={22} color={colors.primary} />
+        </Pressable>
+      </View>
+    </View>
   );
 }
 
@@ -266,12 +419,14 @@ function CountView({
   locations,
   items,
   canApprove,
+  canSubmit,
   onDone,
 }: {
   siteId: string;
   locations: StockLocation[];
   items: { id: string; name: string; unit: string }[];
   canApprove: boolean;
+  canSubmit: boolean;
   onDone: () => void;
 }) {
   const { state, currentUser } = useSmartClean();
@@ -281,6 +436,7 @@ function CountView({
   const today = useMemo(() => new Date().toLocaleDateString("en-CA"), []);
   const [base, setBase] = useState<StockCountSession | null>(null);
   const [entries, setEntries] = useState<Record<string, string>>({});
+  const { shifts } = useSiteShifts(siteId);
 
   const waiting = outbox.filter((m) => m.userId === userId && m.status !== "rejected" && m.kind.startsWith("stock.count")).length;
   const { session: count, submitPending } = useMemo(
@@ -297,10 +453,10 @@ function CountView({
   );
 
   // Today's count from the server (or a new one). Returns false with no signal.
-  const fetchCount = useCallback(async (): Promise<boolean> => {
+  const fetchCount = useCallback(async (options: { kind?: "handover" | "cycle"; shiftId?: string } = {}): Promise<boolean> => {
     if (!token) return false;
     try {
-      keep(await startStockCount(token, siteId));
+      keep(await startStockCount(token, siteId, options));
       return true;
     } catch (error) {
       if (error instanceof ApiError) appAlert("Could not open the count", errorMessage(error));
@@ -316,7 +472,7 @@ function CountView({
       const cached = await loadCachedCount(userId, siteId, today);
       if (cancelled) return;
       setBase(cached);
-      if (cached) await fetchCount();
+      if (cached) await fetchCount({ kind: cached.kind, shiftId: cached.kind === "handover" ? (cached.shiftId ?? undefined) : undefined });
     })();
     return () => {
       cancelled = true;
@@ -348,21 +504,30 @@ function CountView({
   };
 
   if (!count) {
+    const begin = async (options: { kind?: "handover" | "cycle"; shiftId?: string }) => {
+      if (!(await fetchCount(options)) && state.connectivity === "offline") {
+        appAlert("No connection", "Today's list is built on the server, so you need a connection to start the count. After that you can count offline.");
+      }
+    };
+    if (!canSubmit) {
+      return (
+        <View style={styles.stack}>
+          <Text style={styles.muted}>Open the count to see the lines a supervisor has given you to count.</Text>
+          <Button onPress={() => begin({})}>Open my lines</Button>
+        </View>
+      );
+    }
     return (
       <View style={styles.stack}>
+        <HandoverStart shifts={shifts} onStart={begin} />
         <Text style={styles.muted}>
-          Start today's count to get the list of items most worth checking. You won't see what the system expects until you submit.
-          Once it is on your phone you can count with no signal.
+          You won't see what the system expects until you submit. Once the list is on your phone you can count with no signal.
         </Text>
-        <Button
-          onPress={async () => {
-            if (!(await fetchCount()) && state.connectivity === "offline") {
-              appAlert("No connection", "Today's list is built on the server, so you need a connection to start the count. After that you can count offline.");
-            }
-          }}
-        >
-          Start today's count
-        </Button>
+        {canApprove && shifts.length === 0 && (
+          <Text style={styles.muted}>
+            This site has no shifts yet. Set them up under Schedule (Book staff, then Shifts) to run shift handover counts. Until then you can run a spot check.
+          </Text>
+        )}
       </View>
     );
   }
@@ -370,13 +535,30 @@ function CountView({
   const name = (id: string) => items.find((i) => i.id === id)?.name ?? id;
   const place = (id: string) => locations.find((l) => l.id === id)?.name ?? id;
   const open = count.status === "open" && !submitPending;
-  const allCounted = count.lines.every((l) => l.counted != null);
+  // A helper sees and counts only the lines a supervisor gave them.
+  const visibleLines = canSubmit ? count.lines : count.lines.filter((l) => l.assigneeId === userId);
+  const allCounted = visibleLines.every((l) => l.counted != null);
+  const counted = visibleLines.filter((l) => l.counted != null).length;
 
   return (
     <View style={styles.stack}>
-      <Text style={styles.heading}>
-        {count.countDate} - {count.status === "open" ? (submitPending ? "submitted" : "counting") : count.status === "closed" ? "closed" : "resolving variances"}
-      </Text>
+      <Card style={styles.section}>
+        <View style={styles.sectionHead}>
+          <Ionicons name="clipboard-outline" size={18} color={colors.primary} />
+          <Text style={styles.sectionHeadText}>
+            {count.kind === "handover" ? `${count.shiftName ?? "Shift"} handover, ` : "Spot check, "}
+            {count.countDate} · {count.status === "open" ? (submitPending ? "Submitted" : "Counting") : count.status === "closed" ? "Closed" : "Resolving variances"}
+          </Text>
+        </View>
+        {count.status === "open" && (
+          <>
+            <ProgressBar value={visibleLines.length ? (counted / visibleLines.length) * 100 : 0} />
+            <Text style={styles.muted}>
+              {counted} of {visibleLines.length} counted
+            </Text>
+          </>
+        )}
+      </Card>
       {waiting > 0 && (
         <Text style={styles.muted}>
           {submitPending
@@ -384,10 +566,26 @@ function CountView({
             : "Saved on this phone - it will go to the server as soon as there is a connection."}
         </Text>
       )}
-      {count.lines.map((line) => (
-        <Card key={line.id} style={styles.countCard}>
+      {count.kind === "handover" && count.status === "open" && canApprove && count.lines.length > 0 && (
+        <AssignHelpers count={count} locationName={place} onChanged={keep} />
+      )}
+      {visibleLines.length === 0 && (
+        <EmptyState
+          icon="clipboard-outline"
+          text={
+            canSubmit
+              ? "Nothing to count yet. Items are picked from stock held in a store or cart at this site. Record a delivery on the Receive tab, then open Count again."
+              : "No lines have been assigned to you yet. Ask your supervisor to give you some, then open Count again."
+          }
+        />
+      )}
+      {visibleLines.map((line) => (
+        <Card key={line.id} style={[styles.countCard, line.counted != null && count.status === "open" && styles.countDone]}>
           <Text style={styles.rowTitle}>{name(line.itemId)}</Text>
-          <Text style={styles.muted}>{place(line.locationId)}</Text>
+          <View style={styles.placeLine}>
+            <Ionicons name="location-outline" size={13} color={colors.mutedForeground} />
+            <Text style={styles.muted}>{place(line.locationId)}</Text>
+          </View>
           {count.status === "open" ? (
             <View style={styles.countRow}>
               <TextInput
@@ -395,7 +593,7 @@ function CountView({
                 keyboardType="number-pad"
                 placeholder="Counted"
                 placeholderTextColor={colors.mutedForeground}
-                editable={open}
+                editable={open && (canSubmit || line.assigneeId === userId)}
                 value={entries[line.id] ?? (line.counted != null ? String(line.counted) : "")}
                 onChangeText={(text) => setEntries({ ...entries, [line.id]: text.replace(/[^0-9]/g, "") })}
                 onEndEditing={() => {
@@ -403,10 +601,15 @@ function CountView({
                   if (value) void queue("stock.count.enter", { countId: count.id, lineId: line.id, counted: Number(value) });
                 }}
               />
-              {line.counted != null && <Ionicons name="checkmark-circle" size={20} color={colors.primary} />}
+              {line.counted != null && <Ionicons name="checkmark-circle" size={24} color={colors.success} />}
             </View>
           ) : (
             <>
+              {count.kind === "handover" && line.previousCounted != null && (
+                <Text style={styles.muted}>
+                  Last shift counted {line.previousCounted}, then {(line.movementNet ?? 0) > 0 ? `+${line.movementNet}` : (line.movementNet ?? 0)} recorded since
+                </Text>
+              )}
               <Text style={styles.muted}>
                 Expected {line.expected} · counted {line.counted} · {line.variance ? (line.variance > 0 ? `+${line.variance}` : line.variance) : "matches"}
               </Text>
@@ -440,9 +643,9 @@ function CountView({
           )}
         </Card>
       ))}
-      {open && (
+      {open && canSubmit && count.lines.length > 0 && (
         <Button disabled={!allCounted} onPress={() => queue("stock.count.submit", { countId: count.id })}>
-          Submit count
+          {allCounted ? "Submit count" : `Count ${count.lines.length - counted} more to submit`}
         </Button>
       )}
     </View>
@@ -578,29 +781,48 @@ function IssueForm({
     }
   };
 
+  const quantity = Number(qty) || 0;
+  const low = Boolean(item) && quantity > onHand;
+
   return (
     <View style={styles.stack}>
-      <SelectField label="From" value={locationName} options={choices.map((l) => l.name)} onChange={setLocationName} />
-      <SelectField label="Item" value={itemName} options={items.map((i) => i.name)} onChange={setItemName} />
-      <NumberField label={`Quantity${item ? ` (${onHand} ${item.unit} on hand)` : ""}`} value={qty} onChange={setQty} />
-      {mode === "issue" ? (
-        <>
-          <SelectField
-            label="For a"
-            value={refType === "task" ? "Task" : refType === "round" ? "Round" : "Room"}
-            options={["Task", "Round", "Room"]}
-            onChange={(value) => {
-              setRefType(value === "Task" ? "task" : value === "Round" ? "round" : "location");
-              setRefName("");
-            }}
-          />
-          <SelectField label={refType === "task" ? "Which task" : refType === "round" ? "Which round" : "Which room"} value={refName} options={refOptions} onChange={setRefName} />
-        </>
-      ) : (
-        <SelectField label="Reason" value={reason} options={STOCK_WASTE_REASONS} onChange={setReason} />
-      )}
+      <FormSection step={1} title={mode === "issue" ? "Take it from" : "Where was it"}>
+        <SelectField label="Location" value={locationName} options={choices.map((l) => l.name)} onChange={setLocationName} />
+      </FormSection>
+      <FormSection step={2} title="What and how many">
+        <SelectField label="Item" value={itemName} options={items.map((i) => i.name)} onChange={setItemName} />
+        <QtyStepper
+          label="Quantity"
+          value={qty}
+          onChange={setQty}
+          hint={item ? `${onHand} ${item.unit} on hand` : undefined}
+          tone={low ? "low" : "ok"}
+        />
+        {low && <Text style={styles.lowNote}>That is more than the {onHand} on hand. You can still save it, and the count will flag it.</Text>}
+      </FormSection>
+      <FormSection step={3} title={mode === "issue" ? "What it is for" : "Why"}>
+        {mode === "issue" ? (
+          <>
+            <Segmented
+              value={refType}
+              options={[
+                { value: "task", label: "Task" },
+                { value: "round", label: "Round" },
+                { value: "location", label: "Room" },
+              ]}
+              onChange={(value) => {
+                setRefType(value);
+                setRefName("");
+              }}
+            />
+            <SelectField label={refType === "task" ? "Which task" : refType === "round" ? "Which round" : "Which room"} value={refName} options={refOptions} onChange={setRefName} />
+          </>
+        ) : (
+          <SelectField label="Reason" value={reason} options={STOCK_WASTE_REASONS} onChange={setReason} />
+        )}
+      </FormSection>
       <Button onPress={submit} icon={<Ionicons name={mode === "issue" ? "arrow-up-circle" : "trash"} size={18} color={colors.primaryForeground} />}>
-        {mode === "issue" ? "Issue" : "Log waste"}
+        {mode === "issue" ? "Issue stock" : "Log waste"}
       </Button>
     </View>
   );
@@ -665,22 +887,26 @@ function ReceiveForm({
 
   return (
     <View style={styles.stack}>
-      <SelectField label="Into store" value={storeName} options={stores.map((l) => l.name)} onChange={setStoreName} />
-      <View style={styles.field}>
-        <Text style={styles.label}>Supplier</Text>
-        <TextInput style={styles.input} value={supplier} onChangeText={setSupplier} placeholderTextColor={colors.mutedForeground} />
-      </View>
-      <View style={styles.field}>
-        <Text style={styles.label}>Delivery reference</Text>
-        <TextInput style={styles.input} value={reference} onChangeText={setReference} placeholderTextColor={colors.mutedForeground} />
-      </View>
-      <SelectField label="Item" value={itemName} options={items.map((i) => i.name)} onChange={setItemName} />
-      {unitOptions.length > 1 && (
-        <SelectField label="Counted in" value={chosenUnit} options={unitOptions} onChange={setUnitLabel} />
-      )}
-      <NumberField label="Received" value={qty} onChange={setQty} />
-      <NumberField label="Ordered (if different)" value={ordered} onChange={setOrdered} />
-      <Button onPress={submit}>Receive</Button>
+      <FormSection step={1} title="The delivery">
+        <SelectField label="Into store" value={storeName} options={stores.map((l) => l.name)} onChange={setStoreName} />
+        <View style={styles.field}>
+          <Text style={styles.label}>Supplier</Text>
+          <TextInput style={styles.input} value={supplier} onChangeText={setSupplier} placeholder="Who delivered it" placeholderTextColor={colors.mutedForeground} />
+        </View>
+        <View style={styles.field}>
+          <Text style={styles.label}>Delivery note number (optional)</Text>
+          <TextInput style={styles.input} value={reference} onChangeText={setReference} placeholderTextColor={colors.mutedForeground} />
+        </View>
+      </FormSection>
+      <FormSection step={2} title="What arrived">
+        <SelectField label="Item" value={itemName} options={items.map((i) => i.name)} onChange={setItemName} />
+        {unitOptions.length > 1 && <SelectField label="Counted in" value={chosenUnit} options={unitOptions} onChange={setUnitLabel} />}
+        <QtyStepper label="Received" value={qty} onChange={setQty} />
+        <NumberField label="Ordered (only if different)" value={ordered} onChange={setOrdered} />
+      </FormSection>
+      <Button onPress={submit} icon={<Ionicons name="download" size={18} color={colors.primaryForeground} />}>
+        Receive delivery
+      </Button>
     </View>
   );
 }
@@ -689,23 +915,76 @@ const styles = themedStyles(() =>
   StyleSheet.create({
     stack: { gap: spacing.md },
     card: { padding: spacing.lg },
-    chips: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginBottom: spacing.md },
-    chip: {
-      paddingHorizontal: spacing.md,
-      paddingVertical: spacing.sm,
-      borderRadius: radius.xl,
+    tabs: { gap: spacing.sm, paddingBottom: spacing.xs },
+    tab: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.xs,
+      paddingHorizontal: spacing.lg,
+      minHeight: 44,
+      borderRadius: radius.round,
       borderWidth: 1,
       borderColor: colors.border,
       backgroundColor: colors.card,
     },
-    chipSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
-    chipText: { fontSize: typography.small, color: colors.foreground },
-    chipTextSelected: { color: colors.primaryForeground },
-    heading: { fontSize: typography.h2, color: colors.foreground, marginTop: spacing.sm },
+    tabSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
+    tabText: { fontSize: typography.body, fontWeight: "600", color: colors.mutedForeground },
+    tabTextSelected: { color: colors.primaryForeground },
+    tabBadge: { minWidth: 20, height: 20, borderRadius: 10, paddingHorizontal: 6, alignItems: "center", justifyContent: "center", backgroundColor: colors.primary },
+    tabBadgeSelected: { backgroundColor: colors.primaryForeground },
+    tabBadgeText: { fontSize: typography.small, fontWeight: "700", color: colors.primaryForeground },
+    tabBadgeTextSelected: { color: colors.primary },
+    modeHint: { fontSize: typography.body, color: colors.mutedForeground, marginTop: spacing.sm, marginBottom: spacing.md },
+    statRow: { flexDirection: "row", gap: spacing.sm, marginBottom: spacing.md },
+    stat: { flex: 1, backgroundColor: colors.secondary, borderRadius: radius.xl, paddingVertical: spacing.md, alignItems: "center" },
+    statValue: { fontSize: typography.title, fontWeight: "700", color: colors.foreground },
+    statLabel: { fontSize: typography.small, color: colors.mutedForeground },
+    sectionTitle: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginTop: spacing.sm },
+    countPill: { minWidth: 22, height: 22, borderRadius: 11, paddingHorizontal: 7, alignItems: "center", justifyContent: "center", backgroundColor: colors.accent },
+    countPillText: { fontSize: typography.small, fontWeight: "700", color: colors.primary },
+    empty: { alignItems: "center", gap: spacing.sm, paddingVertical: spacing.xl, borderRadius: radius.xl, borderWidth: 1, borderStyle: "dashed", borderColor: colors.border },
+    section: { padding: spacing.lg, gap: spacing.md },
+    sectionHead: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+    sectionHeadText: { fontSize: typography.h2, fontWeight: "600", color: colors.foreground },
+    stepDot: { width: 24, height: 24, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: colors.accent },
+    stepDotText: { fontSize: typography.small, fontWeight: "700", color: colors.primary },
+    segmented: { flexDirection: "row", backgroundColor: colors.muted, borderRadius: radius.xl, padding: 3 },
+    segment: { flex: 1, minHeight: 40, alignItems: "center", justifyContent: "center", borderRadius: radius.lg },
+    segmentOn: { backgroundColor: colors.card },
+    segmentText: { fontSize: typography.body, color: colors.mutedForeground, fontWeight: "500" },
+    segmentTextOn: { color: colors.primary, fontWeight: "700" },
+    stepperHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.sm },
+    stepper: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+    stepBtn: { width: 52, height: 52, borderRadius: radius.xl, alignItems: "center", justifyContent: "center", backgroundColor: colors.accent },
+    stepInput: {
+      flex: 1,
+      height: 52,
+      textAlign: "center",
+      fontSize: 24,
+      fontWeight: "700",
+      color: colors.foreground,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: radius.xl,
+      backgroundColor: colors.card,
+    },
+    hintPill: { paddingHorizontal: spacing.sm, paddingVertical: 2, borderRadius: radius.round, backgroundColor: colors.successSoft },
+    hintPillLow: { backgroundColor: colors.destructiveSoft },
+    hintPillText: { fontSize: typography.small, fontWeight: "600", color: colors.success },
+    hintPillTextLow: { color: colors.destructive },
+    lowNote: { fontSize: typography.small, color: colors.destructive },
+    qtyBubble: { width: 56, height: 56, borderRadius: radius.xl, alignItems: "center", justifyContent: "center", backgroundColor: colors.accent },
+    qtyBubbleInfo: { backgroundColor: colors.infoSoft },
+    qtyBubbleValue: { fontSize: typography.h1, fontWeight: "700", color: colors.primary },
+    qtyBubbleValueInfo: { color: colors.info },
+    qtyBubbleUnit: { fontSize: typography.tiny, color: colors.primary, maxWidth: 52 },
+    placeLine: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
+    countDone: { borderColor: colors.success },
+    heading: { fontSize: typography.h2, fontWeight: "600", color: colors.foreground },
     muted: { fontSize: typography.small, color: colors.mutedForeground },
     row: { flexDirection: "row", alignItems: "center", gap: spacing.md, padding: spacing.md },
     rowText: { flex: 1 },
-    countCard: { padding: spacing.md, gap: spacing.xs },
+    countCard: { padding: spacing.lg, gap: spacing.xs },
     countRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
     countInput: { flex: 1 },
     rowTitle: { fontSize: typography.body, color: colors.foreground, fontWeight: "600" },

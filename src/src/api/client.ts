@@ -15,7 +15,10 @@ import type {
   StaffRole,
   StockAccess,
   StockConversion,
+  StockCountHelper,
   StockCountSession,
+  StockHandoverReport,
+  StockShift,
   StockItem,
   StockLevel,
   StockLocation,
@@ -26,6 +29,10 @@ import type {
   Task,
   TableRatingSummary,
   TableSession,
+  PendingTableOrder,
+  TableOrder,
+  TableOrderLineDecision,
+  TableSessionOrders,
   TableSessionClaimResult,
   Tenant,
   WaiterSessionEndReason,
@@ -655,10 +662,15 @@ export function presentTableSessionBill(accessToken: string, sessionId: string) 
   return request<TableSession>(`/table-sessions/${sessionId}/present-bill`, { method: "POST" }, accessToken);
 }
 
-export function confirmTableSessionBillPaid(accessToken: string, sessionId: string, note?: string) {
+export function confirmTableSessionBillPaid(
+  accessToken: string,
+  sessionId: string,
+  note?: string,
+  paymentMethod?: "cash" | "card" | "eft" | "other",
+) {
   return request<TableSession>(
     `/table-sessions/${sessionId}/confirm-bill-paid`,
-    { method: "POST", body: JSON.stringify({ note }) },
+    { method: "POST", body: JSON.stringify({ note, paymentMethod }) },
     accessToken,
   );
 }
@@ -667,6 +679,34 @@ export function snoozeTableSessionBill(accessToken: string, sessionId: string, n
   return request<TableSession>(
     `/table-sessions/${sessionId}/snooze-bill`,
     { method: "POST", body: JSON.stringify({ note }) },
+    accessToken,
+  );
+}
+
+export function getPendingTableOrders(accessToken: string) {
+  return request<PendingTableOrder[]>("/table-service/orders/pending", {}, accessToken);
+}
+
+export function getSessionOrders(accessToken: string, sessionId: string) {
+  return request<TableSessionOrders>(`/table-service/sessions/${sessionId}/orders`, {}, accessToken);
+}
+
+export function decideTableOrder(
+  accessToken: string,
+  orderId: string,
+  body: { action: "accept_all" | "decline_all" | "review"; reason?: string; lines?: TableOrderLineDecision[] },
+) {
+  return request<TableOrder>(
+    `/table-service/orders/${orderId}/decision`,
+    { method: "POST", body: JSON.stringify(body) },
+    accessToken,
+  );
+}
+
+export function voidTableOrderLine(accessToken: string, lineId: string, reason?: string) {
+  return request<TableOrder>(
+    `/table-service/orders/lines/${lineId}/void`,
+    { method: "POST", body: JSON.stringify({ reason }) },
     accessToken,
   );
 }
@@ -1617,8 +1657,30 @@ export const completeStockRestockTask = (accessToken: string, id: string) =>
   stockRequest<StockRestockTask>(accessToken, `/restock-tasks/${id}/complete`, {});
 
 // Cycle counts: blind until submitted (the server withholds the expected figure).
-export const startStockCount = (accessToken: string, siteId: string) =>
-  stockRequest<StockCountSession>(accessToken, "/counts", { siteId });
+export const startStockCount = (
+  accessToken: string,
+  siteId: string,
+  options: { kind?: "handover" | "cycle"; shiftId?: string } = {},
+) => stockRequest<StockCountSession>(accessToken, "/counts", { siteId, ...options });
+
+export const assignStockCountLines = (accessToken: string, countId: string, assigneeId: string | null, lineIds: string[]) =>
+  stockRequest<StockCountSession>(accessToken, `/counts/${countId}/assign`, { assigneeId, lineIds });
+
+export const listStockCountHelpers = (accessToken: string, siteId: string, countId?: string) =>
+  stockRequest<StockCountHelper[]>(
+    accessToken,
+    `/sites/${encodeURIComponent(siteId)}/counters${countId ? `?countId=${encodeURIComponent(countId)}` : ""}`,
+  );
+
+export const listStockShifts = (accessToken: string, siteId: string) =>
+  stockRequest<StockShift[]>(accessToken, `/sites/${encodeURIComponent(siteId)}/shifts`);
+
+export const getStockHandoverReport = (accessToken: string, siteId: string, start?: string, end?: string) => {
+  const params = new URLSearchParams({ siteId });
+  if (start) params.set("start", start);
+  if (end) params.set("end", end);
+  return stockRequest<StockHandoverReport>(accessToken, `/report/handovers?${params}`);
+};
 
 export const enterStockCount = (accessToken: string, countId: string, lineId: string, counted: number) =>
   stockRequest<StockCountSession>(accessToken, `/counts/${countId}/lines/${lineId}`, { counted }, "PUT");
@@ -1831,6 +1893,9 @@ export type StaffBooking = {
   date: string;
   startTime: string | null;
   endTime: string | null;
+  /** The shifts the booking covers (a double shift names both). Empty for custom hours or all day. */
+  shiftIds: string[];
+  shiftNames: string[];
   instructions: string;
   status: "booked" | "cancelled";
   notified: string[];
@@ -1841,6 +1906,8 @@ export type BookStaffInput = {
   siteId: string;
   userIds: string[];
   dates: string[];
+  /** Shifts to book onto, or leave empty and give times. Times typed by hand win. */
+  shiftIds?: string[];
   startTime: string | null;
   endTime: string | null;
   instructions: string;
@@ -1855,6 +1922,20 @@ export const bookStaff = (t: string, input: BookStaffInput) =>
   request<{ created: StaffBooking[]; skipped: { userId: string; userName: string; date: string }[] }>(
     "/schedule/bookings",
     { method: "POST", body: JSON.stringify(input) },
+    t,
+  );
+/** The shifts set up for a site. They belong to Schedule: bookings name them, clock-in takes its
+ * expected hours from them, and stock handover counts follow them. */
+export const listSiteShifts = (t: string, siteId: string) =>
+  request<StockShift[]>(`/schedule/shifts?siteId=${encodeURIComponent(siteId)}`, {}, t);
+export const saveSiteShifts = (
+  t: string,
+  siteId: string,
+  shifts: { id?: string; name: string; startTime: string; endTime: string }[],
+) =>
+  request<StockShift[]>(
+    `/schedule/sites/${encodeURIComponent(siteId)}/shifts`,
+    { method: "PUT", body: JSON.stringify({ shifts }) },
     t,
   );
 export const cancelBooking = (t: string, id: string) =>

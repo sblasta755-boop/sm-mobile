@@ -619,6 +619,11 @@ export interface StockCountLine {
   varianceCost?: number | null;
   reasonCode?: string | null;
   status: "pending" | "counted" | "needs_reason" | "awaiting_approval" | "approved" | "rejected" | "ok";
+  /** Handover counts: who was asked to count the line. */
+  assigneeId?: string | null;
+  countedBy?: string | null;
+  previousCounted?: number | null;
+  movementNet?: number | null;
 }
 
 export interface StockCountSession {
@@ -626,8 +631,79 @@ export interface StockCountSession {
   siteId: string;
   countDate: string;
   status: "open" | "submitted" | "closed";
+  /** "handover" counts the whole site for a shift; "cycle" is a short spot check. */
+  kind?: "handover" | "cycle";
+  shiftId?: string | null;
+  shiftName?: string | null;
   lines: StockCountLine[];
   openIssues: number;
+}
+
+export interface StockShift {
+  id: string;
+  siteId: string;
+  name: string;
+  /** Site wall-clock "HH:MM". An end not after the start means the shift runs past midnight. */
+  startTime: string;
+  endTime: string;
+  sortOrder: number;
+}
+
+export interface StockCountHelper {
+  id: string;
+  name: string;
+  role: string;
+  /** Booked at this site on the count's shift and day. */
+  booked?: boolean;
+}
+
+/** GET /stock/report/handovers: shift handovers for one site and period. */
+export interface StockHandoverReport {
+  siteName: string;
+  start: string;
+  end: string;
+  shifts: { id: string; name: string; startTime: string; endTime: string }[];
+  summary: {
+    handoversDone: number;
+    expected: number;
+    missed: number;
+    completionRate: number | null;
+    withIrregularities: number;
+    flaggedLines: number;
+    flaggedCost: number;
+    unresolvedLines: number;
+  };
+  byShift: { shiftId: string; shiftName: string; expected: number; completed: number; missed: number; flaggedLines: number; flaggedCost: number }[];
+  handovers: {
+    id: string;
+    countDate: string;
+    shiftName?: string | null;
+    previousShiftName?: string | null;
+    startedBy?: string | null;
+    signedOffBy?: string | null;
+    submittedAt?: string | null;
+    status: string;
+    lines: number;
+    flaggedLines: number;
+    flaggedCost: number;
+    unresolved: number;
+    flagged: {
+      lineId: string;
+      itemName: string;
+      locationName: string;
+      previousCounted?: number | null;
+      movementNet?: number | null;
+      expected?: number | null;
+      counted?: number | null;
+      variance?: number | null;
+      cost: number;
+      reasonLabel?: string | null;
+      status: string;
+      countedBy?: string | null;
+    }[];
+  }[];
+  missed: { date: string; shiftName: string; windowStart: string; windowEnd: string; started: boolean }[];
+  hotspots: { itemName: string; locationName: string; timesFlagged: number; units: number; cost: number }[];
 }
 
 /** [code, label] pairs for explaining a count variance. */
@@ -761,4 +837,57 @@ export interface TableRatingSummary {
    * misleading zero-star average. */
   averageRating: number | null;
   ratingCount: number;
+}
+
+export interface TableOrderLine {
+  id: string;
+  name: string;
+  qty: number;
+  unitMinor: number;
+  lineTotalMinor: number;
+  options: string[];
+  note?: string | null;
+  status: "pending" | "accepted" | "declined";
+  qtyAccepted: number;
+  declineReason?: string | null;
+}
+
+export interface TableOrder {
+  id: string;
+  number: number;
+  status: "awaiting_confirmation" | "accepted" | "partially_accepted" | "declined" | "cancelled";
+  note?: string | null;
+  placedAt: string;
+  declineReason?: string | null;
+  lines: TableOrderLine[];
+}
+
+export interface TableLiveBill {
+  lines: { name: string; qty: number; unitMinor: number; lineTotalMinor: number; options: string[] }[];
+  totals: { subtotal: number; service: number; vat: number; total: number };
+  pendingTotalMinor: number;
+  pendingCount: number;
+  currency: string;
+  pricesIncludeVat: boolean;
+  vatRateBp: number;
+  serviceChargeBp: number;
+}
+
+export interface TableSessionOrders {
+  orders: TableOrder[];
+  bill: TableLiveBill | null;
+  canOrder: boolean;
+}
+
+export interface PendingTableOrder {
+  sessionId: string;
+  locationName: string;
+  order: TableOrder;
+}
+
+export interface TableOrderLineDecision {
+  lineId: string;
+  action: "accept" | "decline";
+  qty?: number;
+  reason?: string;
 }

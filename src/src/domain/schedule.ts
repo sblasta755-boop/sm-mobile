@@ -41,6 +41,11 @@ export function dayHeading(iso: string, today: Date = new Date()): string {
   return parseDateKey(iso).toLocaleDateString("en-ZA", { weekday: "long", day: "numeric", month: "long" });
 }
 
+/** The shifts a booking covers, e.g. "Day + Night", or "" for custom hours or all day. */
+export function bookingShifts(b: Pick<StaffBooking, "shiftNames">): string {
+  return (b.shiftNames ?? []).join(" + ");
+}
+
 export function bookingTime(b: Pick<StaffBooking, "startTime" | "endTime">): string {
   if (b.startTime && b.endTime) return `${b.startTime} to ${b.endTime}`;
   if (b.startTime) return `from ${b.startTime}`;

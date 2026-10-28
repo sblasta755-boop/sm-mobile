@@ -1,9 +1,9 @@
 import type { StaffBooking } from "@/api/client";
-import { addDays, bookingTime, dateKey, dayHeading, daysBetween, groupByDay, isPastDay, mapsUrl, mondayOf } from "./schedule";
+import { addDays, bookingShifts, bookingTime, dateKey, dayHeading, daysBetween, groupByDay, isPastDay, mapsUrl, mondayOf } from "./schedule";
 
 const site = { id: "s1", name: "Hazelwood Mall", address: "1 Main Rd", latitude: -26.1, longitude: 28.0 };
 const b = (over: Partial<StaffBooking>): StaffBooking => ({
-  id: "b", siteId: "s1", site, userId: "u", userName: "Ann", date: "2026-11-03", startTime: null, endTime: null,
+  id: "b", siteId: "s1", site, userId: "u", userName: "Ann", date: "2026-11-03", startTime: null, endTime: null, shiftIds: [], shiftNames: [],
   instructions: "", status: "booked", notified: [], bookedBy: "", tasks: [], ...over,
 });
 
@@ -50,4 +50,10 @@ test("a day is past only before today", () => {
   expect(isPastDay("2026-11-02", today)).toBe(true);
   expect(isPastDay("2026-11-03", today)).toBe(false);
   expect(isPastDay("2026-11-04", today)).toBe(false);
+});
+
+test("a booking names its shifts, joined for a double shift, or nothing for custom hours", () => {
+  expect(bookingShifts(b({ shiftNames: ["Day"] }))).toBe("Day");
+  expect(bookingShifts(b({ shiftNames: ["Day", "Night"] }))).toBe("Day + Night");
+  expect(bookingShifts(b({}))).toBe("");
 });

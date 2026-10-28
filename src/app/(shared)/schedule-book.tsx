@@ -6,7 +6,9 @@ import { Screen } from "@/components/Screen";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { appAlert } from "@/components/Dialog";
-import { bookStaff, listBookablePeople, listSiteBookings, type StaffBooking } from "@/api/client";
+import { bookStaff, listBookablePeople, listSiteBookings, listSiteShifts, type StaffBooking } from "@/api/client";
+import { ShiftSetup } from "@/components/ShiftSetup";
+import type { StockShift } from "@/types/smartclean";
 import { addDays, dateKey, daysBetween, isPastDay } from "@/domain/schedule";
 import { useCanBook, useScheduleOn } from "@/features/schedule";
 import { useHomePath } from "@/features/roles";
@@ -14,6 +16,16 @@ import { useSmartClean } from "@/features/store";
 import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+const minutes = (hhmm: string) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3));
+/** First start to last end of the picked shifts, running past midnight when the last one does. */
+function shiftSpan(chosen: StockShift[]): { start: string; end: string } | null {
+  if (chosen.length === 0) return null;
+  const first = chosen.reduce((a, b) => (minutes(b.startTime) < minutes(a.startTime) ? b : a));
+  const offset = (s: StockShift) => (minutes(s.startTime) - minutes(first.startTime) + 1440) % 1440;
+  const last = chosen.reduce((a, b) => (offset(b) > offset(a) ? b : a));
+  return { start: first.startTime, end: last.endTime };
+}
 
 /** Book people onto a site for one or more days, with instructions. They are told straight away. */
 export default function ScheduleBookScreen() {
@@ -33,6 +45,11 @@ export default function ScheduleBookScreen() {
   const [weekdaysOnly, setWeekdaysOnly] = useState(false);
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
+  // The shifts picked (several for a double shift), or custom hours for a half day.
+  const [shiftIds, setShiftIds] = useState<string[]>([]);
+  const [custom, setCustom] = useState(false);
+  const [shifts, setShifts] = useState<StockShift[]>([]);
+  const [shiftsVersion, setShiftsVersion] = useState(0);
   const [instructions, setInstructions] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -41,6 +58,23 @@ export default function ScheduleBookScreen() {
     setChosen([]);
     listBookablePeople(state.accessToken, siteId).then(setPeople).catch(() => setPeople([]));
   }, [state.accessToken, siteId]);
+
+  useEffect(() => {
+    if (!state.accessToken || !siteId) return;
+    let live = true;
+    setShiftIds([]);
+    setCustom(false);
+    setStartTime("");
+    setEndTime("");
+    listSiteShifts(state.accessToken, siteId)
+      .then((next) => live && setShifts(next))
+      .catch(() => live && setShifts([]));
+    return () => {
+      live = false;
+    };
+  }, [state.accessToken, siteId, shiftsVersion]);
+  const chosenShifts = shifts.filter((s) => shiftIds.includes(s.id));
+  const span = shiftSpan(chosenShifts);
 
   const dates = useMemo(() => daysBetween(from, to, weekdaysOnly), [from, to, weekdaysOnly]);
   // Who is already booked at this site on the chosen days, so the list can say so.
@@ -63,7 +97,7 @@ export default function ScheduleBookScreen() {
   const pickable = people.filter((p) => !fullyBooked(p.id));
   const picked = chosen.filter((id) => pickable.some((p) => p.id === id));
   const inPast = isPastDay(from);
-  const timesOk = (!startTime || TIME.test(startTime)) && (!endTime || (TIME.test(endTime) && !!startTime && endTime > startTime));
+  const timesOk = !custom && shifts.length > 0 ? true : (!startTime || TIME.test(startTime)) && (!endTime || (TIME.test(endTime) && !!startTime && endTime > startTime));
 
   if (!on || !canBook) return <Redirect href={homePath as never} />;
 
@@ -81,8 +115,9 @@ export default function ScheduleBookScreen() {
         siteId,
         userIds: picked,
         dates,
-        startTime: startTime || null,
-        endTime: endTime || null,
+        shiftIds: custom ? [] : shiftIds,
+        startTime: custom || shifts.length === 0 ? startTime || null : null,
+        endTime: custom || shifts.length === 0 ? endTime || null : null,
         instructions,
       });
       const told = new Set(result.created.map((c) => c.userId)).size;
@@ -162,10 +197,59 @@ export default function ScheduleBookScreen() {
             <Text style={styles.personName}>Weekdays only</Text>
           </Pressable>
         )}
-        <View style={styles.pair}>
-          <TextInput style={[styles.input, styles.flex]} value={startTime} onChangeText={setStartTime} placeholder="Start 07:00" placeholderTextColor={colors.mutedForeground} autoCapitalize="none" accessibilityLabel="Start time" />
-          <TextInput style={[styles.input, styles.flex]} value={endTime} onChangeText={setEndTime} placeholder="End 15:00" placeholderTextColor={colors.mutedForeground} autoCapitalize="none" accessibilityLabel="End time" />
-        </View>
+        <Text style={styles.heading}>Hours</Text>
+        {shifts.length > 0 ? (
+          <>
+            <View style={styles.chips}>
+              {shifts.map((shift) => {
+                const on = !custom && shiftIds.includes(shift.id);
+                return (
+                  <Pressable
+                    key={shift.id}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: on }}
+                    style={[styles.chip, on && styles.chipOn]}
+                    onPress={() => {
+                      setCustom(false);
+                      setShiftIds((ids) => (ids.includes(shift.id) ? ids.filter((i) => i !== shift.id) : [...ids, shift.id]));
+                    }}
+                  >
+                    <Text style={[styles.chipText, on && styles.chipTextOn]}>
+                      {shift.name} {shift.startTime} to {shift.endTime}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ selected: custom }}
+                style={[styles.chip, custom && styles.chipOn]}
+                onPress={() => {
+                  setCustom((c) => !c);
+                  setShiftIds([]);
+                }}
+              >
+                <Text style={[styles.chipText, custom && styles.chipTextOn]}>Custom hours</Text>
+              </Pressable>
+            </View>
+            {!custom && chosenShifts.length > 1 && <Text style={styles.muted}>Double shift: {chosenShifts.map((s) => s.name).join(" and ")}.</Text>}
+            {!custom && span && (
+              <Text style={styles.muted}>
+                Works {span.start} to {span.end}
+                {span.end <= span.start ? " the next morning" : ""}. Clock-in is checked against these hours.
+              </Text>
+            )}
+            {!custom && !span && <Text style={styles.muted}>Pick a shift, several for a double shift, or Custom hours for a half day. Leave empty for all day.</Text>}
+          </>
+        ) : (
+          <Text style={styles.muted}>Optional. Without hours the site's working hours apply. Set up shifts below to book onto them.</Text>
+        )}
+        {(custom || shifts.length === 0) && (
+          <View style={styles.pair}>
+            <TextInput style={[styles.input, styles.flex]} value={startTime} onChangeText={setStartTime} placeholder="Start 07:00" placeholderTextColor={colors.mutedForeground} autoCapitalize="none" accessibilityLabel="Start time" />
+            <TextInput style={[styles.input, styles.flex]} value={endTime} onChangeText={setEndTime} placeholder="End 15:00" placeholderTextColor={colors.mutedForeground} autoCapitalize="none" accessibilityLabel="End time" />
+          </View>
+        )}
         {inPast && <Text style={styles.error}>Days that have passed cannot be booked. Choose today or a later day.</Text>}
         {!timesOk && <Text style={styles.error}>Times look like 07:30, and the end must be after the start.</Text>}
 
@@ -185,6 +269,9 @@ export default function ScheduleBookScreen() {
       <Button disabled={busy || !siteId || picked.length === 0 || dates.length === 0 || !timesOk || inPast} onPress={() => void submit()}>
         Book and notify
       </Button>
+      <View style={styles.setup}>
+  <ShiftSetup siteId={siteId} onSaved={() => setShiftsVersion((v) => v + 1)} />
+      </View>
     </Screen>
   );
 }
@@ -192,6 +279,7 @@ export default function ScheduleBookScreen() {
 const styles = themedStyles(() =>
   StyleSheet.create({
     card: { marginBottom: spacing.md, gap: spacing.sm },
+    setup: { marginTop: spacing.lg },
     heading: { fontSize: typography.body, fontWeight: "800", color: colors.foreground, marginTop: spacing.xs },
     muted: { fontSize: typography.small, color: colors.mutedForeground },
     error: { fontSize: typography.small, color: colors.destructive },

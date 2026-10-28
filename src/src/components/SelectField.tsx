@@ -1,7 +1,10 @@
 import { useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { colors, radius, spacing, typography, themedStyles } from "@/theme";
+
+/** More options than this and the list gets a search box. */
+const SEARCH_FROM = 6;
 
 export function SelectField({
   label,
@@ -10,6 +13,7 @@ export function SelectField({
   onChange,
   capitalize,
   disabled,
+  searchable,
 }: {
   label: string;
   value: string;
@@ -17,8 +21,18 @@ export function SelectField({
   onChange: (value: string) => void;
   capitalize?: boolean;
   disabled?: boolean;
+  /** Show a search box. Defaults to on once the list is long enough to need one. */
+  searchable?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const showSearch = searchable ?? options.length > SEARCH_FROM;
+  const needle = query.trim().toLowerCase();
+  const shown = needle ? options.filter((option) => option.toLowerCase().includes(needle)) : options;
+  const close = () => {
+    setOpen(false);
+    setQuery("");
+  };
 
   return (
     <View style={styles.field}>
@@ -32,17 +46,34 @@ export function SelectField({
         {!disabled && <Ionicons name="chevron-down" size={16} color={colors.mutedForeground} />}
       </Pressable>
 
-      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
-        <Pressable style={styles.backdrop} onPress={() => setOpen(false)}>
-          <View style={styles.sheet}>
-            <ScrollView>
-              {options.map((option) => (
+      <Modal visible={open} transparent animationType="fade" onRequestClose={close}>
+        <Pressable style={[styles.backdrop, showSearch && styles.backdropTop]} onPress={close}>
+          <Pressable style={styles.sheet} onPress={() => undefined}>
+            {showSearch && (
+              <View style={styles.searchBox}>
+                <Ionicons name="search" size={16} color={colors.mutedForeground} />
+                <TextInput
+                  style={styles.searchInput}
+                  value={query}
+                  onChangeText={setQuery}
+                  placeholder={`Search ${options.length} options`}
+                  placeholderTextColor={colors.mutedForeground}
+                  autoCorrect={false}
+                  autoCapitalize="none"
+                  clearButtonMode="while-editing"
+                  returnKeyType="search"
+                />
+              </View>
+            )}
+            <ScrollView keyboardShouldPersistTaps="handled">
+              {showSearch && shown.length === 0 && <Text style={styles.empty}>Nothing matches "{query.trim()}".</Text>}
+              {shown.map((option) => (
                 <Pressable
                   key={option}
                   style={styles.option}
                   onPress={() => {
                     onChange(option);
-                    setOpen(false);
+                    close();
                   }}
                 >
                   <Text style={[styles.optionText, capitalize && styles.capitalize, option === value && styles.optionTextSelected]}>
@@ -52,7 +83,7 @@ export function SelectField({
                 </Pressable>
               ))}
             </ScrollView>
-          </View>
+          </Pressable>
         </Pressable>
       </Modal>
     </View>
@@ -94,6 +125,32 @@ const styles = themedStyles(() => StyleSheet.create({
     backgroundColor: colors.overlay,
     justifyContent: "center",
     padding: spacing.xl,
+  },
+  backdropTop: {
+    // Keeps the list clear of the keyboard while searching.
+    justifyContent: "flex-start",
+    paddingTop: spacing.xxl * 2,
+  },
+  searchBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    margin: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.muted,
+  },
+  searchInput: {
+    flex: 1,
+    minHeight: 44,
+    fontSize: 16,
+    color: colors.foreground,
+  },
+  empty: {
+    padding: spacing.lg,
+    textAlign: "center",
+    fontSize: typography.body,
+    color: colors.mutedForeground,
   },
   sheet: {
     maxHeight: 360,

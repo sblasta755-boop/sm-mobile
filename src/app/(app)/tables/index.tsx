@@ -6,10 +6,10 @@ import { Screen } from "@/components/Screen";
 import { Card } from "@/components/Card";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useSmartClean } from "@/features/store";
-import { attendTableSession, claimTableSession, listTableSessions } from "@/api/client";
+import { attendTableSession, claimTableSession, getPendingTableOrders, listTableSessions } from "@/api/client";
 import { elapsedLabel, riskLabel, sortByRisk, startedLabel } from "@/features/tableRisk";
 import { Button } from "@/components/Button";
-import type { TableSession } from "@/types/smartclean";
+import type { PendingTableOrder, TableSession } from "@/types/smartclean";
 import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 
 // How often to re-fetch the table grid while this screen is open. Push
@@ -38,12 +38,15 @@ export default function TablesScreen() {
   const [claiming, setClaiming] = useState(false);
   const [claimCode, setClaimCode] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [waitingOrders, setWaitingOrders] = useState<PendingTableOrder[]>([]);
 
   const load = useCallback(async () => {
     if (!state.accessToken) return;
     try {
       const rows = await listTableSessions(state.accessToken);
       setSessions(rows);
+      // Fails harmlessly when the organisation does not use the built-in menu.
+      getPendingTableOrders(state.accessToken).then(setWaitingOrders).catch(() => setWaitingOrders([]));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load tables");
     }
@@ -128,6 +131,19 @@ export default function TablesScreen() {
 
   return (
     <Screen title="My Tables">
+      {waitingOrders.length > 0 && (
+        <Card style={styles.ordersCard}>
+          <Text style={styles.ordersTitle}>
+            {waitingOrders.length} order{waitingOrders.length === 1 ? "" : "s"} waiting for you
+          </Text>
+          {waitingOrders.map((o) => (
+            <Pressable key={o.order.id} style={styles.ordersRow} onPress={() => router.push(`/tables/${o.sessionId}`)}>
+              <Text style={styles.ordersName}>{o.locationName}</Text>
+              <Text style={styles.ordersMeta}>Order {o.order.number}</Text>
+            </Pressable>
+          ))}
+        </Card>
+      )}
       <Card style={styles.claimCard}>
         <View style={styles.claimTop}>
           <View style={styles.claimIcon}>
@@ -266,6 +282,11 @@ function SessionRow({ session, onAttend }: { session: TableSession; onAttend?: (
 }
 
 const styles = themedStyles(() => StyleSheet.create({
+  ordersCard: { marginBottom: spacing.md, gap: spacing.xs, borderColor: colors.primary, backgroundColor: colors.accent },
+  ordersTitle: { fontSize: typography.h2, fontWeight: "700", color: colors.foreground },
+  ordersRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: spacing.xs },
+  ordersName: { fontSize: typography.body, fontWeight: "600", color: colors.foreground, textTransform: "capitalize" },
+  ordersMeta: { fontSize: typography.small, color: colors.mutedForeground },
   claimCard: { marginBottom: spacing.md, gap: spacing.md },
   claimTop: { flexDirection: "row", alignItems: "center", gap: spacing.md },
   claimIcon: {

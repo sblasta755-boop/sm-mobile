@@ -4,7 +4,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Card } from "@/components/Card";
 import { listMyBookings, type StaffBooking } from "@/api/client";
-import { addDays, bookingTime, dateKey, dayHeading, groupByDay } from "@/domain/schedule";
+import { addDays, bookingShifts, bookingTime, dateKey, dayHeading, groupByDay } from "@/domain/schedule";
 import { useScheduleOn } from "@/features/schedule";
 import { useSmartClean } from "@/features/store";
 import { colors, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
@@ -48,6 +48,7 @@ export function UpcomingBookingCard() {
             <Text style={styles.site}>{first.site.name}</Text>
             <Text style={styles.muted}>
               {dayHeading(first.date)} · {bookingTime(first)}
+              {bookingShifts(first) !== "" ? ` (${bookingShifts(first)})` : ""}
               {next.length > 1 ? ` (+${next.length - 1} more that day)` : ""}
             </Text>
             {!!first.instructions && (

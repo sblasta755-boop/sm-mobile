@@ -6,6 +6,7 @@ import { Screen } from "@/components/Screen";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { StatusBadge } from "@/components/StatusBadge";
+import { WaiterOrders } from "@/components/WaiterOrders";
 import { useSmartClean } from "@/features/store";
 import {
   acknowledgeTableRequest,
@@ -63,6 +64,7 @@ export default function TableSessionDetailScreen() {
   const [endOpen, setEndOpen] = useState(false);
   const [endReason, setEndReason] = useState<WaiterSessionEndReason>("paid");
   const [endNote, setEndNote] = useState("");
+  const [payMethod, setPayMethod] = useState<"cash" | "card" | "eft" | "other">("cash");
   const [ending, setEnding] = useState(false);
 
   const [snoozeOpen, setSnoozeOpen] = useState(false);
@@ -133,7 +135,7 @@ export default function TableSessionDetailScreen() {
     try {
       const row =
         endReason === "paid"
-          ? await confirmTableSessionBillPaid(state.accessToken, session.id, endNote || undefined)
+          ? await confirmTableSessionBillPaid(state.accessToken, session.id, endNote || undefined, payMethod)
           : await endTableSession(state.accessToken, session.id, { reason: endReason, note: endNote || undefined });
       setSession(row);
       setEndOpen(false);
@@ -143,7 +145,7 @@ export default function TableSessionDetailScreen() {
     } finally {
       setEnding(false);
     }
-  }, [state.accessToken, session, endReason, endNote]);
+  }, [state.accessToken, session, endReason, endNote, payMethod]);
 
   const doSnooze = useCallback(async () => {
     if (!state.accessToken || !session || !snoozeNote.trim()) return;
@@ -317,6 +319,8 @@ export default function TableSessionDetailScreen() {
         </Card>
       )}
 
+      <WaiterOrders sessionId={session.id} ended={session.status === "ended"} />
+
       {pendingRequests.length > 0 && (
         <Card style={styles.section}>
           <Text style={styles.label}>Pending requests</Text>
@@ -413,6 +417,20 @@ export default function TableSessionDetailScreen() {
                 ? "A cleaning task will be created automatically."
                 : "No cleaning task will be created for this reason."}
             </Text>
+            {endReason === "paid" && (
+              <View>
+                <Text style={styles.hint}>How did they pay? It is printed on the guest's receipt.</Text>
+                <View style={styles.reasonList}>
+                  {(["cash", "card", "eft", "other"] as const).map((method) => (
+                    <Pressable key={method} style={[styles.reasonChip, payMethod === method && styles.reasonChipActive]} onPress={() => setPayMethod(method)}>
+                      <Text style={[styles.reasonChipText, payMethod === method && styles.reasonChipTextActive]}>
+                        {method === "eft" ? "EFT" : method.charAt(0).toUpperCase() + method.slice(1)}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
+            )}
             <TextInput
               style={styles.noteInput}
               placeholder="Optional note"
