@@ -9,6 +9,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { useSmartClean } from "@/features/store";
 import { useCanOpenStock } from "@/features/stock";
 import { useCanUsePayroll } from "@/features/payroll";
+import { useLeaveOn } from "@/features/leave";
 import { useScheduleOn } from "@/features/schedule";
 import { useHasModule } from "@/features/modules";
 import { colors, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
@@ -29,6 +30,7 @@ export default function ManageHome() {
   const canOpenStock = useCanOpenStock();
   const canUsePayroll = useCanUsePayroll();
   const scheduleOn = useScheduleOn();
+  const leaveOn = useLeaveOn();
   const wayfindingOn = useHasModule("wayfinding");
 
   const mySites = useMemo(() => {
@@ -84,6 +86,9 @@ export default function ManageHome() {
             : []),
           ...(canUsePayroll
             ? [{ key: "payruns", label: "Pay runs", icon: <Ionicons name="cash-outline" size={20} color={colors.primary} />, onPress: () => router.push("/pay-runs" as never) }]
+            : []),
+          ...(leaveOn
+            ? [{ key: "leave", label: "Leave", icon: <Ionicons name="airplane-outline" size={20} color={colors.primary} />, onPress: () => router.push("/leave" as never) }]
             : []),
           ...(canOpenStock
             ? [{ key: "stock", label: "Stock", icon: <Ionicons name="cube-outline" size={20} color={colors.primary} />, onPress: () => router.push("/stock" as never) }]

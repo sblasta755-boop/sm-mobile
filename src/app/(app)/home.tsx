@@ -16,6 +16,7 @@ import { useTaskFilters } from "@/features/taskFilters";
 import { focusTasks } from "@/domain/todayFocus";
 import { homeTaskView } from "@/domain/homeTasks";
 import { homeTiles } from "@/domain/homeTiles";
+import { useLeaveOn } from "@/features/leave";
 import { useScheduleOn } from "@/features/schedule";
 import { useNow } from "@/features/useNow";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -45,6 +46,7 @@ export default function HomeScreen() {
   const hasCorrectiveActions = useHasModule("corrective_actions");
   const hasIncidents = useHasModule("incidents");
   const scheduleOn = useScheduleOn();
+  const leaveOn = useLeaveOn();
   const nextBooking = useUpcomingBooking();
   const progress = useMyProgress();
   const [showActions, setShowActions] = useState(false);
@@ -304,6 +306,7 @@ export default function HomeScreen() {
           incidents: hasIncidents,
           hasQr,
           schedule: scheduleOn,
+          leave: leaveOn,
           progress: !!progress,
         }).map((tile) => ({
           key: tile.key,

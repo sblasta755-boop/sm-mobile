@@ -112,6 +112,7 @@ export interface NotificationPrefs {
   taskAssignments: boolean;
   correctiveActions: boolean;
   tableService: boolean;
+  leave: boolean;
   reports: boolean;
 }
 

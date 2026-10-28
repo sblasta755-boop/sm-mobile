@@ -4,7 +4,7 @@
 // tasks off the first screen. New features add ONE entry to homeTiles() instead, and the screen
 // draws them as a grid of tiles. Kept free of React so the rules can be tested on their own.
 
-export type HomeTileKey = "rounds" | "corrective" | "stock" | "incident" | "schedule" | "progress";
+export type HomeTileKey = "rounds" | "corrective" | "stock" | "incident" | "schedule" | "leave" | "progress";
 
 export type HomeTileAction =
   | { kind: "route"; path: string }
@@ -33,6 +33,8 @@ export interface HomeTileInput {
   incidents: boolean;
   hasQr: boolean;
   schedule: boolean;
+  /** The Leave module is on. */
+  leave?: boolean;
   /** Gamification is on for this person. */
   progress: boolean;
 }
@@ -74,6 +76,9 @@ export function homeTiles(input: HomeTileInput): HomeTile[] {
   }
   if (input.schedule) {
     tiles.push({ key: "schedule", label: "My schedule", icon: "calendar-outline", action: { kind: "route", path: "/schedule" } });
+  }
+  if (input.leave) {
+    tiles.push({ key: "leave", label: "Leave", icon: "airplane-outline", action: { kind: "route", path: "/leave" }, hint: "Ask for time off" });
   }
   if (input.progress) {
     tiles.push({ key: "progress", label: "My progress", icon: "trophy-outline", action: { kind: "route", path: "/progress" } });

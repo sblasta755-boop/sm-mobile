@@ -1940,3 +1940,74 @@ export const saveSiteShifts = (
   );
 export const cancelBooking = (t: string, id: string) =>
   request<StaffBooking>(`/schedule/bookings/${id}/cancel`, { method: "POST" }, t);
+
+// ---- Leave ----
+export type LeaveStatus = "pending" | "approved" | "declined" | "cancelled";
+export type LeaveType = {
+  id: string;
+  key: string;
+  name: string;
+  paid: boolean;
+  /** Days a person gets each year. Null means no limit (unpaid leave). */
+  daysPerYear: number | null;
+  /** A medical note is needed when a request is longer than this many days. */
+  noteAfterDays: number | null;
+  active: boolean;
+};
+export type LeaveRequest = {
+  id: string;
+  siteId: string;
+  userId: string;
+  userName: string;
+  typeId: string;
+  typeName: string;
+  paid: boolean;
+  startDate: string;
+  endDate: string;
+  halfDay: "am" | "pm" | null;
+  days: number;
+  status: LeaveStatus;
+  reason: string;
+  noteUrl: string | null;
+  decidedBy: string | null;
+  decisionNote: string | null;
+  recordedByManager: boolean;
+  /** Set on a decision: bookings taken off and open tasks to reassign. */
+  cancelledBookings?: number;
+  openTasks?: number;
+};
+export type LeaveBalance = {
+  typeId: string;
+  typeName: string;
+  paid: boolean;
+  allowance: number | null;
+  adjusted: number;
+  taken: number;
+  pending: number;
+  remaining: number | null;
+};
+export type LeaveBalances = { userId: string; userName: string; year: number; balances: LeaveBalance[] };
+export type LeaveRequestInput = {
+  typeId: string;
+  startDate: string;
+  endDate: string;
+  halfDay?: "am" | "pm" | null;
+  reason?: string;
+  noteUrl?: string | null;
+};
+
+export const listLeaveTypes = (t: string) => request<LeaveType[]>("/leave/types", {}, t);
+export const getLeaveBalances = (t: string) => request<LeaveBalances>("/leave/balance", {}, t);
+export const listLeaveRequests = (t: string, q: { status?: LeaveStatus; mine?: boolean } = {}) => {
+  const params = new URLSearchParams();
+  if (q.status) params.set("status", q.status);
+  if (q.mine) params.set("mine", "true");
+  return request<LeaveRequest[]>(`/leave/requests?${params}`, {}, t);
+};
+export const requestLeave = (t: string, input: LeaveRequestInput) =>
+  request<LeaveRequest>("/leave/requests", { method: "POST", body: JSON.stringify(input) }, t);
+export const recordLeave = (t: string, input: LeaveRequestInput & { userId: string }) =>
+  request<LeaveRequest>("/leave/requests/record", { method: "POST", body: JSON.stringify(input) }, t);
+export const decideLeave = (t: string, id: string, approve: boolean, note?: string) =>
+  request<LeaveRequest>(`/leave/requests/${id}/decision`, { method: "POST", body: JSON.stringify({ approve, note: note ?? null }) }, t);
+export const cancelLeave = (t: string, id: string) => request<LeaveRequest>(`/leave/requests/${id}/cancel`, { method: "POST" }, t);

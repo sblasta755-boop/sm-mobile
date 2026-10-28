@@ -5,6 +5,7 @@ import { Screen } from "@/components/Screen";
 import { Card } from "@/components/Card";
 import { appAlert } from "@/components/Dialog";
 import { toUserRecord, updateUser } from "@/api/client";
+import { useLeaveOn } from "@/features/leave";
 import { useSmartClean } from "@/features/store";
 import { colors, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 import type { NotificationPrefs } from "@/types/smartclean";
@@ -17,6 +18,11 @@ const ROWS: Row[] = [
   { key: "correctiveActions", label: "Corrective actions", hint: "Follow-ups raised or rejected" },
   { key: "reports", label: "Reports", hint: "Scheduled reports" },
 ];
+const LEAVE_ROW: Row = {
+  key: "leave",
+  label: "Leave",
+  hint: "Requests waiting for you, and decisions on yours",
+};
 const TABLE_ROW: Row = {
   key: "tableService",
   label: "Table requests",
@@ -36,7 +42,8 @@ export default function NotificationSettingsScreen() {
   const prefs = currentUser?.notificationPrefs ?? {};
   const isOn = (key: keyof NotificationPrefs) => prefs[key] !== false;
   const pushOn = isOn("push");
-  const rows = state.tenant?.tableServiceEnabled ? [...ROWS, TABLE_ROW] : ROWS;
+  const leaveOn = useLeaveOn();
+  const rows = [...ROWS, ...(leaveOn ? [LEAVE_ROW] : []), ...(state.tenant?.tableServiceEnabled ? [TABLE_ROW] : [])];
   const offline = state.connectivity === "offline";
 
   async function set(key: keyof NotificationPrefs, value: boolean) {

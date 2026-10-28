@@ -13,6 +13,7 @@ import { Button } from "@/components/Button";
 import { useMyProgress } from "@/components/ProgressCard";
 import { useUpcomingBooking } from "@/components/UpcomingBookingCard";
 import { TodayCard } from "@/components/TodayCard";
+import { useLeaveOn } from "@/features/leave";
 import { useScheduleOn } from "@/features/schedule";
 import { ActionTiles } from "@/components/ActionTiles";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -93,6 +94,7 @@ export default function SuperviseHome() {
   );
 
   const scheduleOn = useScheduleOn();
+  const leaveOn = useLeaveOn();
   const nextBooking = useUpcomingBooking();
   const progress = useMyProgress();
   const noSites = (currentUser?.siteIds?.length ?? 0) === 0;
@@ -174,6 +176,9 @@ export default function SuperviseHome() {
             : []),
           ...(progress
             ? [{ key: "progress", label: "My progress", icon: <Ionicons name="trophy-outline" size={20} color={colors.primary} />, onPress: () => router.push("/progress" as never) }]
+            : []),
+          ...(leaveOn
+            ? [{ key: "leave", label: "Leave", icon: <Ionicons name="airplane-outline" size={20} color={colors.primary} />, onPress: () => router.push("/leave" as never) }]
             : []),
           ...(canOpenStock
             ? [{ key: "stock", label: "Stock", icon: <Ionicons name="cube-outline" size={20} color={colors.primary} />, onPress: () => router.push("/stock" as never) }]

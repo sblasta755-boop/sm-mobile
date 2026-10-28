@@ -20,31 +20,35 @@ export function TaskRow({ task, onPress }: { task: Task; onPress: () => void }) 
   return (
     <Pressable accessibilityRole="button" onPress={onPress}>
       <Card style={styles.card}>
-        <View style={styles.icon}>
-          <Ionicons name="cube-outline" size={20} color={colors.primary} />
+        <View style={styles.top}>
+          <View style={styles.icon}>
+            <Ionicons name="cube-outline" size={20} color={colors.primary} />
+          </View>
+          <View style={styles.info}>
+            <Text style={styles.title} numberOfLines={1}>
+              {task.title}
+            </Text>
+            <Text style={styles.meta} numberOfLines={1}>
+              {task.locationName ?? "Whole site"} • {window ? window : `Due ${task.dueTime}`}
+            </Text>
+            {starts && <Text style={styles.starts}>{starts}</Text>}
+          </View>
+          <View style={styles.badges}>
+            <StatusBadge tone={toneForTask(task.status)} label={humanStatus(task.status)} />
+            {task.priority === "high" && <StatusBadge tone="destructive" label="Priority" />}
+            {task.isSupervisorTask && <StatusBadge tone="info" label="Supervisor task" />}
+          </View>
         </View>
-        <View style={styles.info}>
-          <Text style={styles.title} numberOfLines={1}>
-            {task.title}
-          </Text>
-          <Text style={styles.meta} numberOfLines={1}>
-            {task.locationName ?? "Whole site"} • {window ? window : `Due ${task.dueTime}`}
-          </Text>
-          {starts && <Text style={styles.starts}>{starts}</Text>}
-          <TagChips tags={task.tags} />
-        </View>
-        <View style={styles.badges}>
-          <StatusBadge tone={toneForTask(task.status)} label={humanStatus(task.status)} />
-          {task.priority === "high" && <StatusBadge tone="destructive" label="Priority" />}
-          {task.isSupervisorTask && <StatusBadge tone="info" label="Supervisor task" />}
-        </View>
+        {/* Below the row, not inside it, so a wrapping row of chips is never cut off by the card. */}
+        <TagChips tags={task.tags} />
       </Card>
     </Pressable>
   );
 }
 
 const styles = themedStyles(() => StyleSheet.create({
-  card: { flexDirection: "row", alignItems: "center", gap: spacing.md },
+  card: { gap: spacing.sm },
+  top: { flexDirection: "row", alignItems: "center", gap: spacing.md },
   icon: {
     width: 44,
     height: 44,

@@ -64,3 +64,8 @@ test("the Today card always has the task count, and adds the rows that have some
   expect(todayRows({ hasBooking: true, hasPoints: true })).toEqual(["booking", "points", "tasks"]);
   expect(todayRows({ hasBooking: false, hasPoints: true })).toEqual(["points", "tasks"]);
 });
+
+test("a leave tile shows when the module is on, after the schedule tile", () => {
+  expect(keys({ ...off, schedule: true, leave: true })).toEqual(["schedule", "leave"]);
+  expect(keys({ ...off, leave: false })).toEqual([]);
+});
