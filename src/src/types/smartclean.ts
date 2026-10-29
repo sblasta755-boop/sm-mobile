@@ -422,12 +422,23 @@ export interface SiteSpaceProfile {
   updatedAt?: string;
 }
 
+/** Light-mode brand palette, each slot a "#RRGGBB" hex. Dark variants and
+ * foreground colours are derived - see theme/brandTheme.ts. */
+export interface BrandingTheme {
+  primary?: string;
+  accent?: string;
+  sidebar?: string;
+  background?: string;
+  surface?: string;
+}
+
 export interface TenantBranding {
   // All optional - an unset field means "use the app default" (Šoma360
   // name/mark/blue), not "render nothing". See useTenantBranding.
   displayName?: string;
   logoUrl?: string;
   primaryColor?: string;
+  theme?: BrandingTheme;
 }
 
 export interface Tenant {

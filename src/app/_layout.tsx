@@ -4,6 +4,7 @@ import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { SmartCleanProvider } from "@/features/store";
 import { ThemeProvider, useTheme } from "@/theme";
+import { useApplyBrandTheme } from "@/services/branding";
 import { DialogHost } from "@/components/Dialog";
 import { UpdateRequiredGate } from "@/components/UpdateBanner";
 import { useAppUpdateWatcher } from "@/features/appUpdate";
@@ -40,6 +41,8 @@ export default function RootLayout() {
 // the provider without restructuring RootLayout itself.
 function PushNotificationsBridge() {
   usePushRegistration();
+  // Applies the organisation's / site's colour palette once signed in.
+  useApplyBrandTheme();
   useDeviceHealthReporting();
   // Uploads photos taken offline, in the background, as soon as there is a connection.
   useEvidenceUploader();

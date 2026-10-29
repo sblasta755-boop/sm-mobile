@@ -2,12 +2,26 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { Appearance, StyleSheet } from "react-native";
 import * as SecureStore from "expo-secure-store";
 import { colors, darkPalette, lightPalette } from "./colors";
+import { brandOverrides, type BrandTheme } from "./brandTheme";
 import { DARK_TONE_BORDERS, LIGHT_TONE_BORDERS, refreshStatus } from "./status";
 
 export type ThemePreference = "light" | "dark" | "system";
 export type ResolvedTheme = "light" | "dark";
 
 const STORAGE_KEY = "soma.theme";
+const BRAND_KEY = "soma.brandTheme";
+
+// Same synchronous-read trick as the preference: the organisation's palette
+// from the last session is applied before the first screen renders, so a
+// branded app doesn't flash the default colours while the session restores.
+function readBrandTheme(): BrandTheme {
+  try {
+    const raw = SecureStore.getItem(BRAND_KEY);
+    return raw ? (JSON.parse(raw) as BrandTheme) : {};
+  } catch {
+    return {};
+  }
+}
 
 // Plain preference, not a secret - SecureStore is used only because it has a
 // synchronous read, so the saved theme is applied before the first screen
@@ -30,8 +44,11 @@ let version = 0;
 let current: ResolvedTheme = "light";
 const listeners = new Set<() => void>();
 
+let brandNow: BrandTheme = readBrandTheme();
+
 function apply(theme: ResolvedTheme) {
-  Object.assign(colors, theme === "dark" ? darkPalette : lightPalette);
+  const base = theme === "dark" ? darkPalette : lightPalette;
+  Object.assign(colors, base, brandOverrides(brandNow, theme === "light"));
   refreshStatus(theme === "dark" ? DARK_TONE_BORDERS : LIGHT_TONE_BORDERS);
   current = theme;
   version += 1;
@@ -40,6 +57,21 @@ function apply(theme: ResolvedTheme) {
 
 let preferenceNow = readPreference();
 apply(resolve(preferenceNow));
+
+/**
+ * Applies (or, with {}, clears) the signed-in organisation's brand palette on
+ * top of the light/dark palettes. Cheap no-op when nothing changed.
+ */
+export function setBrandTheme(next: BrandTheme) {
+  if (JSON.stringify(next) === JSON.stringify(brandNow)) return;
+  brandNow = next;
+  const empty = Object.keys(next).length === 0;
+  const write = empty
+    ? SecureStore.deleteItemAsync(BRAND_KEY)
+    : SecureStore.setItemAsync(BRAND_KEY, JSON.stringify(next));
+  write.catch(() => {});
+  apply(current);
+}
 
 /**
  * `StyleSheet.create` evaluated once at import would freeze the colours of

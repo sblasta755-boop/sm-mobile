@@ -1,6 +1,8 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
+import { setBrandTheme } from "@/theme/themeStore";
 import { useSmartClean } from "@/features/store";
 import { fileUrl } from "@/api/client";
+import { resolveBrandTheme, type BrandTheme } from "@/theme/brandTheme";
 import type { TenantBranding } from "@/types/smartclean";
 
 // The app's own identity - every screen falls back to this whenever
@@ -15,6 +17,8 @@ export interface ResolvedBranding {
   mark: string;
   logoUrl: string | null;
   primaryColor: string;
+  /** Only the palette slots the org/site actually set. */
+  theme: BrandTheme;
 }
 
 function initialsFor(name: string): string {
@@ -33,11 +37,12 @@ export function resolveBranding(branding: TenantBranding | undefined): ResolvedB
     name,
     mark: branding?.displayName?.trim() ? initialsFor(name) : DEFAULT_BRAND_MARK,
     logoUrl: branding?.logoUrl ? (fileUrl(branding.logoUrl) ?? branding.logoUrl) : null,
-    primaryColor: branding?.primaryColor || DEFAULT_BRAND_COLOR,
+    primaryColor: branding?.theme?.primary || branding?.primaryColor || DEFAULT_BRAND_COLOR,
+    theme: resolveBrandTheme(branding?.theme, branding?.primaryColor),
   };
 }
 
-function mergeBranding(
+export function mergeBranding(
   site: TenantBranding | undefined,
   tenant: TenantBranding | undefined,
 ): TenantBranding {
@@ -45,6 +50,13 @@ function mergeBranding(
     displayName: site?.displayName ?? tenant?.displayName,
     logoUrl: site?.logoUrl ?? tenant?.logoUrl,
     primaryColor: site?.primaryColor ?? tenant?.primaryColor,
+    // Slot by slot - a site that only set one colour inherits the rest. A
+    // site's legacy primaryColor still beats the tenant's theme.primary.
+    theme: {
+      ...tenant?.theme,
+      ...(site?.primaryColor ? { primary: site.primaryColor } : {}),
+      ...site?.theme,
+    },
   };
 }
 
@@ -62,4 +74,19 @@ export function useTenantBranding(): ResolvedBranding {
       : undefined;
     return resolveBranding(mergeBranding(ownSite?.branding, state.tenant?.branding));
   }, [state.sites, state.tenant, currentUser]);
+}
+
+/** Pushes the signed-in user's resolved palette into the theme store, and
+ * clears it on sign-out so the login screen stays on the default look.
+ * Mounted once inside SmartCleanProvider. */
+export function useApplyBrandTheme(): void {
+  const { currentUser } = useSmartClean();
+  const branding = useTenantBranding();
+  const theme = currentUser ? branding.theme : null;
+  const signature = JSON.stringify(theme ?? {});
+  useEffect(() => {
+    setBrandTheme(theme ?? {});
+    // `signature` stands in for `theme` (a fresh object each render).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signature]);
 }
