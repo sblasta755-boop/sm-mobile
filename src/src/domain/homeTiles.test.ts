@@ -42,7 +42,7 @@ test("a single open corrective action opens it directly; several open the list",
   const one = homeTiles({ ...off, correctiveActions: true, openCorrective: { count: 1, onlyId: "ca_1" } }).find((t) => t.key === "corrective");
   expect(one?.action).toEqual({ kind: "route", path: "/corrective-actions/ca_1" });
   const many = homeTiles({ ...off, correctiveActions: true, openCorrective: { count: 2, onlyId: undefined } }).find((t) => t.key === "corrective");
-  expect(many?.action).toEqual({ kind: "toggle", id: "corrective" });
+  expect(many?.action).toEqual({ kind: "route", path: "/corrective-actions" });
   expect(many?.badge).toBe(2);
 });
 

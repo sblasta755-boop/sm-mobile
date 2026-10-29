@@ -8,7 +8,8 @@ import { Card } from "@/components/Card";
 import { StatusBadge } from "@/components/StatusBadge";
 import { TaskSearchBar } from "@/components/TaskSearchBar";
 import { filterTasks, filtersActive, tagsOf } from "@/domain/taskBoard";
-import { DateStrip, isSameDay, startOfDay } from "@/components/DateStrip";
+import { DateStrip, isSameDay } from "@/components/DateStrip";
+import { useDaySelection } from "@/features/useDaySelection";
 import { useSmartClean } from "@/features/store";
 import { toneForTask, humanStatus } from "@/domain/status";
 import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
@@ -20,8 +21,9 @@ export default function ShiftsScreen() {
   const [activeGroup, setActiveGroup] = useState("Not started");
   // Shared across screens and kept until the person changes it (features/taskFilters).
   const [filters, setFilters] = useTaskFilters();
-  const today = useMemo(() => startOfDay(new Date()), []);
-  const [selectedDate, setSelectedDate] = useState(today);
+  // Always opens on today, and goes back to today each time the tab is opened, so a day that has passed
+  // is only ever shown when the person picks it on purpose.
+  const { today, selectedDate, setSelectedDate } = useDaySelection();
   // Hourly-compliance rounds have their own dedicated screen ("My hourly
   // compliance rounds", reached from Home) rather than showing up here
   // alongside regular cleaning tasks - excluded the same way home.tsx

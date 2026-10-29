@@ -6,10 +6,7 @@
 
 export type HomeTileKey = "rounds" | "corrective" | "stock" | "incident" | "schedule" | "leave" | "progress";
 
-export type HomeTileAction =
-  | { kind: "route"; path: string }
-  // Opens or closes the list that sits under the tiles (the open corrective actions).
-  | { kind: "toggle"; id: "corrective" };
+export type HomeTileAction = { kind: "route"; path: string };
 
 export interface HomeTile {
   key: HomeTileKey;
@@ -58,7 +55,7 @@ export function homeTiles(input: HomeTileInput): HomeTile[] {
       key: "corrective",
       label: "Corrective actions",
       icon: "alert-circle-outline",
-      action: count === 1 && onlyId ? { kind: "route", path: `/corrective-actions/${onlyId}` } : { kind: "toggle", id: "corrective" },
+      action: { kind: "route", path: count === 1 && onlyId ? `/corrective-actions/${onlyId}` : "/corrective-actions" },
       hint: `${count} open`,
       badge: count,
     });

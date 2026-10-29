@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { router } from "expo-router";
 import { ImageBackground, Pressable, StyleSheet, Text, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
@@ -21,7 +21,8 @@ import { useScheduleOn } from "@/features/schedule";
 import { useNow } from "@/features/useNow";
 import { StatusBadge } from "@/components/StatusBadge";
 import { TaskRow } from "@/components/TaskRow";
-import { DateStrip, isSameDay, startOfDay } from "@/components/DateStrip";
+import { DateStrip, isSameDay } from "@/components/DateStrip";
+import { useDaySelection } from "@/features/useDaySelection";
 import { useHasCapability, useHasModule } from "@/features/modules";
 import { clockIn as clockInRequest, clockOut as clockOutRequest } from "@/api/client";
 import { getCurrentCoords } from "@/services/geolocation";
@@ -29,9 +30,11 @@ import { fileUrl } from "@/api/client";
 import { useStaffRole } from "@/features/roles";
 import { useCanOpenStock } from "@/features/stock";
 import { useSmartClean } from "@/features/store";
-import { toneForTask, humanStatus } from "@/domain/status";
 import { colors, radius, spacing, typography, themedStyles, status, useThemeVersion } from "@/theme";
 import { appAlert } from "@/components/Dialog";
+
+/** The most tasks "Do now" lists. The rest are one tap away under View all. */
+const MAX_DO_NOW = 4;
 
 export default function HomeScreen() {
   useThemeVersion(); // re-render with the new colours when the theme changes
@@ -49,7 +52,6 @@ export default function HomeScreen() {
   const leaveOn = useLeaveOn();
   const nextBooking = useUpcomingBooking();
   const progress = useMyProgress();
-  const [showActions, setShowActions] = useState(false);
   // Stock is offered only to staff roles the organisation has switched on.
   const canOpenStock = useCanOpenStock();
   // How this organisation lets people clock. Defaults (before bootstrap, or
@@ -61,8 +63,8 @@ export default function HomeScreen() {
   const canGeofenceClock = useHasCapability("geofence_attendance");
   const hasQr = useHasCapability("qr_codes");
   const [clocking, setClocking] = useState(false);
-  const today = useMemo(() => startOfDay(new Date()), []);
-  const [selectedDate, setSelectedDate] = useState(today);
+  // Today, and the day being looked at; both reset to today whenever the screen is opened or midnight passes.
+  const { today, selectedDate, setSelectedDate } = useDaySelection();
   const site = state.sites.find((s) => currentUser?.siteIds.includes(s.id));
   const supervisor = state.users.find((u) => u.id === site?.supervisorId);
   // Hourly-compliance rounds get their own dedicated list/tab (see
@@ -237,65 +239,8 @@ export default function HomeScreen() {
 
       <TodayCard done={done} total={myTasks.length} next={nextBooking} progress={progress} />
 
-      <View style={styles.sectionHeaderRow}>
-        <Text style={styles.sectionTitle}>
-          {viewingToday ? "Do now" : "Assigned tasks"}
-          {!isSameDay(selectedDate, today)
-            ? ` - ${selectedDate.toLocaleDateString("en-ZA", { weekday: "short", day: "numeric", month: "short" })}`
-            : ""}
-        </Text>
-        <View style={styles.boardLinks}>
-          <Pressable accessibilityRole="button" onPress={() => router.push("/kanban")}>
-            <Text style={styles.link}>Board</Text>
-          </Pressable>
-          <Pressable onPress={() => router.push("/shifts")}>
-            <Text style={styles.link}>View all</Text>
-          </Pressable>
-        </View>
-      </View>
-      <ActiveFiltersBar hiddenCount={taskView.hiddenCount} relaxed={taskView.relaxed} scope={viewingToday ? "due now" : "on this day"} />
-      {focus.length === 0 && (
-        <Text style={styles.emptyTasks}>
-          {viewingToday ? "Nothing to do right now. You're all caught up." : "No tasks assigned for this day."}
-        </Text>
-      )}
-      {focus.length > 0 && shownTasks.length === 0 && (
-        <Text style={styles.emptyTasks}>No tasks match your filters.</Text>
-      )}
-      <View style={styles.list}>
-        {shownTasks.slice(0, 3).map((t) => (
-          <TaskRow key={t.id} task={t} onPress={() => router.push(`/tasks/${t.id}`)} />
-        ))}
-      </View>
-
-      {candidateRounds.length > 0 && (
-        <View style={styles.caSection}>
-          <Text style={styles.caSectionTitle}>Hourly compliance rounds</Text>
-          {candidateRounds.map((t) => {
-            const claimedByName = t.hourlyComplianceClaimed
-              ? (state.users.find((u) => u.id === t.assigneeId)?.name ?? "someone else")
-              : null;
-            return (
-              <Pressable key={t.id} onPress={() => router.push(`/tasks/${t.id}`)}>
-                <Card style={styles.taskCard}>
-                  <Ionicons name="shield-checkmark-outline" size={20} color={colors.mutedForeground} />
-                  <View style={styles.taskInfo}>
-                    <Text style={styles.taskTitle} numberOfLines={1}>
-                      {t.title}
-                    </Text>
-                    <Text style={styles.mutedSmall} numberOfLines={1}>
-                      {claimedByName ? `Taken by ${claimedByName}` : "Not yet claimed - first to scan wins"}
-                    </Text>
-                  </View>
-                </Card>
-              </Pressable>
-            );
-          })}
-        </View>
-      )}
-
-      {/* Everything else is one tile each, so a new feature adds a tile (see domain/homeTiles.ts),
-          not another full-width card above the day's tasks. */}
+      {/* At most four shortcuts, the rest behind More. What needs attention (rounds to claim, open
+          corrective actions) is shown first. See ActionTiles and domain/homeTiles.ts. */}
       <ActionTiles
         items={homeTiles({
           hourlyCompliance: hasHourlyCompliance,
@@ -311,43 +256,47 @@ export default function HomeScreen() {
         }).map((tile) => ({
           key: tile.key,
           label: tile.label,
-          hint: tile.hint,
           badge: tile.badge,
           icon:
             tile.key === "incident" ? (
-              <BrokenGlassIcon size={20} color={colors.primary} />
+              <BrokenGlassIcon size={22} color={colors.primary} />
             ) : (
-              <Ionicons name={tile.icon as keyof typeof Ionicons.glyphMap} size={20} color={colors.primary} />
+              <Ionicons name={tile.icon as keyof typeof Ionicons.glyphMap} size={22} color={colors.primary} />
             ),
-          onPress: () =>
-            tile.action.kind === "route"
-              ? router.push(tile.action.path as never)
-              : setShowActions((open) => !open),
+          onPress: () => router.push(tile.action.path as never),
         }))}
       />
 
-      {hasCorrectiveActions && showActions && openCA.length > 0 && (
-        <View style={styles.caSection}>
-          <Text style={styles.caSectionTitle}>Open corrective actions</Text>
-          {openCA.map((c) => (
-            <Pressable key={c.id} onPress={() => router.push(`/corrective-actions/${c.id}`)}>
-              <Card style={styles.caCard}>
-                <Ionicons name="alert-circle" size={20} color={colors.warningForeground} />
-                <View style={styles.taskInfo}>
-                  <Text style={styles.taskTitle} numberOfLines={1}>
-                    {c.reason}
-                  </Text>
-                  <Text style={styles.mutedSmall}>
-                    Due by{" "}
-                    {new Date(c.deadline).toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit" })}
-                  </Text>
-                </View>
-                <Ionicons name="arrow-forward" size={16} color={colors.foreground} />
-              </Card>
-            </Pressable>
-          ))}
+      <View style={styles.sectionHeaderRow}>
+        <Text style={styles.sectionTitle}>
+          {viewingToday ? "Do now" : "Assigned tasks"}
+          {!isSameDay(selectedDate, today)
+            ? ` - ${selectedDate.toLocaleDateString("en-ZA", { weekday: "short", day: "numeric", month: "short" })}`
+            : ""}
+        </Text>
+        <View style={styles.boardLinks}>
+          <Pressable accessibilityRole="button" onPress={() => router.push("/kanban")}>
+            <Text style={styles.link}>Board</Text>
+          </Pressable>
+          <Pressable accessibilityRole="button" onPress={() => router.push("/shifts")}>
+            <Text style={styles.link}>{shownTasks.length > MAX_DO_NOW ? `View all ${shownTasks.length}` : "View all"}</Text>
+          </Pressable>
         </View>
+      </View>
+      <ActiveFiltersBar hiddenCount={taskView.hiddenCount} relaxed={taskView.relaxed} scope={viewingToday ? "due now" : "on this day"} />
+      {focus.length === 0 && (
+        <Text style={styles.emptyTasks}>
+          {viewingToday ? "Nothing to do right now. You're all caught up." : "No tasks assigned for this day."}
+        </Text>
       )}
+      {focus.length > 0 && shownTasks.length === 0 && (
+        <Text style={styles.emptyTasks}>No tasks match your filters.</Text>
+      )}
+      <View style={styles.list}>
+        {shownTasks.slice(0, MAX_DO_NOW).map((t) => (
+          <TaskRow key={t.id} task={t} onPress={() => router.push(`/tasks/${t.id}`)} />
+        ))}
+      </View>
     </Screen>
   );
 }
