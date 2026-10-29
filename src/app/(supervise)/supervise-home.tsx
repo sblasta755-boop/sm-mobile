@@ -393,7 +393,7 @@ const styles = themedStyles(() => StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: radius.lg,
-    backgroundColor: colors.accent,
+    backgroundColor: hexAlpha(colors.primary, 0.12),
     alignItems: "center",
     justifyContent: "center",
   },
