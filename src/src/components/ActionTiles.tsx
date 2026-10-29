@@ -2,6 +2,8 @@ import { useState, type ReactNode } from "react";
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
+import { hexAlpha, mixHex } from "@/domain/calendarGrid";
 import { colors, radius, spacing, themedStyles, typography, useThemeVersion } from "@/theme";
 
 export type ActionTile = {
@@ -9,7 +11,7 @@ export type ActionTile = {
   label: string;
   icon: ReactNode;
   onPress: () => void;
-  /** Not shown: the label and the count say it. Kept so callers need no change. */
+  /** A short line under the name, e.g. "3 to claim". */
   hint?: string;
   /** A count pill on the tile, for something that needs attention. */
   badge?: number;
@@ -19,10 +21,12 @@ export type ActionTile = {
 export const MAX_TILES = 4;
 
 /**
- * Shortcuts: at most four, in a tidy two-by-two grid, each a tinted icon over a label with a count
- * pill when something is waiting. Anything beyond four (the rarer shortcuts) sits behind a fourth
- * "More" tile that opens a sheet, so the home screen never turns into a wall of buttons.
- * Tiles that need attention are shown first. Colours come from the theme (light and dark).
+ * Shortcuts: at most four, in a tidy two-by-two grid of solid tiles - no icons, just a small pill
+ * (the count, when something is waiting), the name in bold and a one-line hint. The first tile, the
+ * one that needs attention most, is filled with the brand colour; the rest are dark slate. Anything
+ * beyond four (the rarer shortcuts) sits behind a fourth "More" tile that opens a sheet, so the home
+ * screen never turns into a wall of buttons. Colours come from the theme (light and dark): the brand
+ * colour from Primary, the slate from the Shift Card colours.
  */
 export function ActionTiles({ items, max = MAX_TILES }: { items: ActionTile[]; max?: number }) {
   useThemeVersion();
@@ -47,6 +51,7 @@ export function ActionTiles({ items, max = MAX_TILES }: { items: ActionTile[]; m
             icon: <Ionicons name="grid-outline" size={22} color={colors.primary} />,
             onPress: () => setMoreOpen(true),
             badge: restBadge || undefined,
+            hint: `${rest.length} shortcut${rest.length === 1 ? "" : "s"}`,
           },
         ]
       : []),
@@ -55,27 +60,55 @@ export function ActionTiles({ items, max = MAX_TILES }: { items: ActionTile[]; m
   return (
     <>
       <View style={styles.grid}>
-        {tiles.map((item) => (
-          <Pressable
-            key={item.key}
-            accessibilityRole="button"
-            accessibilityLabel={item.badge ? `${item.label}, ${item.badge} waiting` : item.label}
-            onPress={item.onPress}
-            style={({ pressed }) => [styles.tile, pressed && styles.pressed]}
-          >
-            <View style={styles.topRow}>
-              <View style={styles.disc}>{item.icon}</View>
-              {item.badge ? (
-                <View style={styles.badge}>
-                  <Text style={styles.badgeText}>{item.badge > 99 ? "99+" : item.badge}</Text>
-                </View>
-              ) : null}
-            </View>
-            <Text style={styles.label} numberOfLines={2}>
-              {item.label}
-            </Text>
-          </Pressable>
-        ))}
+        {tiles.map((item, index) => {
+          const primary = index === 0;
+          const text = primary ? colors.primaryForeground : colors.shiftForeground;
+          return (
+            <Pressable
+              key={item.key}
+              accessibilityRole="button"
+              accessibilityLabel={
+                item.badge
+                  ? `${item.label}, ${item.badge} waiting${item.hint ? `, ${item.hint}` : ""}`
+                  : `${item.label}${item.hint ? `, ${item.hint}` : ""}`
+              }
+              onPress={item.onPress}
+              style={({ pressed }) => [
+                styles.tile,
+                { backgroundColor: primary ? colors.primary : colors.shiftBackground },
+                pressed && styles.pressed,
+              ]}
+            >
+              {primary && (
+                <LinearGradient
+                  colors={[colors.primary, mixHex(colors.primary, "#000000", 0.3)]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={StyleSheet.absoluteFill}
+                />
+              )}
+              <View style={styles.topRow}>
+                {item.badge ? (
+                  <View style={[styles.pill, { backgroundColor: hexAlpha(text, 0.2) }]}>
+                    <Text style={[styles.pillText, { color: text }]}>
+                      {item.badge > 99 ? "99+" : item.badge}
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
+              <View>
+                <Text style={[styles.label, { color: text }]} numberOfLines={2}>
+                  {item.label}
+                </Text>
+                {item.hint ? (
+                  <Text style={[styles.hint, { color: hexAlpha(text, 0.75) }]} numberOfLines={1}>
+                    {item.hint}
+                  </Text>
+                ) : null}
+              </View>
+            </Pressable>
+          );
+        })}
       </View>
 
       <Modal visible={moreOpen} transparent animationType="slide" onRequestClose={() => setMoreOpen(false)}>
@@ -120,14 +153,14 @@ const styles = themedStyles(() =>
       justifyContent: "space-between",
       padding: spacing.md,
       borderRadius: radius.xl,
-      borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.card,
+      overflow: "hidden",
     },
     pressed: { opacity: 0.85, transform: [{ scale: 0.98 }] },
     topRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-    disc: { width: 42, height: 42, borderRadius: 21, alignItems: "center", justifyContent: "center", backgroundColor: colors.accent },
-    label: { fontSize: typography.body, fontWeight: "700", color: colors.foreground, marginTop: spacing.sm },
+    label: { fontSize: typography.body, fontWeight: "700" },
+    hint: { fontSize: typography.tiny, marginTop: 2 },
+    pill: { minWidth: 22, height: 22, paddingHorizontal: 8, borderRadius: 11, alignItems: "center", justifyContent: "center" },
+    pillText: { fontSize: 11, fontWeight: "800" },
     badge: { minWidth: 22, height: 22, paddingHorizontal: 6, borderRadius: 11, backgroundColor: colors.destructive, alignItems: "center", justifyContent: "center" },
     badgeText: { fontSize: 11, fontWeight: "800", color: colors.white },
     backdrop: { flex: 1, backgroundColor: colors.overlay, justifyContent: "flex-end" },

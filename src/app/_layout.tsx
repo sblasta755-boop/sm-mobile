@@ -3,7 +3,7 @@ import * as NativeSplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { SmartCleanProvider } from "@/features/store";
-import { ThemeProvider, useTheme } from "@/theme";
+import { installBrandFonts, ThemeProvider, useTheme } from "@/theme";
 import { useApplyBrandTheme } from "@/services/branding";
 import { DialogHost } from "@/components/Dialog";
 import { UpdateRequiredGate } from "@/components/UpdateBanner";
@@ -19,6 +19,10 @@ import { useRememberLocation } from "@/features/lastLocation";
 // it is app/index.tsx's job - it, not this root layout, knows when its
 // first frame is on screen.
 NativeSplashScreen.preventAutoHideAsync().catch(() => {});
+
+// Lets an organisation's chosen fonts apply to every Text/TextInput. Must run
+// before the first screen renders; a no-op until a font has been chosen.
+installBrandFonts();
 
 export default function RootLayout() {
   return (

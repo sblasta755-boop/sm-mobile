@@ -1,8 +1,21 @@
 import { useMemo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { colors, radius, spacing, typography, themedStyles } from "@/theme";
+import { WeekTiles, type DayTileData } from "@/components/MonthCalendar";
+import { dayKey, parseDayKey } from "@/domain/calendarGrid";
+import {
+  colors,
+  spacing,
+  typography,
+  themedStyles,
+  useThemeVersion,
+} from "@/theme";
 
+/**
+ * The date picker at the top of the staff screens: the chosen day's name and
+ * date with ‹ Today › under it, then the week as rounded tiles. Just dates -
+ * nothing about tasks on it.
+ */
 export function DateStrip({
   today,
   selectedDate,
@@ -12,85 +25,74 @@ export function DateStrip({
   selectedDate: Date;
   onSelect: (date: Date) => void;
 }) {
-  const weekDays = useMemo(() => buildDateStrip(selectedDate), [selectedDate]);
-  const selectedLabel = selectedDate.toLocaleDateString("en-ZA", { weekday: "long" });
+  useThemeVersion();
+  const weekKeys = useMemo(
+    () => buildDateStrip(selectedDate).map(dayKey),
+    [selectedDate],
+  );
+  const todayKey = dayKey(today);
+  const selectedKey = dayKey(selectedDate);
+  const selectedLabel = selectedDate.toLocaleDateString("en-ZA", {
+    weekday: "long",
+  });
   const selectedSubLabel = selectedDate.toLocaleDateString("en-ZA", {
     month: "long",
     day: "numeric",
     year: "numeric",
   });
+  const tile = (): DayTileData => ({});
 
   return (
     <View style={styles.wrap}>
-      {/* The arrows flank the date, not the seven days: in the header this strip
-          sits between the back and profile buttons, where there is no room for
-          seven dates and two arrows on one line. */}
-      <View style={styles.labelRow}>
-        <Pressable
-          accessibilityLabel="Previous day"
-          onPress={() => onSelect(addDays(selectedDate, -1))}
-          style={styles.arrow}
-          hitSlop={8}
-        >
-          <Ionicons name="chevron-back" size={18} color={colors.mutedForeground} />
-        </Pressable>
-        <View style={styles.labelWrap}>
-          <Text style={styles.label} numberOfLines={1}>
-            {selectedLabel}
-          </Text>
-          <Text style={styles.subLabel}>{selectedSubLabel}</Text>
+      <View style={styles.labelWrap} accessibilityRole="header">
+        <Text style={styles.label} numberOfLines={1}>
+          {selectedLabel}
+        </Text>
+        <Text style={styles.subLabel}>{selectedSubLabel}</Text>
+        <View style={styles.controls}>
+          <Pressable
+            accessibilityLabel="Previous week"
+            onPress={() => onSelect(addDays(selectedDate, -7))}
+            style={styles.roundButton}
+            hitSlop={6}
+          >
+            <Ionicons name="chevron-back" size={16} color={colors.foreground} />
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => onSelect(startOfDay(new Date()))}
+            style={styles.todayButton}
+            hitSlop={6}
+          >
+            <Text style={styles.todayText}>Today</Text>
+          </Pressable>
+          <Pressable
+            accessibilityLabel="Next week"
+            onPress={() => onSelect(addDays(selectedDate, 7))}
+            style={styles.roundButton}
+            hitSlop={6}
+          >
+            <Ionicons
+              name="chevron-forward"
+              size={16}
+              color={colors.foreground}
+            />
+          </Pressable>
         </View>
-        <Pressable
-          accessibilityLabel="Next day"
-          onPress={() => onSelect(addDays(selectedDate, 1))}
-          style={styles.arrow}
-          hitSlop={8}
-        >
-          <Ionicons name="chevron-forward" size={18} color={colors.mutedForeground} />
-        </Pressable>
       </View>
-
-      <View style={styles.days}>
-        {weekDays.map((date) => {
-          const isSelected = isSameDay(date, selectedDate);
-          const isToday = isSameDay(date, today);
-          return (
-            <Pressable
-              key={date.toISOString()}
-              onPress={() => onSelect(date)}
-              style={styles.day}
-              accessibilityState={{ selected: isSelected }}
-            >
-              <Text style={styles.dayLetter}>
-                {date.toLocaleDateString("en-ZA", { weekday: "short" }).slice(0, 1)}
-              </Text>
-              <View
-                style={[
-                  styles.dayNumber,
-                  isSelected && styles.dayNumberSelected,
-                  !isSelected && isToday && styles.dayNumberToday,
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.dayNumberText,
-                    isSelected && styles.dayNumberTextSelected,
-                    !isSelected && isToday && styles.dayNumberTextToday,
-                  ]}
-                >
-                  {date.getDate()}
-                </Text>
-              </View>
-            </Pressable>
-          );
-        })}
-      </View>
+      <WeekTiles
+        days={weekKeys}
+        tile={tile}
+        today={todayKey}
+        selected={selectedKey}
+        onSelect={(key) => onSelect(parseDayKey(key))}
+      />
     </View>
   );
 }
 
-function buildDateStrip(today: Date) {
-  const start = startOfWeek(today);
+function buildDateStrip(day: Date) {
+  const start = startOfWeek(day);
   return Array.from({ length: 7 }, (_, index) => addDays(start, index));
 }
 
@@ -111,76 +113,49 @@ export function startOfDay(date: Date) {
 }
 
 export function isSameDay(a: Date, b: Date) {
-  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
 }
 
-const styles = themedStyles(() => StyleSheet.create({
-  wrap: {
-    alignSelf: "stretch",
-  },
-  labelRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: spacing.sm,
-    marginBottom: spacing.sm,
-  },
-  labelWrap: {
-    alignItems: "center",
-    flexShrink: 1,
-  },
-  label: {
-    fontSize: typography.h2,
-    fontWeight: "800",
-    color: colors.foreground,
-  },
-  subLabel: {
-    fontSize: typography.tiny,
-    color: colors.mutedForeground,
-  },
-  arrow: {
-    width: 28,
-    height: 32,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  // Seven equal cells that share whatever width there is, so nothing can overflow.
-  days: {
-    flexDirection: "row",
-  },
-  day: {
-    flex: 1,
-    alignItems: "center",
-    gap: 4,
-    paddingVertical: 4,
-  },
-  dayLetter: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: colors.mutedForeground,
-  },
-  dayNumber: {
-    width: 26,
-    height: 26,
-    borderRadius: radius.round,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  dayNumberSelected: {
-    backgroundColor: colors.primary,
-  },
-  dayNumberToday: {
-    backgroundColor: colors.accent,
-  },
-  dayNumberText: {
-    fontSize: typography.small,
-    fontWeight: "700",
-    color: colors.foreground,
-  },
-  dayNumberTextSelected: {
-    color: colors.primaryForeground,
-  },
-  dayNumberTextToday: {
-    color: colors.primary,
-  },
-}));
+const styles = themedStyles(() =>
+  StyleSheet.create({
+    wrap: { alignSelf: "stretch" },
+    labelWrap: { alignItems: "center", marginBottom: spacing.md },
+    controls: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.xs,
+      marginTop: spacing.sm,
+    },
+    roundButton: {
+      width: 30,
+      height: 30,
+      borderRadius: 15,
+      alignItems: "center",
+      justifyContent: "center",
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    todayButton: {
+      paddingHorizontal: spacing.md,
+      height: 30,
+      borderRadius: 15,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    todayText: {
+      fontSize: typography.small,
+      fontWeight: "700",
+      color: colors.primary,
+    },
+    label: {
+      fontSize: typography.h2,
+      fontWeight: "800",
+      color: colors.foreground,
+    },
+    subLabel: { fontSize: typography.tiny, color: colors.mutedForeground },
+  }),
+);

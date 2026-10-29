@@ -65,7 +65,7 @@ export default function SuperviseProfile() {
           <Text style={styles.linkText}>Edit profile</Text>
           <Ionicons name="chevron-forward" size={16} color={colors.mutedForeground} />
         </Pressable>
-        <Pressable style={styles.linkRow} onPress={() => router.push("/notifications")}>
+        <Pressable style={styles.linkRow} onPress={() => router.push("/notification-settings" as never)}>
           <Ionicons name="notifications-outline" size={18} color={colors.foreground} />
           <Text style={styles.linkText}>Notifications</Text>
           <Ionicons name="chevron-forward" size={16} color={colors.mutedForeground} />

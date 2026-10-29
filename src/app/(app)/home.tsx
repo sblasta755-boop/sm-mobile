@@ -30,6 +30,7 @@ import { fileUrl } from "@/api/client";
 import { useStaffRole } from "@/features/roles";
 import { useCanOpenStock } from "@/features/stock";
 import { useSmartClean } from "@/features/store";
+import { hexAlpha } from "@/domain/calendarGrid";
 import { colors, radius, spacing, typography, themedStyles, status, useThemeVersion } from "@/theme";
 import { appAlert } from "@/components/Dialog";
 
@@ -171,7 +172,7 @@ export default function HomeScreen() {
           imageStyle={styles.shiftImage}
         >
           <LinearGradient
-            colors={["rgba(0,0,0,0.85)", "rgba(0,0,0,0.55)", "rgba(0,0,0,0)"]}
+            colors={[hexAlpha(colors.shiftBackground, 0.9), hexAlpha(colors.shiftBackground, 0.6), hexAlpha(colors.shiftBackground, 0)]}
             start={{ x: 0, y: 1 }}
             end={{ x: 0, y: 0 }}
             style={StyleSheet.absoluteFill}
@@ -183,7 +184,7 @@ export default function HomeScreen() {
                 {site?.workingHours ? `${site.workingHours.start} - ${site.workingHours.end}` : "07:00 - 16:00"}
               </Text>
               <View style={styles.shiftMetaRow}>
-                <Ionicons name="location" size={11} color="rgba(255,255,255,0.8)" />
+                <Ionicons name="location" size={11} color={hexAlpha(colors.shiftForeground, 0.8)} />
                 <Text style={styles.shiftMeta}>{site?.name}</Text>
               </View>
               {supervisor && <Text style={styles.shiftMeta}>Supervisor: {supervisor.name}</Text>}
@@ -257,6 +258,7 @@ export default function HomeScreen() {
           key: tile.key,
           label: tile.label,
           badge: tile.badge,
+          hint: tile.hint,
           icon:
             tile.key === "incident" ? (
               <BrokenGlassIcon size={22} color={colors.primary} />
@@ -307,7 +309,7 @@ const styles = themedStyles(() => StyleSheet.create({
     marginBottom: spacing.lg,
   },
   shiftOverlay: {
-    backgroundColor: "#182531",
+    backgroundColor: colors.shiftBackground,
     padding: spacing.lg,
     minHeight: 190,
     justifyContent: "flex-end",
@@ -331,12 +333,12 @@ const styles = themedStyles(() => StyleSheet.create({
     fontWeight: "700",
     textTransform: "uppercase",
     letterSpacing: 0.4,
-    color: "rgba(255,255,255,0.75)",
+    color: hexAlpha(colors.shiftForeground, 0.75),
   },
   shiftTime: {
     fontSize: typography.h1,
     fontWeight: "800",
-    color: colors.white,
+    color: colors.shiftForeground,
     marginTop: 2,
   },
   shiftMetaRow: {
@@ -347,22 +349,22 @@ const styles = themedStyles(() => StyleSheet.create({
   },
   shiftMeta: {
     fontSize: typography.tiny,
-    color: "rgba(255,255,255,0.8)",
+    color: hexAlpha(colors.shiftForeground, 0.8),
   },
   clockedActions: {
     gap: spacing.sm,
   },
   clockedPill: {
     borderRadius: radius.lg,
-    backgroundColor: "rgba(255,255,255,0.15)",
+    backgroundColor: hexAlpha(colors.shiftForeground, 0.15),
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.2)",
+    borderColor: hexAlpha(colors.shiftForeground, 0.2),
     padding: spacing.md,
   },
   clockedText: {
     fontSize: typography.small,
     fontWeight: "600",
-    color: colors.white,
+    color: colors.shiftForeground,
   },
   progressCard: {
     marginBottom: spacing.lg,

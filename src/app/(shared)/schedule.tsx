@@ -6,6 +6,8 @@ import { Screen } from "@/components/Screen";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { ScheduleMap } from "@/components/ScheduleMap";
+import { CalendarFrame, CalendarLegend, DotStrip, MonthTiles, type DayTileData } from "@/components/MonthCalendar";
+import { heatColor, monthDays, monthTitle } from "@/domain/calendarGrid";
 import { appAlert } from "@/components/Dialog";
 import { cancelBooking, listMyBookings, listSiteBookings, type StaffBooking } from "@/api/client";
 import { addDays, bookingShifts, bookingTime, isPastDay, mondayOf, dateKey, dayHeading, groupByDay, mapsUrl, parseDateKey } from "@/domain/schedule";
@@ -113,6 +115,14 @@ export default function ScheduleScreen() {
               </Card>
   );
 
+  const bookedOn = (day: string) => (bookings ?? []).filter((b) => b.date === day && b.status !== "cancelled").length;
+  const busiest = Math.max(1, ...monthDays(monthStart, 1).map(bookedOn));
+  const bookingTile = (day: string): DayTileData => {
+    const count = bookedOn(day);
+    const label = `${dayHeading(day)}, ${count === 0 ? "no bookings" : `${count} booked`}`;
+    return count === 0 ? { label } : { intensity: count / busiest, badge: count, label };
+  };
+
   return (
     <Screen title={scope === "all" ? "Schedule" : "My schedule"}>
       {canBook && (
@@ -170,37 +180,30 @@ export default function ScheduleScreen() {
 
       {view === "calendar" && (
         <>
-          <View style={styles.monthBar}>
-            <Pressable accessibilityLabel="Previous month" hitSlop={10} onPress={() => { setBookings(null); setMonthStart((m) => new Date(m.getFullYear(), m.getMonth() - 1, 1)); }}>
-              <Ionicons name="chevron-back" size={22} color={colors.foreground} />
-            </Pressable>
-            <Text style={styles.monthText}>{monthStart.toLocaleDateString("en-ZA", { month: "long", year: "numeric" })}</Text>
-            <Pressable accessibilityLabel="Next month" hitSlop={10} onPress={() => { setBookings(null); setMonthStart((m) => new Date(m.getFullYear(), m.getMonth() + 1, 1)); }}>
-              <Ionicons name="chevron-forward" size={22} color={colors.foreground} />
-            </Pressable>
-          </View>
-          <View style={styles.grid}>
-            {["M", "T", "W", "T", "F", "S", "S"].map((d, i) => (
-              <Text key={i} style={styles.gridHead}>{d}</Text>
-            ))}
-            {Array.from({ length: 42 }, (_, i) => dateKey(addDays(mondayOf(monthStart), i))).map((day) => {
-              const count = (bookings ?? []).filter((b) => b.date === day && b.status !== "cancelled").length;
-              const inMonth = parseDateKey(day).getMonth() === monthStart.getMonth();
-              const picked = day === pickedDay;
-              return (
-                <Pressable
-                  key={day}
-                  style={[styles.cell, picked && styles.cellOn, !inMonth && styles.cellOut]}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${dayHeading(day)}, ${count === 0 ? "no bookings" : `${count} booked`}`}
-                  onPress={() => setPickedDay(day)}
-                >
-                  <Text style={[styles.cellNum, picked && styles.cellNumOn, day === dateKey(new Date()) && styles.cellToday]}>{parseDateKey(day).getDate()}</Text>
-                  {count > 0 && <View style={[styles.dot, picked && styles.dotOn]}><Text style={[styles.dotText, picked && styles.dotTextOn]}>{count}</Text></View>}
-                </Pressable>
-              );
-            })}
-          </View>
+          <CalendarFrame
+            id="schedule"
+            title={monthTitle(monthStart)}
+            caption="Staff bookings"
+            onPrev={() => { setBookings(null); setMonthStart((m) => new Date(m.getFullYear(), m.getMonth() - 1, 1)); }}
+            onNext={() => { setBookings(null); setMonthStart((m) => new Date(m.getFullYear(), m.getMonth() + 1, 1)); }}
+            onToday={() => { setBookings(null); setMonthStart(new Date(new Date().getFullYear(), new Date().getMonth(), 1)); setPickedDay(dateKey(new Date())); }}
+            collapsedSummary={
+              <DotStrip
+                month={monthStart}
+                tile={(day) => (parseDateKey(day).getMonth() === monthStart.getMonth() ? bookingTile(day) : { tone: "muted" })}
+                right={`${(bookings ?? []).filter((b) => b.status !== "cancelled").length} booked`}
+              />
+            }
+          >
+            <MonthTiles month={monthStart} tile={bookingTile} selected={pickedDay} onSelect={setPickedDay} />
+            <CalendarLegend
+              items={[
+                { label: "Booked", color: heatColor(colors.card, colors.primary, 0.6) },
+                { label: "Today", ring: true },
+                { label: "Free" },
+              ]}
+            />
+          </CalendarFrame>
           <Text style={styles.dayHeading}>{dayHeading(pickedDay)}</Text>
           {canBook && !isPastDay(pickedDay) && <Button onPress={() => router.push(`/schedule-book?date=${pickedDay}` as never)}>Book staff on this day</Button>}
           {isPastDay(pickedDay) && <Text style={styles.muted}>This day has passed, so it can be viewed but not changed.</Text>}
@@ -246,20 +249,6 @@ const styles = themedStyles(() =>
     noteLabel: { fontSize: typography.tiny, fontWeight: "700", color: colors.mutedForeground },
     noteText: { fontSize: typography.small, color: colors.foreground },
     link: { fontSize: typography.small, fontWeight: "700", color: colors.primary },
-    monthBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: spacing.sm },
-    monthText: { fontSize: typography.body, fontWeight: "800", color: colors.foreground },
-    grid: { flexDirection: "row", flexWrap: "wrap", marginVertical: spacing.sm },
-    gridHead: { width: "14.2857%", textAlign: "center", fontSize: typography.tiny, fontWeight: "700", color: colors.mutedForeground, paddingBottom: spacing.xs },
-    cell: { width: "14.2857%", aspectRatio: 1, alignItems: "center", justifyContent: "center", borderRadius: radius.md },
-    cellOn: { backgroundColor: colors.primary },
-    cellOut: { opacity: 0.4 },
-    cellNum: { fontSize: typography.small, fontWeight: "600", color: colors.foreground },
-    cellNumOn: { color: colors.white },
-    cellToday: { textDecorationLine: "underline" },
-    dot: { minWidth: 16, paddingHorizontal: 4, borderRadius: 8, backgroundColor: colors.primary, alignItems: "center" },
-    dotOn: { backgroundColor: colors.white },
-    dotText: { fontSize: 10, fontWeight: "800", color: colors.white },
-    dotTextOn: { color: colors.primary },
     danger: { fontSize: typography.small, fontWeight: "700", color: colors.destructive },
   }),
 );

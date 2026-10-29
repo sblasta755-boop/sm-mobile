@@ -422,14 +422,31 @@ export interface SiteSpaceProfile {
   updatedAt?: string;
 }
 
-/** Light-mode brand palette, each slot a "#RRGGBB" hex. Dark variants and
- * foreground colours are derived - see theme/brandTheme.ts. */
-export interface BrandingTheme {
-  primary?: string;
-  accent?: string;
-  sidebar?: string;
+/** One mode's colours, each a "#RRGGBB". Unset = app default. See theme/brandTheme.ts. */
+export interface ThemeColors {
   background?: string;
-  surface?: string;
+  text?: string;
+  card?: string;
+  primary?: string;
+  primaryText?: string;
+  secondary?: string;
+  secondaryText?: string;
+  accent?: string;
+  accentText?: string;
+  muted?: string;
+  mutedText?: string;
+  border?: string;
+  navBackground?: string;
+  navText?: string;
+  shiftBackground?: string;
+  shiftText?: string;
+}
+
+/** Separate light and dark palettes plus font ids (heading/body). */
+export interface BrandingTheme {
+  light?: ThemeColors;
+  dark?: ThemeColors;
+  fonts?: { heading?: string; body?: string };
 }
 
 export interface TenantBranding {

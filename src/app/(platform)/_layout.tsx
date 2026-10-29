@@ -47,13 +47,13 @@ export default function PlatformTabsLayout() {
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.mutedForeground,
+        tabBarInactiveTintColor: colors.navForeground,
         tabBarStyle: {
           height: sizes.bottomNavHeight + insets.bottom,
           paddingBottom: insets.bottom + spacing.xs,
           paddingTop: spacing.xs,
           borderTopColor: colors.border,
-          backgroundColor: colors.background,
+          backgroundColor: colors.navBackground,
         },
         tabBarLabelStyle: {
           fontSize: typography.tiny,

@@ -6,3 +6,4 @@ export * from "./shadows";
 export * from "./sizes";
 export * from "./status";
 export * from "./themeStore";
+export { installBrandFonts } from "./fonts";

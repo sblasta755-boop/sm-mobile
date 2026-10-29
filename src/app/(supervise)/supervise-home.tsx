@@ -23,6 +23,7 @@ import { useCanOpenStock } from "@/features/stock";
 import { useHasCapability, useHasModule } from "@/features/modules";
 import { toneForTask, humanStatus } from "@/domain/status";
 import { taskDestination } from "@/domain/inspections";
+import { hexAlpha } from "@/domain/calendarGrid";
 import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 
 /**
@@ -110,7 +111,7 @@ export default function SuperviseHome() {
                 <Text style={styles.shiftEyebrow}>Today&apos;s shift</Text>
                 {site?.name && (
                   <View style={styles.shiftMetaRow}>
-                    <Ionicons name="location" size={11} color="rgba(255,255,255,0.8)" />
+                    <Ionicons name="location" size={11} color={hexAlpha(colors.shiftForeground, 0.8)} />
                     <Text style={styles.shiftMeta}>{site.name}</Text>
                   </View>
                 )}
@@ -300,7 +301,7 @@ const styles = themedStyles(() => StyleSheet.create({
     marginBottom: spacing.lg,
   },
   shiftOverlay: {
-    backgroundColor: "#182531",
+    backgroundColor: colors.shiftBackground,
     padding: spacing.lg,
     gap: spacing.md,
   },
@@ -319,7 +320,7 @@ const styles = themedStyles(() => StyleSheet.create({
     fontWeight: "700",
     textTransform: "uppercase",
     letterSpacing: 0.4,
-    color: "rgba(255,255,255,0.75)",
+    color: hexAlpha(colors.shiftForeground, 0.75),
   },
   shiftMetaRow: {
     flexDirection: "row",
@@ -329,22 +330,22 @@ const styles = themedStyles(() => StyleSheet.create({
   },
   shiftMeta: {
     fontSize: typography.tiny,
-    color: "rgba(255,255,255,0.8)",
+    color: hexAlpha(colors.shiftForeground, 0.8),
   },
   clockedActions: {
     gap: spacing.sm,
   },
   clockedPill: {
     borderRadius: radius.lg,
-    backgroundColor: "rgba(255,255,255,0.15)",
+    backgroundColor: hexAlpha(colors.shiftForeground, 0.15),
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.2)",
+    borderColor: hexAlpha(colors.shiftForeground, 0.2),
     padding: spacing.md,
   },
   clockedText: {
     fontSize: typography.small,
     fontWeight: "600",
-    color: colors.white,
+    color: colors.shiftForeground,
   },
   tiles: {
     flexDirection: "row",

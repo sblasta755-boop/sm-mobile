@@ -159,7 +159,7 @@ export default function ProfileScreen() {
 
       <View style={styles.rows}>
         <Row icon={<Ionicons name="person-outline" size={16} color={colors.primary} />} label="Edit profile" onPress={() => router.push("/profile-edit")} />
-        <Row icon={<Ionicons name="notifications-outline" size={16} color={colors.primary} />} label="Notifications" onPress={() => router.push("/notifications")} />
+        <Row icon={<Ionicons name="notifications-outline" size={16} color={colors.primary} />} label="Notifications" onPress={() => router.push("/notification-settings" as never)} />
         {/* Incidents are always tied to a scanned room/zone now, so this
             sends the cleaner to Scan first rather than straight to the
             report form - see app/(app)/incidents/new.tsx. */}
