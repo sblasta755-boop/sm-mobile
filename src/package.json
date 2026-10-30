@@ -55,6 +55,7 @@
     "expo-sharing": "~14.0.8",
     "expo-splash-screen": "~31.0.13",
     "expo-status-bar": "~3.0.8",
+    "expo-task-manager": "~14.0.9",
     "jest-expo": "~54.0.18",
     "pdf-lib": "^1.17.1",
     "react": "19.1.0",

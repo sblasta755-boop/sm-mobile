@@ -58,6 +58,8 @@ export interface WorkflowPolicy {
     defaultClockInMethod: string;
     requireSiteSelection: boolean;
     requireGeofence: boolean;
+    /** Clock people out when they leave the site radius and back in when they return. */
+    autoClock?: { enabled: boolean; graceMinutes: number; overtimeCheck: boolean };
   };
   tasks: {
     enabled: boolean;
@@ -383,6 +385,12 @@ export interface Site {
   geofenceRadius: number;
   supervisorId: string;
   active: boolean;
+  /** Where the site is and how far from it counts as on site; set when it was geocoded. */
+  latitude?: number | null;
+  longitude?: number | null;
+  radiusMeters?: number | null;
+  /** This site's own on/off for automatic clock-out by location; null follows the organisation. */
+  autoClock?: boolean | null;
   // This site's own branding - takes priority over the tenant-wide
   // default (Tenant.branding) whenever a field here is set. See
   // resolveBranding.

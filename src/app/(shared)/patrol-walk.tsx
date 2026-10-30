@@ -28,6 +28,19 @@ const clock = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2,
 const NEAR_METERS = 40;
 // Keep the trail light: one point per few metres is plenty for a line on a map.
 const MAX_TRAIL_POINTS = 600;
+// Fixes less accurate than this say little about which way someone walked.
+const MAX_FIX_ERROR_M = 40;
+const MAX_POINTS_SENT = 300;
+
+/** The walked track as [[lat, lng], ...]: only decent fixes, thinned so the request stays small. The
+ * server simplifies it further and keeps it as the path's shape. */
+function trackToSend(trail: { latitude: number; longitude: number; accuracy?: number | null }[]): number[][] | undefined {
+  const good = trail.filter((p) => p.accuracy == null || p.accuracy <= MAX_FIX_ERROR_M);
+  if (good.length < 3) return undefined;
+  const step = Math.max(1, Math.ceil(good.length / MAX_POINTS_SENT));
+  const thinned = good.filter((_, i) => i % step === 0 || i === good.length - 1);
+  return thinned.map((p) => [p.latitude, p.longitude]);
+}
 
 /**
  * Walk a path to confirm it, with a map. The map shows the site's signs and the
@@ -125,11 +138,12 @@ export default function PatrolWalkScreen() {
       const result = await recordWayfindingPatrol(token, {
         aBeaconId: from.id,
         bBeaconId: to.id,
-        ...(blocked ? { blocked: true } : { seconds: Math.max(5, elapsed) }),
+        ...(blocked ? { blocked: true } : { seconds: Math.max(5, elapsed), trail: trackToSend(trail) }),
       });
+      const saved = result.shapeSource === "walked" ? " The way you walked is saved as the path." : "";
       appAlert(
         blocked ? "Path closed" : "Path confirmed",
-        result.tasksCompleted > 0 ? `${result.tasksCompleted} walk-this-path task(s) completed.` : "Thank you.",
+        (result.tasksCompleted > 0 ? `${result.tasksCompleted} walk-this-path task(s) completed.` : "Thank you.") + saved,
       );
       // The next leg starts where this one ended, and the map shows the path as walked.
       setFromId(to.id);

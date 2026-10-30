@@ -423,7 +423,10 @@ export function createIncident(accessToken: string, payload: Record<string, unkn
 export interface ClockPayload {
   siteId: string;
   qrValue?: string;
-  method?: "qr" | "manual" | "geofence";
+  /** "geofence_auto" is set by the phone itself when it detects leaving or re-entering the site. */
+  method?: "qr" | "manual" | "geofence" | "geofence_auto";
+  /** For "geofence_auto": left_site | returned | shift_end. */
+  reason?: string;
   latitude?: number;
   longitude?: number;
   /** For a scan made with no signal: when it really happened (ISO) and that it was offline. */
@@ -1535,9 +1538,17 @@ export function installWayfindingBeacon(
  * verified and completes any open "walk this path" task. `blocked` closes it. */
 export function recordWayfindingPatrol(
   accessToken: string,
-  payload: { aBeaconId: string; bBeaconId: string; seconds?: number; blocked?: boolean; note?: string },
+  payload: {
+    aBeaconId: string;
+    bBeaconId: string;
+    seconds?: number;
+    blocked?: boolean;
+    note?: string;
+    /** The GPS track as walked, [[lat, lng], ...]; the server keeps it (simplified) as the path's shape. */
+    trail?: number[][];
+  },
 ) {
-  return request<{ tasksCompleted: number; walkSeconds: number }>(
+  return request<{ tasksCompleted: number; walkSeconds: number; shapeSource?: string | null }>(
     "/wayfinding/patrol",
     { method: "POST", body: JSON.stringify(payload) },
     accessToken,
@@ -1566,6 +1577,9 @@ export interface WayfindingEdgeRecord {
   source: "geometry" | "observed" | "manual";
   confidence: number;
   verifiedAt: string | null;
+  /** The points between the two signs, from a to b; empty means a straight line (a guess). */
+  polyline?: number[][];
+  shapeSource?: "walked" | "drawn" | null;
 }
 
 /** The walkable links between a site's signs (for drawing the map). */
@@ -2010,4 +2024,28 @@ export const recordLeave = (t: string, input: LeaveRequestInput & { userId: stri
   request<LeaveRequest>("/leave/requests/record", { method: "POST", body: JSON.stringify(input) }, t);
 export const decideLeave = (t: string, id: string, approve: boolean, note?: string) =>
   request<LeaveRequest>(`/leave/requests/${id}/decision`, { method: "POST", body: JSON.stringify({ approve, note: note ?? null }) }, t);
+export type OvertimeStatus = "awaiting_approval" | "approved" | "declined" | "expired" | "cancelled";
+export interface OvertimeRequest {
+  id: string;
+  siteId: string;
+  userId: string;
+  userName: string;
+  dayId: string;
+  shiftEndAt: string;
+  requestedAt: string;
+  reason: string;
+  status: OvertimeStatus;
+  approverTier: "supervisor" | "site_manager" | "operations_manager";
+  decidedBy: string | null;
+  decidedAt: string | null;
+  decisionNote: string | null;
+}
+/** pending: waiting for me to decide; history: decided at my sites; mine: my own requests. */
+export const listOvertime = (t: string, scope: "pending" | "history" | "mine" = "pending") =>
+  request<{ requests: OvertimeRequest[] }>(`/attendance/overtime?scope=${scope}`, {}, t).then((r) => r.requests);
+export const decideOvertime = (t: string, id: string, approve: boolean, note?: string) =>
+  request<OvertimeRequest>(`/attendance/overtime/${id}/decide`, { method: "POST", body: JSON.stringify({ approve, note: note ?? null }) }, t);
+export const requestOvertime = (t: string, reason: string, requestedAt?: string) =>
+  request<OvertimeRequest>("/attendance/overtime", { method: "POST", body: JSON.stringify({ reason, requestedAt }) }, t);
+
 export const cancelLeave = (t: string, id: string) => request<LeaveRequest>(`/leave/requests/${id}/cancel`, { method: "POST" }, t);

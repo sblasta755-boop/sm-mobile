@@ -12,6 +12,8 @@ import { usePushRegistration } from "@/features/pushNotifications";
 import { useDeviceHealthReporting } from "@/features/deviceHealth";
 import { useEvidenceUploader } from "@/features/evidenceUploader";
 import { useRememberLocation } from "@/features/lastLocation";
+import { useGeofenceClock } from "@/features/geofenceClock";
+import { OvertimePrompt } from "@/components/OvertimePrompt";
 
 // Keep the native splash image up until our animated in-app splash
 // (rendered from app/index.tsx while the session restores) has actually
@@ -33,6 +35,7 @@ export default function RootLayout() {
           <ThemedStatusBar />
           <Stack screenOptions={{ headerShown: false }} />
           <UpdateRequiredGate />
+          <OvertimePrompt />
           <DialogHost />
         </SmartCleanProvider>
       </ThemeProvider>
@@ -54,6 +57,8 @@ function PushNotificationsBridge() {
   useAppUpdateWatcher();
   // Remembers the screen and scroll position so a lock or a closed app puts the person back.
   useRememberLocation();
+  // Clocks people out when they leave their site and back in when they return, if their site uses it.
+  useGeofenceClock();
   return null;
 }
 

@@ -17,6 +17,7 @@ import { focusTasks } from "@/domain/todayFocus";
 import { homeTaskView } from "@/domain/homeTasks";
 import { homeTiles } from "@/domain/homeTiles";
 import { useLeaveOn } from "@/features/leave";
+import { useAutoClockStatus } from "@/features/geofenceClock";
 import { useScheduleOn } from "@/features/schedule";
 import { useNow } from "@/features/useNow";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -149,6 +150,7 @@ export default function HomeScreen() {
     }
   }
   const canClockWithoutScan = canManualClock || canGeofenceClock;
+  const autoClock = useAutoClockStatus();
   // The image card is always there. Only the clocking parts of it (the status
   // badge and the buttons) go when this organisation does not clock people in this way.
   const showClockControls = hasAttendance && ((canScanClock && hasQr) || canClockWithoutScan);
@@ -238,6 +240,15 @@ export default function HomeScreen() {
         </ImageBackground>
       </Card>
 
+      {autoClock.enabled && autoClock.permission !== "always" && (
+        <Pressable accessibilityRole="button" onPress={() => router.push("/location-always" as never)} style={styles.autoClockNotice}>
+          <Ionicons name="location-outline" size={18} color={colors.warningForeground} />
+          <Text style={styles.autoClockText}>
+            Your site clocks you out when you leave. Allow location all the time so it works with the app closed.
+          </Text>
+        </Pressable>
+      )}
+
       <TodayCard done={done} total={myTasks.length} next={nextBooking} progress={progress} />
 
       {/* At most four shortcuts, the rest behind More. What needs attention (rounds to claim, open
@@ -305,6 +316,16 @@ export default function HomeScreen() {
 
 const styles = themedStyles(() => StyleSheet.create({
   boardLinks: { flexDirection: "row", alignItems: "center", gap: spacing.md },
+  autoClockNotice: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    borderRadius: radius.lg,
+    backgroundColor: colors.warningSoft,
+  },
+  autoClockText: { flex: 1, fontSize: typography.small, color: colors.warningForeground },
   shiftCard: {
     marginBottom: spacing.lg,
   },

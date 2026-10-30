@@ -18,7 +18,11 @@
       "bundleIdentifier": "za.co.smartclean.mobile",
       "infoPlist": {
         "NSCameraUsageDescription": "Šoma360 uses the camera to scan site and room QR codes and capture required task evidence.",
-        "NSLocationWhenInUseUsageDescription": "Šoma360 captures location only during operational verification such as attendance, scans, and inspections."
+        "NSLocationWhenInUseUsageDescription": "Šoma360 captures location only during operational verification such as attendance, scans, and inspections.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Šoma360 uses your location in the background only to tell whether you are at your site, so your hours are counted while you are on site.",
+        "UIBackgroundModes": [
+          "location"
+        ]
       }
     },
     "android": {
@@ -37,7 +41,10 @@
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.POST_NOTIFICATIONS",
         "android.permission.USE_BIOMETRIC",
-        "android.permission.USE_FINGERPRINT"
+        "android.permission.USE_FINGERPRINT",
+        "android.permission.ACCESS_BACKGROUND_LOCATION",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_LOCATION"
       ]
     },
     "web": {
@@ -55,7 +62,10 @@
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Šoma360 captures location only during operational verification."
+          "locationAlwaysAndWhenInUsePermission": "Šoma360 uses your location, including in the background, only to tell whether you are at your site.",
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true,
+          "isIosBackgroundLocationEnabled": true
         }
       ],
       [

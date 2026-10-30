@@ -11,6 +11,7 @@ export const KIND_LABEL: Record<string, string> = {
   "task.note": "a note",
   "task.submit": "a submission",
   "attendance.clock": "a clock in/out",
+  "overtime.request": "an overtime request",
   "inspection.decide": "an inspection decision",
   "corrective.update": "a corrective-action update",
   "incident.create": "an incident report",

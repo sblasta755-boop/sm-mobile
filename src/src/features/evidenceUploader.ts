@@ -5,6 +5,7 @@ import {
   addTaskEvidence,
   ApiError,
   clockIn,
+  requestOvertime,
   clockOut,
   createIncident,
   decideInspection,
@@ -20,7 +21,7 @@ import {
   updateChecklistItem,
   uploadImage,
 } from "@/api/client";
-import type { OutboxMutation } from "@/domain/outbox";
+import { clockBodyFromMutation, type OutboxMutation } from "@/domain/outbox";
 import { markSynced } from "@/features/lastSynced";
 import { getOutbox, loadOutbox, removeMutation, subscribeOutbox, updateMutation } from "@/features/outbox";
 import type { Task } from "@/types/smartclean";
@@ -127,18 +128,14 @@ async function sendMutation(ctx: Context, m: OutboxMutation): Promise<Task | nul
       ctx.onStale();
       return null;
     case "attendance.clock": {
-      const body = {
-        siteId: String(m.payload.siteId),
-        qrValue: m.payload.qrValue as string | undefined,
-        latitude: m.payload.latitude as number | undefined,
-        longitude: m.payload.longitude as number | undefined,
-        occurredAt: String(m.payload.at ?? m.createdAt),
-        offlineRecorded: true,
-      };
+      const body = clockBodyFromMutation(m);
       if (m.payload.direction === "out") await clockOut(ctx.token, body);
       else await clockIn(ctx.token, body);
       return null;
     }
+    case "overtime.request":
+      await requestOvertime(ctx.token, String(m.payload.reason ?? ""), String(m.payload.at ?? m.createdAt));
+      return null;
     case "task.checklist":
       return updateChecklistItem(ctx.token, m.taskId!, String(p.itemId), {
         done: typeof m.payload.done === "boolean" ? m.payload.done : undefined,

@@ -118,14 +118,14 @@ const styles = themedStyles(() => StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: radius.round,
-    backgroundColor: colors.accent,
+    backgroundColor: colors.primary,
     alignItems: "center",
     justifyContent: "center",
   },
   avatarText: {
     fontSize: typography.h2,
     fontWeight: "800",
-    color: colors.primary,
+    color: colors.primaryForeground,
   },
   identityInfo: {
     flex: 1,

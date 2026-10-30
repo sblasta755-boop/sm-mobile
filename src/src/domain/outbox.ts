@@ -11,6 +11,7 @@ export type OutboxKind =
   | "task.submit"
   | "task.scan"
   | "attendance.clock"
+  | "overtime.request"
   | "inspection.decide"
   | "corrective.update"
   | "incident.create"
@@ -123,6 +124,7 @@ export function supersedes(incoming: OutboxMutation, existing: OutboxMutation): 
   // through steps, and each incident is its own report: none replaces another.
   if (
     incoming.kind === "attendance.clock" ||
+    incoming.kind === "overtime.request" ||
     incoming.kind === "incident.create" ||
     incoming.kind === "corrective.update"
   ) {
@@ -184,6 +186,22 @@ export function applyAttendance<T extends Record<string, AttendanceLike>>(
     delete next[userId];
   }
   return next as T;
+}
+
+/** The request body for replaying a queued clock event. The method and reason travel with it:
+ * without them an automatic (geofence) clock would replay as a QR scan and be refused. */
+export function clockBodyFromMutation(m: OutboxMutation) {
+  const method = m.payload.method;
+  return {
+    siteId: String(m.payload.siteId),
+    qrValue: m.payload.qrValue as string | undefined,
+    method: typeof method === "string" ? (method as "qr" | "manual" | "geofence" | "geofence_auto") : undefined,
+    reason: typeof m.payload.reason === "string" ? m.payload.reason : undefined,
+    latitude: m.payload.latitude as number | undefined,
+    longitude: m.payload.longitude as number | undefined,
+    occurredAt: String(m.payload.at ?? m.createdAt),
+    offlineRecorded: true,
+  };
 }
 
 interface InspectionLike {

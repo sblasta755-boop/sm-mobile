@@ -172,6 +172,7 @@ export default function SuperviseHome() {
         items={[
           { key: "board", label: "Task board", icon: <Ionicons name="albums-outline" size={20} color={colors.primary} />, onPress: () => router.push("/kanban") },
           { key: "report", label: "Management report", icon: <Ionicons name="document-text-outline" size={20} color={colors.primary} />, onPress: () => router.push("/management-report") },
+          { key: "overtime", label: "Overtime", icon: <Ionicons name="time-outline" size={20} color={colors.primary} />, onPress: () => router.push("/overtime" as never) },
           ...(scheduleOn
             ? [{ key: "schedule", label: "My schedule", icon: <Ionicons name="calendar-outline" size={20} color={colors.primary} />, onPress: () => router.push("/schedule" as never) }]
             : []),

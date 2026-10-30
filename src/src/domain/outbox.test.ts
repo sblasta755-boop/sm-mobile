@@ -5,6 +5,7 @@ import {
   applyInspectionDecisions,
   applyMutations,
   applyStockCount,
+  clockBodyFromMutation,
   pendingStockUse,
   type OutboxMutation,
 } from "./outbox";
@@ -168,5 +169,24 @@ describe("offline stock issues and waste", () => {
     const used = pendingStockUse([issue("a", 2), issue("b", 3, "stock.waste"), { ...issue("c", 9), status: "rejected" }], "u1");
     expect(used.get("i1|l1")).toBe(5);
     expect(pendingStockUse([issue("a", 2)], "u2").size).toBe(0);
+  });
+});
+
+describe("clockBodyFromMutation", () => {
+  it("keeps the method, reason and crossing time of an automatic clock", () => {
+    const body = clockBodyFromMutation(
+      mut({
+        kind: "attendance.clock",
+        payload: { siteId: "s1", direction: "out", method: "geofence_auto", reason: "left_site", at: "2026-10-15T12:03:00.000Z", latitude: 1, longitude: 2 },
+      }),
+    );
+    expect(body).toMatchObject({ siteId: "s1", method: "geofence_auto", reason: "left_site", occurredAt: "2026-10-15T12:03:00.000Z", offlineRecorded: true });
+  });
+
+  it("leaves the method off for an ordinary queued scan, as before", () => {
+    const body = clockBodyFromMutation(mut({ kind: "attendance.clock", payload: { siteId: "s1", qrValue: "SITE-1", direction: "in" } }));
+    expect(body.method).toBeUndefined();
+    expect(body.qrValue).toBe("SITE-1");
+    expect(body.occurredAt).toBe("2026-10-15T10:00:00.000Z");
   });
 });

@@ -50,6 +50,8 @@ export default function EvidenceScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const [cameraSlotKey, setCameraSlotKey] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // The photo just taken, shown for a check before it is kept (Use photo) or thrown away (Retake).
+  const [review, setReview] = useState<{ uri: string; width: number; height: number } | null>(null);
   // Which section of the photos is showing. Starts from the standing preference (Settings) and
   // changes only for this task when a person picks another chip.
   const [evidenceViewMode] = useEvidenceViewMode();
@@ -162,6 +164,11 @@ export default function EvidenceScreen() {
 
   const cameraSlot = cameraSlotKey ? (slots.find((slot) => slot.key === cameraSlotKey) ?? null) : null;
 
+  const closeCamera = () => {
+    setReview(null);
+    setCameraSlotKey(null);
+  };
+
   async function openCamera(slot: EvidenceSlot) {
     if (!slot.unlocked) {
       appAlert("Not yet", slot.lockedReason ?? "This photo isn't available yet.");
@@ -194,13 +201,27 @@ export default function EvidenceScreen() {
     void drainQueue();
   }
 
-  async function capture() {
-    if (!cameraRef.current || busy || !state.accessToken || !currentUser || !cameraSlot) return;
-    const slot = cameraSlot;
+  // Takes the shot, then asks the person to check it before anything is saved.
+  async function takeShot() {
+    if (!cameraRef.current || busy || review) return;
     setBusy(true);
     try {
       const photo = await cameraRef.current.takePictureAsync({ quality: 0.7, base64: false, skipProcessing: true });
-      if (!photo?.uri) return;
+      if (photo?.uri) setReview({ uri: photo.uri, width: photo.width, height: photo.height });
+    } catch (error) {
+      appAlert("Could not take the photo", error instanceof Error ? error.message : "Please try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Use photo: shrink it, keep it on the phone and queue it for upload.
+  async function keepShot() {
+    if (!review || busy || !state.accessToken || !currentUser || !cameraSlot) return;
+    const slot = cameraSlot;
+    const photo = review;
+    setBusy(true);
+    try {
       // A checklist item's photo is labelled with the item and sent with its
       // id, so the server ties the image to exactly that item.
       const label = slot.checklistItemId
@@ -233,6 +254,7 @@ export default function EvidenceScreen() {
         attempts: 0,
       });
       void drainQueue();
+      setReview(null);
       // Stay in the camera only while this slot still wants more photos.
       if (slot.required === null || slot.taken + 1 >= slot.required) setCameraSlotKey(null);
     } catch (error) {
@@ -385,7 +407,7 @@ export default function EvidenceScreen() {
         onClose={() => setNoteItemId(null)}
       />
 
-      <Modal visible={cameraSlot !== null} animationType="slide" onRequestClose={() => setCameraSlotKey(null)}>
+      <Modal visible={cameraSlot !== null} animationType="slide" onRequestClose={closeCamera}>
         <View style={styles.cameraScreen}>
           {cameraSlot && (
             <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing="back" />
@@ -405,25 +427,62 @@ export default function EvidenceScreen() {
                 </Text>
               )}
             </View>
-            <Pressable accessibilityLabel="Close camera" onPress={() => setCameraSlotKey(null)} style={styles.cameraClose}>
+            <Pressable accessibilityLabel="Close camera" onPress={closeCamera} style={styles.cameraClose}>
               <Ionicons name="close" size={22} color={colors.white} />
             </Pressable>
           </View>
-          <View style={[styles.cameraBottom, { paddingBottom: insets.bottom + spacing.lg }]}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Take photo"
-              disabled={busy}
-              onPress={() => void capture()}
-              style={[styles.shutter, busy && styles.shutterBusy]}
-            >
-              <View style={styles.shutterInner} />
-            </Pressable>
-          </View>
+          {!review && (
+            <View style={[styles.cameraBottom, { paddingBottom: insets.bottom + spacing.lg }]}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Take photo"
+                disabled={busy}
+                onPress={() => void takeShot()}
+                style={[styles.shutter, busy && styles.shutterBusy]}
+              >
+                <View style={styles.shutterInner} />
+              </Pressable>
+            </View>
+          )}
+          {review && cameraSlot && (
+            <View style={styles.reviewScrim}>
+              <View style={[styles.reviewSheet, { paddingBottom: insets.bottom + spacing.lg }]}>
+                <View style={styles.reviewGrab} />
+                <View style={styles.reviewHead}>
+                  <View style={styles.reviewHeadText}>
+                    <Text style={styles.reviewTitle}>Check your photo</Text>
+                    <Text style={styles.reviewSub} numberOfLines={1}>
+                      {cameraSlot.checklistItemId
+                        ? (currentTask.checklist.find((c) => c.id === cameraSlot.checklistItemId)?.label ?? cameraSlot.label)
+                        : cameraSlot.label}
+                    </Text>
+                  </View>
+                  <View style={styles.reviewPill}>
+                    <Text style={styles.reviewPillText}>
+                      {tileTitle(cameraSlot)}
+                      {cameraSlot.required !== null ? ` ${Math.min(cameraSlot.taken + 1, cameraSlot.required)} of ${cameraSlot.required}` : ""}
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.reviewPhotoWrap}>
+                  <Image source={{ uri: review.uri }} style={styles.reviewPhoto} resizeMode="contain" />
+                </View>
+                <Text style={styles.reviewHint}>Is it clear, well lit and showing the right area?</Text>
+                <View style={styles.reviewButtons}>
+                  <Button variant="outline" fullWidth={false} style={styles.reviewButton} disabled={busy} onPress={() => setReview(null)} icon={<Ionicons name="refresh" size={18} color={colors.foreground} />}>
+                    Retake
+                  </Button>
+                  <Button fullWidth={false} style={styles.reviewButton} disabled={busy} onPress={() => keepShot()} icon={<Ionicons name="checkmark" size={18} color={colors.primaryForeground} />}>
+                    Use photo
+                  </Button>
+                </View>
+              </View>
+            </View>
+          )}
           {busy && (
             <View style={styles.captureOverlay}>
               <ActivityIndicator color={colors.white} />
-              <Text style={styles.captureOverlayText}>Saving photo…</Text>
+              <Text style={styles.captureOverlayText}>{review ? "Saving photo…" : "Taking photo…"}</Text>
             </View>
           )}
         </View>
@@ -528,6 +587,27 @@ const styles = themedStyles(() => StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.55)",
   },
   captureOverlayText: { color: colors.white, fontSize: typography.small },
+  reviewScrim: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end" },
+  reviewSheet: {
+    backgroundColor: colors.card,
+    borderTopLeftRadius: radius.xl * 1.5,
+    borderTopRightRadius: radius.xl * 1.5,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+    gap: spacing.sm,
+  },
+  reviewGrab: { alignSelf: "center", width: 40, height: 4, borderRadius: 2, backgroundColor: colors.border, marginBottom: spacing.xs },
+  reviewHead: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  reviewHeadText: { flex: 1, minWidth: 0 },
+  reviewTitle: { fontSize: typography.h2, fontWeight: "800", color: colors.foreground },
+  reviewSub: { fontSize: typography.small, color: colors.mutedForeground },
+  reviewPill: { paddingHorizontal: spacing.md, paddingVertical: 6, borderRadius: 999, backgroundColor: colors.accent },
+  reviewPillText: { fontSize: typography.tiny, fontWeight: "700", color: colors.primary },
+  reviewPhotoWrap: { height: 340, borderRadius: radius.lg, overflow: "hidden", backgroundColor: "#000" },
+  reviewPhoto: { width: "100%", height: "100%" },
+  reviewHint: { fontSize: typography.small, color: colors.mutedForeground, textAlign: "center" },
+  reviewButtons: { flexDirection: "row", gap: spacing.sm },
+  reviewButton: { flex: 1 },
   clockInPromptCard: { marginTop: spacing.md, alignItems: "center", gap: spacing.sm, padding: spacing.lg },
   clockInPromptIcon: { marginBottom: spacing.xs },
   clockInPromptTitle: { fontSize: typography.h2, fontWeight: "700", color: colors.foreground, textAlign: "center" },

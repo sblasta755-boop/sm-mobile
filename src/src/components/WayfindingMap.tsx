@@ -53,7 +53,7 @@ export function WayfindingMap({
         beacons: beacons
           .filter((b) => b.active)
           .map((b) => ({ id: b.id, name: b.name, kind: b.kind, lat: b.latitude, lng: b.longitude, safe: b.safePoint })),
-        edges: edges.map((e) => ({ a: e.aBeaconId, b: e.bBeaconId, status: e.status, source: e.source })),
+        edges: edges.map((e) => ({ a: e.aBeaconId, b: e.bBeaconId, status: e.status, source: e.source, shape: e.polyline ?? [] })),
         here: here ? { lat: here.latitude, lng: here.longitude, acc: here.accuracy ?? null } : null,
         trail: (trail ?? []).map((p) => [p.latitude, p.longitude]),
         fromId: fromId ?? null,
@@ -107,7 +107,7 @@ const PAGE_HTML = `<!doctype html>
 </style></head>
 <body>
 <div id="map"></div>
-<div class="legend"><i style="border-color:#209c68"></i>walked <i style="border-color:#8a96a3;border-top-style:dashed"></i>estimate <i style="border-color:#d3382c"></i>closed <i style="border-color:#f0b42a"></i>hazard</div>
+<div class="legend"><i style="border-color:#209c68"></i>walked <i style="border-color:#8a96a3;border-top-style:dashed"></i>straight guess <i style="border-color:#d3382c"></i>closed <i style="border-color:#f0b42a"></i>hazard</div>
 <button class="locate" id="locate" aria-label="Centre on me">&#9737;</button>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
@@ -125,8 +125,12 @@ const PAGE_HTML = `<!doctype html>
     var pts = [];
     d.edges.forEach(function (e) {
       var a = byId[e.a], b = byId[e.b]; if (!a || !b) return;
-      var color = e.status === 'closed' ? '#d3382c' : e.status === 'hazard' ? '#f0b42a' : e.source === 'geometry' ? '#8a96a3' : '#209c68';
-      L.polyline([[a.lat, a.lng], [b.lat, b.lng]], { color: color, weight: e.source === 'geometry' && e.status === 'open' ? 3 : 4, dashArray: e.source === 'geometry' && e.status === 'open' ? '6 6' : null, opacity: .9 }).addTo(layer);
+      // A path with a known shape is drawn along it; without one it is only a straight guess (dashed).
+      var shaped = e.shape && e.shape.length > 0;
+      var guess = e.source === 'geometry' && !shaped && e.status === 'open';
+      var color = e.status === 'closed' ? '#d3382c' : e.status === 'hazard' ? '#f0b42a' : guess ? '#8a96a3' : shaped ? '#209c68' : '#209c68';
+      var line = [[a.lat, a.lng]].concat(e.shape || [], [[b.lat, b.lng]]);
+      L.polyline(line, { color: color, weight: guess ? 3 : 4, dashArray: guess ? '6 6' : null, opacity: .9 }).addTo(layer);
     });
     d.beacons.forEach(function (b) {
       pts.push([b.lat, b.lng]);
