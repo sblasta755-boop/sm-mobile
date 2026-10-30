@@ -25,6 +25,8 @@ import type {
   StockMovement,
   StockRestockTask,
   StockTransfer,
+  StockLoan,
+  StockOverview,
   SubscriptionState,
   Task,
   TableRatingSummary,
@@ -1632,6 +1634,18 @@ export const listStockRestockTasks = (accessToken: string, siteId: string) =>
 
 export const listStockTransfersInTransit = (accessToken: string, siteId: string) =>
   stockRequest<StockTransfer[]>(accessToken, `/transfers?status=in_transit&siteId=${encodeURIComponent(siteId)}`);
+
+/** A site's stock at a glance. siteId "all" is every site together: organisation admins and operations managers only. */
+export const getStockOverview = (accessToken: string, siteId: string, days = 30) =>
+  stockRequest<StockOverview>(accessToken, `/overview?siteId=${encodeURIComponent(siteId)}&days=${days}`);
+
+/** Stock lent to other sites and not yet back, and stock this site has borrowed. */
+export const listStockLoans = (accessToken: string, siteId: string) =>
+  stockRequest<{ toBeReturned: StockLoan[]; weOwe: StockLoan[] }>(accessToken, `/loans?siteId=${encodeURIComponent(siteId)}`);
+
+/** The borrower sends (part of) a loan back; the lender confirms it on arrival like any transfer. */
+export const returnStockLoan = (accessToken: string, loanId: string, qty: number) =>
+  stockRequest<StockTransfer>(accessToken, `/loans/${encodeURIComponent(loanId)}/return`, { qty });
 
 export const issueStock = (
   accessToken: string,

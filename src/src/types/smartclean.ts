@@ -633,6 +633,76 @@ export interface StockTransfer {
   toLocationId: string;
   qty: number;
   status: "in_transit" | "received";
+  /** The site it is going to; differs from siteId for a transfer between sites. */
+  toSiteId?: string | null;
+  /** Names, since the other site's items and locations are not in this site's own lists. */
+  itemName?: string | null;
+  itemUnit?: string | null;
+  fromLocationName?: string | null;
+  toLocationName?: string | null;
+  fromSiteName?: string | null;
+  toSiteName?: string | null;
+  /** Lent to another site and expected back. */
+  loan?: boolean;
+}
+
+export type StockInsightTone = "bad" | "warn" | "info" | "good";
+
+/** A plain statement about what to look at in the stock. */
+export interface StockInsight {
+  key: string;
+  tone: StockInsightTone;
+  title: string;
+  detail: string;
+}
+
+/** A site's stock at a glance, or every site together (scope "all"). Money is cost. */
+export interface StockOverview {
+  siteId: string;
+  scope: "site" | "all";
+  siteNames: string[];
+  days: number;
+  kpis: {
+    stockValue: number;
+    unpricedItems: number;
+    negativeLevels: number;
+    notCountedItems: number;
+    newRequests: number;
+    atReorder: number;
+    outOfStock: number;
+    movementsToday: number;
+    itemsTotal: number;
+    loansOut: number;
+  };
+  valueByLocation: { locationId: string; name: string; value: number; items: number; unpriced: number; negative: number }[];
+  valueByCategory: { name: string; value: number; items: number }[];
+  topItemsByValue: { itemId: string; name: string; unit: string; qty: number; value: number }[];
+  topUsed: { itemId: string; name: string; unit: string; used: number }[];
+  needsAttention: { itemId: string; name: string; unit: string; qty: number; reorder: number; status: "out" | "low"; coverDays: number | null }[];
+  movementsByDay: { date: string; receipts: number; issues: number; waste: number }[];
+  waste: { value: number; previousValue: number; byReason: { reason: string; qty: number; value: number }[] };
+  deadStock: { count: number; value: number };
+  insights: StockInsight[];
+}
+
+/** One loan of stock between two sites, with where it stands. */
+export interface StockLoan {
+  transferId: string;
+  itemName?: string | null;
+  itemUnit?: string | null;
+  lenderSiteId: string;
+  lenderSiteName?: string | null;
+  borrowerSiteId: string;
+  borrowerSiteName?: string | null;
+  qty: number;
+  returned: number;
+  comingBack: number;
+  /** Not yet sent back. */
+  outstanding: number;
+  /** Not yet confirmed back by the lender (outstanding plus what is on the road). */
+  owed: number;
+  status: "in_transit" | "received";
+  ageDays: number;
 }
 
 export interface StockRestockTask {

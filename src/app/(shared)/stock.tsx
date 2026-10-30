@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Screen } from "@/components/Screen";
 import { Card } from "@/components/Card";
@@ -8,6 +8,8 @@ import { SelectField } from "@/components/SelectField";
 import { ProgressBar } from "@/components/ProgressBar";
 import { AssignHelpers, HandoverReportView, HandoverStart, useSiteShifts } from "@/components/StockHandover";
 import { appAlert } from "@/components/Dialog";
+import { StockOverviewView } from "@/components/StockOverviewView";
+import { canSeeAllSites, canSeeStockOverview } from "@/domain/stockOverview";
 import { useSmartClean } from "@/features/store";
 import { useStockAccess } from "@/features/stock";
 import { enqueueMutation, useOutbox } from "@/features/outbox";
@@ -26,7 +28,9 @@ import {
   listStockConversions,
   listStockLocations,
   listStockRestockTasks,
+  listStockLoans,
   listStockTransfersInTransit,
+  returnStockLoan,
   logStockWaste,
   receiveStockDelivery,
   receiveStockTransfer,
@@ -39,13 +43,15 @@ import {
   type StockLevel,
   type StockLocation,
   type StockRestockTask,
+  type StockLoan,
   type StockTransfer,
 } from "@/types/smartclean";
 import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 
-type Mode = "issue" | "waste" | "restock" | "receive" | "count" | "report";
+type Mode = "overview" | "issue" | "waste" | "restock" | "receive" | "count" | "report";
 
 const MODE_LABELS: Record<Mode, string> = {
+  overview: "Overview",
   issue: "Issue",
   waste: "Waste",
   restock: "Restock",
@@ -55,6 +61,7 @@ const MODE_LABELS: Record<Mode, string> = {
 };
 
 const MODE_ICONS: Record<Mode, keyof typeof Ionicons.glyphMap> = {
+  overview: "pie-chart-outline",
   issue: "arrow-up-circle-outline",
   waste: "trash-outline",
   restock: "cart-outline",
@@ -64,6 +71,7 @@ const MODE_ICONS: Record<Mode, keyof typeof Ionicons.glyphMap> = {
 };
 
 const MODE_HINTS: Record<Mode, string> = {
+  overview: "What the stock is worth, what needs attention and what to look at.",
   issue: "Take stock out for a task, round or room.",
   waste: "Record anything spoiled, broken or lost.",
   restock: "Bring these to the carts and stores that are running low.",
@@ -86,7 +94,7 @@ export default function StockScreen() {
   const access = useStockAccess();
   const token = state.accessToken;
 
-  const sites = state.sites.filter((s) => currentUser?.siteIds.includes(s.id) || access.manage);
+  const sites = state.sites.filter((s) => currentUser?.siteIds.includes(s.id) || access.manage || canSeeAllSites(currentUser?.role));
   const [siteId, setSiteId] = useState(sites[0]?.id ?? "");
   useEffect(() => {
     if (!siteId && sites[0]) setSiteId(sites[0].id);
@@ -94,15 +102,17 @@ export default function StockScreen() {
 
   const modes = useMemo<Mode[]>(
     () => [
+      // Insights are for site managers and above.
+      ...(canSeeStockOverview(currentUser?.role) ? (["overview"] as Mode[]) : []),
       ...(access.issue ? (["issue", "waste"] as Mode[]) : []),
       ...(access.keep ? (["restock", "receive"] as Mode[]) : []),
       // A helper with issue access can count the lines a supervisor gave them.
       ...(access.keep || access.issue ? (["count"] as Mode[]) : []),
       ...(access.manage ? (["report"] as Mode[]) : []),
     ],
-    [access.issue, access.keep, access.manage],
+    [access.issue, access.keep, access.manage, currentUser?.role],
   );
-  const [mode, setMode] = useState<Mode>("issue");
+  const [mode, setMode] = useState<Mode>(() => (canSeeStockOverview(currentUser?.role) ? "overview" : "issue"));
   useEffect(() => {
     if (modes.length && !modes.includes(mode)) setMode(modes[0]);
   }, [modes, mode]);
@@ -111,6 +121,10 @@ export default function StockScreen() {
   const [levels, setLevels] = useState<StockLevel[]>([]);
   const [restock, setRestock] = useState<StockRestockTask[]>([]);
   const [transfers, setTransfers] = useState<StockTransfer[]>([]);
+  // Stock lent to other sites and not yet back, and stock this site has borrowed.
+  const [loans, setLoans] = useState<{ toBeReturned: StockLoan[]; weOwe: StockLoan[] }>({ toBeReturned: [], weOwe: [] });
+  const [returning, setReturning] = useState<StockLoan | null>(null);
+  const [returnQty, setReturnQty] = useState("");
   const [conversions, setConversions] = useState<StockConversion[]>([]);
   const [version, setVersion] = useState(0);
   const reload = useCallback(() => setVersion((v) => v + 1), []);
@@ -125,9 +139,11 @@ export default function StockScreen() {
       listStockRestockTasks(token, siteId).catch(() => []),
       listStockTransfersInTransit(token, siteId).catch(() => []),
       listStockConversions(token, siteId).catch(() => []),
+      listStockLoans(token, siteId).catch(() => ({ toBeReturned: [], weOwe: [] })),
     ])
-      .then(([nextLocations, nextLevels, nextRestock, nextTransfers, nextConversions]) => {
+      .then(([nextLocations, nextLevels, nextRestock, nextTransfers, nextConversions, nextLoans]) => {
         if (cancelled) return;
+        setLoans(nextLoans);
         setLocations(nextLocations);
         setLevels(nextLevels);
         setRestock(nextRestock);
@@ -274,36 +290,149 @@ export default function StockScreen() {
           ))}
           <SectionTitle icon="swap-horizontal-outline" title="On the way" count={transfers.length} />
           {transfers.length === 0 && <EmptyState icon="car-outline" text="No stock is on the way." />}
-          {transfers.map((transfer) => (
+          {transfers.map((transfer) => {
+            // A transfer between sites shows at both. Names come with it, since the other site's items and
+            // locations are not in this site's lists; only the receiving site confirms it.
+            const betweenSites = !!transfer.toSiteId && transfer.toSiteId !== transfer.siteId;
+            const incoming = !betweenSites || transfer.toSiteId === siteId;
+            return (
             <Card key={transfer.id} style={styles.row}>
               <View style={[styles.qtyBubble, styles.qtyBubbleInfo]}>
                 <Text style={[styles.qtyBubbleValue, styles.qtyBubbleValueInfo]}>{transfer.qty}</Text>
-                <Text style={[styles.qtyBubbleUnit, styles.qtyBubbleValueInfo]} numberOfLines={1}>{itemUnit(transfer.itemId)}</Text>
+                <Text style={[styles.qtyBubbleUnit, styles.qtyBubbleValueInfo]} numberOfLines={1}>{transfer.itemUnit ?? itemUnit(transfer.itemId)}</Text>
               </View>
               <View style={styles.rowText}>
-                <Text style={styles.rowTitle}>{itemName(transfer.itemId)}</Text>
+                <Text style={styles.rowTitle}>{transfer.itemName ?? itemName(transfer.itemId)}</Text>
                 <Text style={styles.muted}>
-                  {locationName(transfer.fromLocationId)} → {locationName(transfer.toLocationId)}
+                  {transfer.fromLocationName ?? locationName(transfer.fromLocationId)}
+                  {betweenSites && transfer.fromSiteName ? ` (${transfer.fromSiteName})` : ""} →{" "}
+                  {transfer.toLocationName ?? locationName(transfer.toLocationId)}
+                  {betweenSites && transfer.toSiteName ? ` (${transfer.toSiteName})` : ""}
+                </Text>
+                {transfer.loan && <Text style={styles.muted}>A loan: expected back</Text>}
+              </View>
+              {incoming ? (
+                <Button
+                  fullWidth={false}
+                  variant="outline"
+                  onPress={async () => {
+                    try {
+                      await receiveStockTransfer(token!, transfer.id);
+                      reload();
+                    } catch (error) {
+                      appAlert("Could not confirm", errorMessage(error));
+                    }
+                  }}
+                >
+                  Got it
+                </Button>
+              ) : (
+                <Text style={styles.muted}>Waiting for them</Text>
+              )}
+            </Card>
+            );
+          })}
+          <SectionTitle icon="return-down-back-outline" title="Stock to be returned to us" count={loans.toBeReturned.length} />
+          {loans.toBeReturned.length === 0 ? (
+            <EmptyState icon="hand-left-outline" text="Nothing is out on loan." />
+          ) : (
+            <Text style={styles.muted}>Lent to other sites. Follow up until it comes back.</Text>
+          )}
+          {loans.toBeReturned.map((loan) => (
+            <Card key={loan.transferId} style={styles.row}>
+              <View style={[styles.qtyBubble, styles.qtyBubbleInfo]}>
+                <Text style={[styles.qtyBubbleValue, styles.qtyBubbleValueInfo]}>{loan.owed}</Text>
+                <Text style={[styles.qtyBubbleUnit, styles.qtyBubbleValueInfo]} numberOfLines={1}>{loan.itemUnit ?? ""}</Text>
+              </View>
+              <View style={styles.rowText}>
+                <Text style={styles.rowTitle}>{loan.itemName}</Text>
+                <Text style={styles.muted}>{loan.borrowerSiteName}</Text>
+                <Text style={styles.muted}>
+                  {loan.status === "in_transit" ? "On the way to them" : `Lent ${loan.ageDays <= 0 ? "today" : `${loan.ageDays} day${loan.ageDays === 1 ? "" : "s"} ago`}`}
+                  {loan.owed !== loan.qty ? ` · ${loan.owed} of ${loan.qty} still out` : ""}
+                  {loan.comingBack ? ` · ${loan.comingBack} on its way back` : ""}
                 </Text>
               </View>
-              <Button
-                fullWidth={false}
-                variant="outline"
-                onPress={async () => {
-                  try {
-                    await receiveStockTransfer(token!, transfer.id);
-                    reload();
-                  } catch (error) {
-                    appAlert("Could not confirm", errorMessage(error));
-                  }
-                }}
-              >
-                Got it
-              </Button>
+            </Card>
+          ))}
+          <SectionTitle icon="arrow-undo-outline" title="Stock we owe back" count={loans.weOwe.length} />
+          {loans.weOwe.length === 0 && <EmptyState icon="checkmark-circle-outline" text="You do not owe any other site stock." />}
+          {loans.weOwe.map((loan) => (
+            <Card key={loan.transferId} style={styles.row}>
+              <View style={[styles.qtyBubble, styles.qtyBubbleInfo]}>
+                <Text style={[styles.qtyBubbleValue, styles.qtyBubbleValueInfo]}>{loan.owed}</Text>
+                <Text style={[styles.qtyBubbleUnit, styles.qtyBubbleValueInfo]} numberOfLines={1}>{loan.itemUnit ?? ""}</Text>
+              </View>
+              <View style={styles.rowText}>
+                <Text style={styles.rowTitle}>{loan.itemName}</Text>
+                <Text style={styles.muted}>from {loan.lenderSiteName}</Text>
+                {loan.status === "in_transit" && <Text style={styles.muted}>Not received yet. Tap Got it above first.</Text>}
+                {loan.comingBack ? <Text style={styles.muted}>{loan.comingBack} on its way back</Text> : null}
+              </View>
+              {loan.status === "received" && loan.outstanding > 0 && (
+                <Button
+                  fullWidth={false}
+                  variant="outline"
+                  onPress={() => {
+                    setReturnQty(String(loan.outstanding));
+                    setReturning(loan);
+                  }}
+                >
+                  Send back
+                </Button>
+              )}
             </Card>
           ))}
         </View>
       )}
+
+      <Modal visible={returning !== null} transparent animationType="fade" onRequestClose={() => setReturning(null)}>
+        <Pressable style={styles.modalBackdrop} onPress={() => setReturning(null)}>
+          <Pressable style={styles.modalSheet} onPress={() => undefined}>
+            <Text style={styles.heading}>Send {returning?.itemName} back</Text>
+            <Text style={styles.muted}>
+              To {returning?.lenderSiteName}. {returning?.outstanding} left to send back. They confirm it when it arrives.
+            </Text>
+            <TextInput
+              style={styles.modalInput}
+              value={returnQty}
+              onChangeText={setReturnQty}
+              keyboardType="number-pad"
+              autoFocus
+              accessibilityLabel="How many are you sending back"
+            />
+            <View style={styles.modalButtons}>
+              <Button fullWidth={false} variant="outline" onPress={() => setReturning(null)}>
+                Cancel
+              </Button>
+              <Button
+                fullWidth={false}
+                onPress={async () => {
+                  const loan = returning;
+                  const qty = Number(returnQty);
+                  if (!loan || !token) return;
+                  if (!Number.isInteger(qty) || qty < 1 || qty > loan.outstanding) {
+                    appAlert("Check the number", `Enter a whole number from 1 to ${loan.outstanding}.`);
+                    return;
+                  }
+                  try {
+                    await returnStockLoan(token, loan.transferId, qty);
+                    setReturning(null);
+                    appAlert("On its way back", "They confirm it when it arrives.", undefined, "success");
+                    reload();
+                  } catch (error) {
+                    appAlert("Could not send it back", errorMessage(error));
+                  }
+                }}
+              >
+                Send back
+              </Button>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {mode === "overview" && <StockOverviewView siteId={siteId} />}
 
       {mode === "report" && <HandoverReportView siteId={siteId} />}
 
@@ -973,6 +1102,10 @@ const styles = themedStyles(() =>
     hintPillText: { fontSize: typography.small, fontWeight: "600", color: colors.success },
     hintPillTextLow: { color: colors.destructive },
     lowNote: { fontSize: typography.small, color: colors.destructive },
+    modalBackdrop: { flex: 1, backgroundColor: colors.overlay, justifyContent: "flex-start", padding: spacing.xl, paddingTop: spacing.xxl * 2 },
+    modalSheet: { backgroundColor: colors.card, borderRadius: radius.lg, padding: spacing.lg, gap: spacing.sm },
+    modalInput: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, color: colors.foreground, backgroundColor: colors.card, fontSize: 16, minHeight: 44 },
+    modalButtons: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.xs },
     qtyBubble: { width: 56, height: 56, borderRadius: radius.xl, alignItems: "center", justifyContent: "center", backgroundColor: colors.accent },
     qtyBubbleInfo: { backgroundColor: colors.infoSoft },
     qtyBubbleValue: { fontSize: typography.h1, fontWeight: "700", color: colors.primary },
