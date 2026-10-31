@@ -249,7 +249,7 @@ export function HandoverReportView({ siteId }: { siteId: string }) {
 
       {report.hotspots.length > 0 && (
         <>
-          <Text style={styles.sectionTitle}>Items that keep turning up</Text>
+          <Text style={styles.sectionTitle}>Products that keep turning up</Text>
           {report.hotspots.slice(0, 8).map((h) => (
             <Card key={`${h.itemName}-${h.locationName}`} style={styles.listCard}>
               <Text style={styles.rowTitle}>{h.itemName}</Text>

@@ -630,7 +630,8 @@ export interface StockTransfer {
   siteId: string;
   itemId: string;
   fromLocationId: string;
-  toLocationId: string;
+  /** Empty for stock sent to a site without naming a place. */
+  toLocationId?: string | null;
   qty: number;
   status: "in_transit" | "received";
   /** The site it is going to; differs from siteId for a transfer between sites. */
@@ -686,6 +687,17 @@ export interface StockOverview {
 }
 
 /** One loan of stock between two sites, with where it stands. */
+/** Who stock is bought from; managed on the web, picked from when receiving. */
+export interface StockSupplier {
+  id: string;
+  name: string;
+  contactPerson?: string | null;
+  email?: string | null;
+  phone?: string | null;
+}
+
+export type StockQualityIssue = "damaged" | "expired" | "short_dated" | "wrong_quantity" | "other";
+
 export interface StockLoan {
   transferId: string;
   itemName?: string | null;

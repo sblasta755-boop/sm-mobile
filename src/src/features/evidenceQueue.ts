@@ -35,7 +35,13 @@ export function loadQueue(): Promise<void> {
       try {
         const raw = await AsyncStorage.getItem(STORAGE_KEY);
         const saved = raw ? (JSON.parse(raw) as QueuedPhoto[]) : [];
-        items = saved.map((p) => (p.status === "uploading" ? { ...p, status: "queued" as const } : p));
+        // Photos refused only because the access token had expired were never
+        // the photo's fault: put them back in line instead of making a retake.
+        items = saved.map((p) =>
+          p.status === "uploading" || (p.status === "rejected" && p.error === "Invalid authentication token")
+            ? { ...p, status: "queued" as const, error: undefined }
+            : p,
+        );
       } catch {
         items = [];
       }

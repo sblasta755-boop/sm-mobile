@@ -26,6 +26,8 @@ import type {
   StockRestockTask,
   StockTransfer,
   StockLoan,
+  StockQualityIssue,
+  StockSupplier,
   StockOverview,
   SubscriptionState,
   Task,
@@ -190,6 +192,26 @@ export function setSessionHandlers(handlers: typeof sessionHandlers) {
 
 let refreshInFlight: Promise<string | null> | null = null;
 
+// The session a refresh just produced, until the provider has re-rendered
+// with it. The refresh token rotates on every use, so a second refresh (or a
+// queued upload) started before that re-render must not reuse the old pair:
+// the backend reads a reused refresh token as theft and revokes the family.
+let rotation: { oldRefreshToken: string; session: BackendSession } | null = null;
+
+function currentRefreshToken(): string | null {
+  const stored = sessionHandlers?.getRefreshToken() ?? null;
+  if (rotation && stored === rotation.oldRefreshToken) return rotation.session.refreshToken;
+  return stored;
+}
+
+/** The newest access token for callers holding one captured earlier (the
+ * photo uploader), which may have been rotated since. */
+export function freshestAccessToken(held: string): string {
+  const stored = sessionHandlers?.getRefreshToken() ?? null;
+  if (rotation && stored === rotation.oldRefreshToken) return rotation.session.accessToken;
+  return held;
+}
+
 /** Attempts one refresh, de-duplicating concurrent callers so a burst of
  * 401s (several screens' requests failing around the same moment) only
  * triggers a single /auth/refresh call. Returns the new access token, or
@@ -198,10 +220,12 @@ let refreshInFlight: Promise<string | null> | null = null;
 async function refreshAccessToken(): Promise<string | null> {
   if (refreshInFlight) return refreshInFlight;
   refreshInFlight = (async () => {
-    const refreshToken = sessionHandlers?.getRefreshToken();
-    if (!refreshToken) return null;
+    const stored = sessionHandlers?.getRefreshToken() ?? null;
+    const refreshToken = currentRefreshToken();
+    if (!refreshToken || !stored) return null;
     try {
       const session = await refreshSession(refreshToken);
+      rotation = { oldRefreshToken: stored, session };
       sessionHandlers?.onRefreshed(session);
       return session.accessToken;
     } catch {
@@ -259,10 +283,12 @@ export async function request<T>(
 // web client's ApiError/extractError - keep both in sync.
 export class ApiError extends Error {
   detail?: Record<string, unknown>;
-  constructor(message: string, detail?: Record<string, unknown>) {
+  status?: number;
+  constructor(message: string, detail?: Record<string, unknown>, status?: number) {
     super(message);
     this.name = "ApiError";
     this.detail = detail;
+    this.status = status;
   }
 }
 
@@ -317,7 +343,7 @@ async function throwForStatus(response: Response): Promise<never> {
     sessionHandlers?.onSubscriptionBlocked?.(code, detail);
     throw new SubscriptionError(message, code, detail);
   }
-  throw new ApiError(message, detail);
+  throw new ApiError(message, detail, response.status);
 }
 
 // ---- Tasks ----
@@ -806,16 +832,25 @@ export function toUserRecord(user: DemoUser, overrides: Record<string, unknown> 
 // ---- Uploads ----
 
 export async function uploadImage(accessToken: string, uri: string, filename: string, mimeType = "image/jpeg"): Promise<string> {
-  const form = new FormData();
-  // React Native's fetch/FormData accepts { uri, name, type } file parts.
-  form.append("file", { uri, name: filename, type: mimeType } as unknown as Blob);
-  const response = await fetch(`${API_BASE_URL}/upload/images`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${accessToken}` },
-    body: form,
-  });
-  // FormData body, so this cannot go through request() (which forces
-  // application/json). /upload/images is a core module, so a 402 here
+  const send = (token: string) => {
+    // A FormData body is consumed by the send, so each attempt builds its own.
+    const form = new FormData();
+    // React Native's fetch/FormData accepts { uri, name, type } file parts.
+    form.append("file", { uri, name: filename, type: mimeType } as unknown as Blob);
+    return fetch(`${API_BASE_URL}/upload/images`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: form,
+    });
+  };
+  let response = await send(freshestAccessToken(accessToken));
+  // Cannot go through request() (it forces application/json), so it refreshes
+  // an expired access token and retries once the same way request() does.
+  if (response.status === 401) {
+    const renewed = await refreshAccessToken();
+    if (renewed) response = await send(renewed);
+  }
+  // /upload/images is a core module, so a 402 here
   // means the subscription itself is inactive rather than a locked
   // feature - either way it must not surface as "Backend 402".
   if (!response.ok) {
@@ -1671,12 +1706,36 @@ export const receiveStockDelivery = (
   accessToken: string,
   payload: {
     locationId: string;
-    supplier: string;
+    supplierId?: string;
+    supplier?: string;
     deliveryRef?: string;
     /** unit: "base", "pack", or the name of one of the item's units. */
-    lines: { itemId: string; qty: number; unit: string; ordered?: number }[];
+    lines: {
+      itemId: string;
+      qty: number;
+      unit: string;
+      ordered?: number;
+      quality?: StockQualityIssue;
+      /** The wrong product, refused: nothing is booked in. */
+      rejected?: boolean;
+    }[];
   },
 ) => stockRequest<StockMovement[]>(accessToken, "/receive", payload);
+
+/** Stock that is not a paid delivery: a shop returning or giving stock, a rebate, or from the owner.
+ * Lands in the site's main store. */
+export const receiveStockFromShop = (
+  accessToken: string,
+  payload: {
+    siteId: string;
+    source: "shop" | "rebate" | "owner";
+    fromSiteId?: string;
+    note?: string;
+    lines: { itemId: string; qty: number; unit: string }[];
+  },
+) => stockRequest<StockMovement[]>(accessToken, "/receive-from-shop", payload);
+
+export const listStockSuppliers = (accessToken: string) => stockRequest<StockSupplier[]>(accessToken, "/suppliers");
 
 export const receiveStockTransfer = (accessToken: string, id: string) =>
   stockRequest<StockTransfer>(accessToken, `/transfers/${id}/receive`, {});

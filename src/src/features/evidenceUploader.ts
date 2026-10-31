@@ -4,6 +4,7 @@ import { useSmartClean } from "@/features/store";
 import {
   addTaskEvidence,
   ApiError,
+  freshestAccessToken,
   clockIn,
   requestOvertime,
   clockOut,
@@ -45,7 +46,10 @@ interface Context {
 let context: Context | null = null;
 let running: Promise<void> | null = null;
 
-const isServerAnswer = (error: unknown) => error instanceof ApiError;
+// A 401 that survived the refresh-and-retry is about the session, not the
+// photo or change: leave it queued to go once the session is good again.
+const isAuthFailure = (error: unknown) => error instanceof ApiError && error.status === 401;
+const isServerAnswer = (error: unknown) => error instanceof ApiError && !isAuthFailure(error);
 
 // A reply that means "this was already done" (a retry after a response was
 // lost): the change is in, so it counts as sent.
@@ -296,7 +300,10 @@ export function useEvidenceUploader() {
       return;
     }
     context = {
-      token,
+      // Read at use time: a refresh mid-pass rotates the token before React re-renders.
+      get token() {
+        return freshestAccessToken(token);
+      },
       userId,
       online: () => context !== null && onlineRef.current,
       onTask: (taskId, task) => dispatch({ type: "UPDATE_TASK", taskId, patch: task }),

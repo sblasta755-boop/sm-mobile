@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Modal, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Screen } from "@/components/Screen";
 import { Card } from "@/components/Card";
@@ -32,7 +32,9 @@ import {
   listStockTransfersInTransit,
   returnStockLoan,
   logStockWaste,
+  listStockSuppliers,
   receiveStockDelivery,
+  receiveStockFromShop,
   receiveStockTransfer,
 } from "@/api/client";
 import {
@@ -44,6 +46,8 @@ import {
   type StockLocation,
   type StockRestockTask,
   type StockLoan,
+  type StockQualityIssue,
+  type StockSupplier,
   type StockTransfer,
 } from "@/types/smartclean";
 import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
@@ -306,8 +310,10 @@ export default function StockScreen() {
                 <Text style={styles.muted}>
                   {transfer.fromLocationName ?? locationName(transfer.fromLocationId)}
                   {betweenSites && transfer.fromSiteName ? ` (${transfer.fromSiteName})` : ""} →{" "}
-                  {transfer.toLocationName ?? locationName(transfer.toLocationId)}
-                  {betweenSites && transfer.toSiteName ? ` (${transfer.toSiteName})` : ""}
+                  {transfer.toLocationId
+                    ? (transfer.toLocationName ?? locationName(transfer.toLocationId))
+                    : (transfer.toSiteName ?? "another site")}
+                  {transfer.toLocationId && betweenSites && transfer.toSiteName ? ` (${transfer.toSiteName})` : ""}
                 </Text>
                 {transfer.loan && <Text style={styles.muted}>A loan: expected back</Text>}
               </View>
@@ -438,7 +444,16 @@ export default function StockScreen() {
 
       {mode === "count" && <CountView siteId={siteId} locations={locations} items={items} canApprove={access.manage} canSubmit={access.keep} onDone={reload} />}
 
-      {mode === "receive" && <ReceiveForm locations={locations} items={items} conversions={conversions} onDone={reload} />}
+      {mode === "receive" && (
+        <ReceiveView
+          siteId={siteId}
+          shops={sites.filter((s) => s.id !== siteId)}
+          locations={locations}
+          items={items}
+          conversions={conversions}
+          onDone={reload}
+        />
+      )}
     </Screen>
   );
 }
@@ -703,7 +718,7 @@ function CountView({
           icon="clipboard-outline"
           text={
             canSubmit
-              ? "Nothing to count yet. Items are picked from stock held in a store or cart at this site. Record a delivery on the Receive tab, then open Count again."
+              ? "Nothing to count yet. Products are picked from stock held in a store or cart at this site. Record a delivery on the Receive tab, then open Count again."
               : "No lines have been assigned to you yet. Ask your supervisor to give you some, then open Count again."
           }
         />
@@ -850,7 +865,7 @@ function IssueForm({
   const submit = async () => {
     const quantity = Number(qty);
     if (!state.accessToken || !location || !item || quantity < 1) {
-      appAlert("Missing details", "Pick the location, item and quantity.");
+      appAlert("Missing details", "Pick the location, product and quantity.");
       return;
     }
     let referenceId: string | undefined;
@@ -919,7 +934,7 @@ function IssueForm({
         <SelectField label="Location" value={locationName} options={choices.map((l) => l.name)} onChange={setLocationName} />
       </FormSection>
       <FormSection step={2} title="What and how many">
-        <SelectField label="Item" value={itemName} options={items.map((i) => i.name)} onChange={setItemName} />
+        <SelectField label="Product" value={itemName} options={items.map((i) => i.name)} onChange={setItemName} />
         <QtyStepper
           label="Quantity"
           value={qty}
@@ -957,8 +972,167 @@ function IssueForm({
   );
 }
 
+/** Receiving starts with an Add button: stock comes either from a supplier (a delivery) or from
+ * another shop (returned or extra stock, rebates, the owner's own stock). */
+function ReceiveView({
+  siteId,
+  shops,
+  locations,
+  items,
+  conversions,
+  onDone,
+}: {
+  siteId: string;
+  shops: { id: string; name: string }[];
+  locations: StockLocation[];
+  items: { id: string; name: string; unit: string }[];
+  conversions: StockConversion[];
+  onDone: () => void;
+}) {
+  const [source, setSource] = useState<"supplier" | "shop" | null>(null);
+  const [choosing, setChoosing] = useState(false);
+  const done = () => {
+    setSource(null);
+    onDone();
+  };
+  return (
+    <View style={styles.stack}>
+      {!choosing && (
+        <Button
+          variant={source ? "outline" : undefined}
+          onPress={() => setChoosing(true)}
+          icon={<Ionicons name="add" size={18} color={source ? colors.primary : colors.primaryForeground} />}
+        >
+          {source ? "Change" : "Add"}
+        </Button>
+      )}
+      {choosing && (
+        <Card style={styles.card}>
+          <Text style={styles.label}>Where is the stock coming from?</Text>
+          <View style={styles.stack}>
+            <Button
+              variant="outline"
+              onPress={() => {
+                setSource("supplier");
+                setChoosing(false);
+              }}
+              icon={<Ionicons name="car-outline" size={18} color={colors.primary} />}
+            >
+              From a supplier
+            </Button>
+            <Button
+              variant="outline"
+              onPress={() => {
+                setSource("shop");
+                setChoosing(false);
+              }}
+              icon={<Ionicons name="storefront-outline" size={18} color={colors.primary} />}
+            >
+              From another shop
+            </Button>
+            <Button variant="outline" onPress={() => setChoosing(false)}>
+              Cancel
+            </Button>
+          </View>
+        </Card>
+      )}
+      {source === "supplier" && <ReceiveForm locations={locations} items={items} conversions={conversions} onDone={done} />}
+      {source === "shop" && <ShopReceiveForm siteId={siteId} shops={shops} items={items} conversions={conversions} onDone={done} />}
+    </View>
+  );
+}
+
+const SHOP_REBATE = "Rebate";
+const SHOP_OWNER = "Owner";
+
+/** Stock from another shop, a rebate, or the owner: goes into the main store and is never a paid
+ * delivery. Whatever a shop gives beyond what it owes us is kept as stock we owe back. */
+function ShopReceiveForm({
+  siteId,
+  shops,
+  items,
+  conversions,
+  onDone,
+}: {
+  siteId: string;
+  shops: { id: string; name: string }[];
+  items: { id: string; name: string; unit: string }[];
+  conversions: StockConversion[];
+  onDone: () => void;
+}) {
+  const { state } = useSmartClean();
+  const [sourceName, setSourceName] = useState("");
+  const [note, setNote] = useState("");
+  const [itemName, setItemName] = useState("");
+  const [qty, setQty] = useState("");
+  const [unitLabel, setUnitLabel] = useState("");
+
+  const item = items.find((i) => i.name === itemName);
+  const unitOptions = item
+    ? [item.unit, ...conversions.filter((c) => c.itemId === item.id).map((c) => `${c.unit} of ${c.baseQty}`)]
+    : [];
+  const chosenUnit = unitOptions.includes(unitLabel) ? unitLabel : (unitOptions[0] ?? "");
+  const unitName = chosenUnit === item?.unit ? "base" : chosenUnit.replace(/ of \d+$/, "");
+
+  const submit = async () => {
+    const shop = shops.find((s) => s.name === sourceName);
+    if (!state.accessToken || !sourceName || !item || Number(qty) < 1) {
+      appAlert("Missing details", "Choose the shop or source, the product and the quantity received.");
+      return;
+    }
+    try {
+      await receiveStockFromShop(state.accessToken, {
+        siteId,
+        source: sourceName === SHOP_REBATE ? "rebate" : sourceName === SHOP_OWNER ? "owner" : "shop",
+        ...(shop ? { fromSiteId: shop.id } : {}),
+        note: note.trim() || undefined,
+        lines: [{ itemId: item.id, qty: Number(qty), unit: unitName }],
+      });
+      appAlert("Received", `${item.name} added to the main store.`, undefined, "success");
+      setQty("");
+      setItemName("");
+      onDone();
+    } catch (error) {
+      appAlert("Could not receive", errorMessage(error));
+    }
+  };
+
+  return (
+    <View style={styles.stack}>
+      <FormSection step={1} title="Where it came from">
+        <Text style={styles.muted}>
+          A shop returning stock we lent, or giving us extra, a rebate, or stock the owner brings in. It goes into the main store and is
+          never a paid delivery.
+        </Text>
+        <SelectField label="Shop / source" value={sourceName} options={[...shops.map((s) => s.name), SHOP_REBATE, SHOP_OWNER]} onChange={setSourceName} />
+        <View style={styles.field}>
+          <Text style={styles.label}>Note (optional)</Text>
+          <TextInput style={styles.input} value={note} onChangeText={setNote} placeholderTextColor={colors.mutedForeground} />
+        </View>
+      </FormSection>
+      <FormSection step={2} title="What arrived">
+        <SelectField label="Product" value={itemName} options={items.map((i) => i.name)} onChange={setItemName} />
+        {unitOptions.length > 1 && <SelectField label="Counted in" value={chosenUnit} options={unitOptions} onChange={setUnitLabel} />}
+        <QtyStepper label="Received" value={qty} onChange={setQty} />
+      </FormSection>
+      <Button onPress={submit} icon={<Ionicons name="download" size={18} color={colors.primaryForeground} />}>
+        Confirm received
+      </Button>
+    </View>
+  );
+}
+
 /** A delivery into the main store, one line at a time. Pack counts convert to
  * the base unit on the server. */
+const QUALITY_ISSUES: { label: string; value?: StockQualityIssue }[] = [
+  { label: "No quality issue" },
+  { label: "Damaged", value: "damaged" },
+  { label: "Expired", value: "expired" },
+  { label: "Short dated", value: "short_dated" },
+  { label: "Wrong quantity", value: "wrong_quantity" },
+  { label: "Other issue", value: "other" },
+];
+
 function ReceiveForm({
   locations,
   items,
@@ -973,8 +1147,11 @@ function ReceiveForm({
   const { state } = useSmartClean();
   const stores = locations.filter((l) => l.type === "store");
   const [storeName, setStoreName] = useState("");
-  const [supplier, setSupplier] = useState("");
+  const [suppliers, setSuppliers] = useState<StockSupplier[]>([]);
+  const [supplierName, setSupplierName] = useState("");
   const [reference, setReference] = useState("");
+  const [quality, setQuality] = useState("No quality issue");
+  const [rejected, setRejected] = useState(false);
   const [itemName, setItemName] = useState("");
   const [qty, setQty] = useState("");
   const [ordered, setOrdered] = useState("");
@@ -983,8 +1160,16 @@ function ReceiveForm({
   useEffect(() => {
     if (!storeName && stores[0]) setStoreName(stores[0].name);
   }, [stores, storeName]);
+  useEffect(() => {
+    if (!state.accessToken) return;
+    listStockSuppliers(state.accessToken)
+      .then(setSuppliers)
+      .catch(() => setSuppliers([]));
+  }, [state.accessToken]);
 
   const store = stores.find((l) => l.name === storeName);
+  const supplier = suppliers.find((s) => s.name === supplierName);
+  const qualityIssue = QUALITY_ISSUES.find((q) => q.label === quality)?.value;
   const item = items.find((i) => i.name === itemName);
   // The item's own unit first, then every unit it can be received in ("case of 12").
   const unitOptions = item
@@ -994,20 +1179,31 @@ function ReceiveForm({
   const unitName = chosenUnit === item?.unit ? "base" : chosenUnit.replace(/ of \d+$/, "");
 
   const submit = async () => {
-    if (!state.accessToken || !store || !item || !supplier.trim() || Number(qty) < 1) {
-      appAlert("Missing details", "Add the supplier, the item and the quantity received.");
+    if (!state.accessToken || !store || !item || !supplier || (!rejected && Number(qty) < 1)) {
+      appAlert("Missing details", "Pick the supplier and the product, and add the quantity received.");
       return;
     }
     try {
       await receiveStockDelivery(state.accessToken, {
         locationId: store.id,
-        supplier: supplier.trim(),
+        supplierId: supplier.id,
         deliveryRef: reference.trim() || undefined,
-        lines: [{ itemId: item.id, qty: Number(qty), unit: unitName, ...(ordered ? { ordered: Number(ordered) } : {}) }],
+        lines: [
+          {
+            itemId: item.id,
+            qty: rejected ? 0 : Number(qty),
+            unit: unitName,
+            ...(ordered ? { ordered: Number(ordered) } : {}),
+            ...(qualityIssue ? { quality: qualityIssue } : {}),
+            ...(rejected ? { rejected: true } : {}),
+          },
+        ],
       });
-      appAlert("Received", `${item.name} added to ${store.name}.`, undefined, "success");
+      appAlert(rejected ? "Refused" : "Received", rejected ? `${item.name} was refused and nothing was booked in.` : `${item.name} added to ${store.name}.`, undefined, "success");
       setQty("");
       setOrdered("");
+      setRejected(false);
+      setQuality("No quality issue");
       onDone();
     } catch (error) {
       appAlert("Could not receive", errorMessage(error));
@@ -1018,20 +1214,23 @@ function ReceiveForm({
     <View style={styles.stack}>
       <FormSection step={1} title="The delivery">
         <SelectField label="Into store" value={storeName} options={stores.map((l) => l.name)} onChange={setStoreName} />
+        <SelectField label="Supplier" value={supplierName} options={suppliers.map((s) => s.name)} onChange={setSupplierName} />
+        {suppliers.length === 0 && <Text style={styles.muted}>No suppliers yet. A manager adds them on the web app.</Text>}
         <View style={styles.field}>
-          <Text style={styles.label}>Supplier</Text>
-          <TextInput style={styles.input} value={supplier} onChangeText={setSupplier} placeholder="Who delivered it" placeholderTextColor={colors.mutedForeground} />
-        </View>
-        <View style={styles.field}>
-          <Text style={styles.label}>Delivery note number (optional)</Text>
+          <Text style={styles.label}>Invoice / reference (optional)</Text>
           <TextInput style={styles.input} value={reference} onChangeText={setReference} placeholderTextColor={colors.mutedForeground} />
         </View>
       </FormSection>
       <FormSection step={2} title="What arrived">
-        <SelectField label="Item" value={itemName} options={items.map((i) => i.name)} onChange={setItemName} />
+        <SelectField label="Product" value={itemName} options={items.map((i) => i.name)} onChange={setItemName} />
         {unitOptions.length > 1 && <SelectField label="Counted in" value={chosenUnit} options={unitOptions} onChange={setUnitLabel} />}
-        <QtyStepper label="Received" value={qty} onChange={setQty} />
-        <NumberField label="Ordered (only if different)" value={ordered} onChange={setOrdered} />
+        <NumberField label="Expected (from the invoice)" value={ordered} onChange={setOrdered} />
+        {!rejected && <QtyStepper label="Received" value={qty} onChange={setQty} />}
+        {!rejected && <SelectField label="Quality" value={quality} options={QUALITY_ISSUES.map((q) => q.label)} onChange={setQuality} />}
+        <View style={styles.rowBetween}>
+          <Text style={styles.label}>Reject wrong product</Text>
+          <Switch value={rejected} onValueChange={setRejected} />
+        </View>
       </FormSection>
       <Button onPress={submit} icon={<Ionicons name="download" size={18} color={colors.primaryForeground} />}>
         Receive delivery
@@ -1115,6 +1314,7 @@ const styles = themedStyles(() =>
     countDone: { borderColor: colors.success },
     heading: { fontSize: typography.h2, fontWeight: "600", color: colors.foreground },
     muted: { fontSize: typography.small, color: colors.mutedForeground },
+    rowBetween: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
     row: { flexDirection: "row", alignItems: "center", gap: spacing.md, padding: spacing.md },
     rowText: { flex: 1 },
     countCard: { padding: spacing.lg, gap: spacing.xs },
