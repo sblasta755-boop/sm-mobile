@@ -696,6 +696,35 @@ export interface StockSupplier {
   phone?: string | null;
 }
 
+/** One line read off an invoice, matched (where it could be) to one of this site's products. */
+export interface InvoiceDraftLine {
+  code: string | null;
+  description: string;
+  qty: number | null;
+  packSize: number | null;
+  /** Units received in our own unit (cases x pack size). */
+  units: number | null;
+  unitPrice: number | null;
+  lineTotal: number | null;
+  flags: string[];
+  itemId: string | null;
+  itemName: string | null;
+  match: "learned" | "suggested" | "none";
+}
+
+/** What reading an invoice photo or PDF found. A person confirms it; nothing is booked. */
+export interface InvoiceDraft {
+  docType: "invoice" | "credit_note" | "unknown";
+  invoiceNumber: string | null;
+  supplier: { id: string; name: string } | null;
+  lines: InvoiceDraftLine[];
+  skipped: { description: string }[];
+  totals: { sumOfLines: number; matches: boolean | null };
+  warnings: string[];
+  /** The stored original, to attach to the receipt. */
+  filePath: string;
+}
+
 export type StockQualityIssue = "damaged" | "expired" | "short_dated" | "wrong_quantity" | "other";
 
 export interface StockLoan {
@@ -850,6 +879,8 @@ export interface StockAccess {
   issue: boolean;
   keep: boolean;
   manage: boolean;
+  /** False while the platform operator has invoice scanning switched off. */
+  invoiceScan?: boolean;
 }
 
 export const STOCK_WASTE_REASONS = ["Damaged", "Expired", "Spilled", "Lost", "Contaminated", "Other"] as const;

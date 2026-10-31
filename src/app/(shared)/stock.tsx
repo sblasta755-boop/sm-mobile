@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import * as ImagePicker from "expo-image-picker";
 import { Modal, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Screen } from "@/components/Screen";
@@ -34,6 +35,7 @@ import {
   logStockWaste,
   listStockSuppliers,
   receiveStockDelivery,
+  scanStockInvoice,
   receiveStockFromShop,
   receiveStockTransfer,
 } from "@/api/client";
@@ -45,6 +47,7 @@ import {
   type StockLevel,
   type StockLocation,
   type StockRestockTask,
+  type InvoiceDraft,
   type StockLoan,
   type StockQualityIssue,
   type StockSupplier,
@@ -451,6 +454,7 @@ export default function StockScreen() {
           locations={locations}
           items={items}
           conversions={conversions}
+          scanEnabled={access.invoiceScan !== false}
           onDone={reload}
         />
       )}
@@ -834,7 +838,7 @@ function IssueForm({
   const [locationName, setLocationName] = useState("");
   const [itemName, setItemName] = useState("");
   const [qty, setQty] = useState("1");
-  const [refType, setRefType] = useState<"task" | "round" | "location">("task");
+  const [refType, setRefType] = useState<"task" | "round" | "location">("location");
   const [refName, setRefName] = useState("");
   const [reason, setReason] = useState<string>(STOCK_WASTE_REASONS[0]);
 
@@ -980,6 +984,7 @@ function ReceiveView({
   locations,
   items,
   conversions,
+  scanEnabled,
   onDone,
 }: {
   siteId: string;
@@ -987,6 +992,7 @@ function ReceiveView({
   locations: StockLocation[];
   items: { id: string; name: string; unit: string }[];
   conversions: StockConversion[];
+  scanEnabled: boolean;
   onDone: () => void;
 }) {
   const [source, setSource] = useState<"supplier" | "shop" | null>(null);
@@ -1036,7 +1042,7 @@ function ReceiveView({
           </View>
         </Card>
       )}
-      {source === "supplier" && <ReceiveForm locations={locations} items={items} conversions={conversions} onDone={done} />}
+      {source === "supplier" && <ReceiveForm siteId={siteId} locations={locations} items={items} conversions={conversions} scanEnabled={scanEnabled} onDone={done} />}
       {source === "shop" && <ShopReceiveForm siteId={siteId} shops={shops} items={items} conversions={conversions} onDone={done} />}
     </View>
   );
@@ -1133,19 +1139,46 @@ const QUALITY_ISSUES: { label: string; value?: StockQualityIssue }[] = [
   { label: "Other issue", value: "other" },
 ];
 
+type ScanLine = {
+  key: string;
+  itemName: string;
+  expected: string;
+  received: string;
+  description: string;
+  code: string | null;
+  packSize: number | null;
+  match: "learned" | "suggested" | "none";
+  flags: string[];
+};
+
+const SCAN_FLAG_TEXT: Record<string, string> = {
+  quantity_unclear: "Quantity unclear: check it on the invoice",
+  amounts_do_not_agree: "The amounts on this line do not agree: check it",
+  pack_size_unclear: "Pack size unclear: check how many are in a case",
+  one_amount_only: "Only one amount was read for this line",
+};
+
 function ReceiveForm({
+  siteId,
   locations,
   items,
   conversions,
+  scanEnabled,
   onDone,
 }: {
+  siteId: string;
   locations: StockLocation[];
   items: { id: string; name: string; unit: string }[];
   conversions: StockConversion[];
+  scanEnabled: boolean;
   onDone: () => void;
 }) {
   const { state } = useSmartClean();
   const stores = locations.filter((l) => l.type === "store");
+  // Lines read from a scanned invoice, to be checked against the delivery.
+  const [draft, setDraft] = useState<InvoiceDraft | null>(null);
+  const [scanLines, setScanLines] = useState<ScanLine[]>([]);
+  const [scanning, setScanning] = useState(false);
   const [storeName, setStoreName] = useState("");
   const [suppliers, setSuppliers] = useState<StockSupplier[]>([]);
   const [supplierName, setSupplierName] = useState("");
@@ -1177,6 +1210,78 @@ function ReceiveForm({
     : [];
   const chosenUnit = unitOptions.includes(unitLabel) ? unitLabel : (unitOptions[0] ?? "");
   const unitName = chosenUnit === item?.unit ? "base" : chosenUnit.replace(/ of \d+$/, "");
+
+  const scan = async () => {
+    if (!state.accessToken) return;
+    const permission = await ImagePicker.requestCameraPermissionsAsync();
+    if (!permission.granted) {
+      appAlert("Camera needed", "Allow the camera to photograph the invoice.");
+      return;
+    }
+    const result = await ImagePicker.launchCameraAsync({ mediaTypes: ["images"], quality: 0.9 });
+    const photo = result.canceled ? null : result.assets[0];
+    if (!photo) return;
+    setScanning(true);
+    try {
+      const read = await scanStockInvoice(state.accessToken, siteId, photo.uri, photo.fileName ?? "invoice.jpg", photo.mimeType ?? "image/jpeg");
+      setDraft(read);
+      if (read.supplier) setSupplierName(read.supplier.name);
+      if (read.invoiceNumber) setReference(read.invoiceNumber);
+      setScanLines(
+        read.lines.map((l, i) => ({
+          key: `inv-${i}`,
+          itemName: l.itemName ?? "",
+          expected: l.units == null ? "" : String(l.units),
+          received: "",
+          description: l.description,
+          code: l.code,
+          packSize: l.packSize,
+          match: l.match,
+          flags: l.flags,
+        })),
+      );
+    } catch (error) {
+      appAlert("Could not read the invoice", errorMessage(error));
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  const patchScan = (key: string, change: Partial<ScanLine>) => setScanLines((current) => current.map((l) => (l.key === key ? { ...l, ...change } : l)));
+
+  const submitScanned = async () => {
+    const ready = scanLines.filter((l) => l.itemName && Number(l.received) > 0);
+    if (!state.accessToken || !store || !supplier || ready.length === 0) {
+      appAlert("Missing details", "Pick the supplier and fill in at least one received line.");
+      return;
+    }
+    try {
+      await receiveStockDelivery(state.accessToken, {
+        locationId: store.id,
+        supplierId: supplier.id,
+        deliveryRef: reference.trim() || undefined,
+        files: draft?.filePath ? [draft.filePath] : undefined,
+        lines: ready.map((l) => {
+          const found = items.find((i) => i.name === l.itemName)!;
+          return {
+            itemId: found.id,
+            qty: Number(l.received),
+            unit: "base",
+            ...(l.expected ? { ordered: Number(l.expected) } : {}),
+            ...(l.code ? { supplierCode: l.code } : {}),
+            invoiceDescription: l.description,
+            ...(l.packSize ? { packSize: l.packSize } : {}),
+          };
+        }),
+      });
+      appAlert("Received", `${ready.length} line${ready.length === 1 ? "" : "s"} added to ${store.name}.`, undefined, "success");
+      setDraft(null);
+      setScanLines([]);
+      onDone();
+    } catch (error) {
+      appAlert("Could not receive", errorMessage(error));
+    }
+  };
 
   const submit = async () => {
     if (!state.accessToken || !store || !item || !supplier || (!rejected && Number(qty) < 1)) {
@@ -1216,11 +1321,62 @@ function ReceiveForm({
         <SelectField label="Into store" value={storeName} options={stores.map((l) => l.name)} onChange={setStoreName} />
         <SelectField label="Supplier" value={supplierName} options={suppliers.map((s) => s.name)} onChange={setSupplierName} />
         {suppliers.length === 0 && <Text style={styles.muted}>No suppliers yet. A manager adds them on the web app.</Text>}
+        {scanEnabled && (
+        <Button variant="outline" loading={scanning} onPress={scan} icon={<Ionicons name="scan-outline" size={18} color={colors.primary} />}>
+          Scan invoice
+        </Button>
+        )}
+        {scanning && <Text style={styles.muted}>Reading the invoice. This takes up to half a minute.</Text>}
         <View style={styles.field}>
           <Text style={styles.label}>Invoice / reference (optional)</Text>
           <TextInput style={styles.input} value={reference} onChangeText={setReference} placeholderTextColor={colors.mutedForeground} />
         </View>
       </FormSection>
+      {scanLines.length > 0 ? (
+        <FormSection step={2} title="Check the delivery">
+          {draft?.warnings.map((w) => (
+            <Text key={w} style={styles.muted}>
+              {w}
+            </Text>
+          ))}
+          {draft?.totals.matches === true && <Text style={styles.muted}>The lines add up to the invoice total.</Text>}
+          <Button
+            variant="outline"
+            onPress={() => setScanLines((c) => c.map((l) => (l.itemName && l.expected && !l.received ? { ...l, received: l.expected } : l)))}
+          >
+            Everything arrived as invoiced
+          </Button>
+          {scanLines.map((l) => (
+            <View key={l.key} style={styles.field}>
+              <Text style={styles.label}>{l.description}</Text>
+              {l.match === "learned" && <Text style={styles.muted}>Matched from before</Text>}
+              {l.match === "suggested" && l.itemName ? <Text style={styles.muted}>Suggested match: check it is right</Text> : null}
+              {l.flags
+                .filter((f) => SCAN_FLAG_TEXT[f])
+                .map((f) => (
+                  <Text key={f} style={styles.muted}>
+                    {SCAN_FLAG_TEXT[f]}
+                  </Text>
+                ))}
+              <SelectField label="Our product" value={l.itemName} options={items.map((i) => i.name)} onChange={(name) => patchScan(l.key, { itemName: name })} />
+              <NumberField label={l.expected ? `Received (invoice says ${l.expected})` : "Received"} value={l.received} onChange={(v) => patchScan(l.key, { received: v })} />
+            </View>
+          ))}
+          <Button onPress={submitScanned} icon={<Ionicons name="download" size={18} color={colors.primaryForeground} />}>
+            Confirm receiving
+          </Button>
+          <Button
+            variant="outline"
+            onPress={() => {
+              setDraft(null);
+              setScanLines([]);
+            }}
+          >
+            Start again
+          </Button>
+        </FormSection>
+      ) : (
+      <>
       <FormSection step={2} title="What arrived">
         <SelectField label="Product" value={itemName} options={items.map((i) => i.name)} onChange={setItemName} />
         {unitOptions.length > 1 && <SelectField label="Counted in" value={chosenUnit} options={unitOptions} onChange={setUnitLabel} />}
@@ -1235,6 +1391,8 @@ function ReceiveForm({
       <Button onPress={submit} icon={<Ionicons name="download" size={18} color={colors.primaryForeground} />}>
         Receive delivery
       </Button>
+      </>
+      )}
     </View>
   );
 }

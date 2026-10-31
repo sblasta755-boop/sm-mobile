@@ -179,17 +179,18 @@ export function buildManagementReportHtml(options: ReportHtmlOptions): string {
   .b { font-weight: 600; }
   .details td { padding: 5px 6px; border-bottom: 1px solid #e2e8f0; }
   .k2 { width: 33%; font-weight: 600; color: #64748b; }
-  .photos { display: flex; flex-wrap: wrap; gap: 10px; padding: 6px 0; }
-  figure { margin: 0; text-align: center; }
-  figure img { height: 90px; width: auto; border: 1px solid #e2e8f0; border-radius: 3px; }
-  figcaption { font-size: 7px; text-transform: uppercase; color: #64748b; margin-top: 2px; }
+  /* The photos are the focus of the report: two to a row, each large. */
+  .photos { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 8px 0; }
+  figure { margin: 0; text-align: left; }
+  figure img { width: 100%; height: auto; max-height: 250px; object-fit: contain; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 3px; }
+  figcaption { font-size: 8px; font-weight: 600; text-transform: uppercase; color: #475569; margin-top: 3px; }
   .note { font-size: 10px; color: #334155; background: #f8fafc; }
   .note .k { color: #0a8f8a; font-weight: 700; text-transform: uppercase; margin-right: 4px; }
   .signoff { margin: 8px 0; display: flex; align-items: center; gap: 10px; }
   .signoff .k { font-size: 9px; font-weight: 700; text-transform: uppercase; color: #64748b; }
   .signoff svg.sig { width: 140px; height: 56px; border-bottom: 1px solid #94a3b8; }
   .signoff .who { font-weight: 700; }
-  .noimg { width: 90px; height: 90px; display: flex; align-items: center; justify-content: center; border: 1px solid #e2e8f0; color: #94a3b8; font-size: 9px; }
+  .noimg { width: 100%; height: 160px; display: flex; align-items: center; justify-content: center; border: 1px solid #e2e8f0; color: #94a3b8; font-size: 9px; }
   .totals p { margin: 4px 0; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: #334155; }
   .approval { display: flex; gap: 12px; background: #f8fafc; padding: 12px; border-radius: 4px; }
   .approval > div { flex: 1; }

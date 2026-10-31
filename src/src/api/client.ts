@@ -25,6 +25,7 @@ import type {
   StockMovement,
   StockRestockTask,
   StockTransfer,
+  InvoiceDraft,
   StockLoan,
   StockQualityIssue,
   StockSupplier,
@@ -1718,9 +1719,34 @@ export const receiveStockDelivery = (
       quality?: StockQualityIssue;
       /** The wrong product, refused: nothing is booked in. */
       rejected?: boolean;
+      /** From a scanned invoice, remembered so the next one matches by itself. */
+      supplierCode?: string;
+      invoiceDescription?: string;
+      packSize?: number;
     }[];
+    /** Uploaded invoice pages / photos. */
+    files?: string[];
   },
 ) => stockRequest<StockMovement[]>(accessToken, "/receive", payload);
+
+/** Reads an invoice photo into a draft delivery (done on the server, in a few seconds). Nothing is booked. */
+export async function scanStockInvoice(accessToken: string, siteId: string, uri: string, filename: string, mimeType = "image/jpeg"): Promise<InvoiceDraft> {
+  const send = (token: string) => {
+    const form = new FormData();
+    form.append("siteId", siteId);
+    form.append("file", { uri, name: filename, type: mimeType } as unknown as Blob);
+    return fetch(`${API_BASE_URL}/stock/invoices/scan`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: form });
+  };
+  let response = await send(freshestAccessToken(accessToken));
+  if (response.status === 401) {
+    const renewed = await refreshAccessToken();
+    if (renewed) response = await send(renewed);
+  }
+  if (!response.ok) {
+    await throwForStatus(response);
+  }
+  return (await response.json()) as InvoiceDraft;
+}
 
 /** Stock that is not a paid delivery: a shop returning or giving stock, a rebate, or from the owner.
  * Lands in the site's main store. */

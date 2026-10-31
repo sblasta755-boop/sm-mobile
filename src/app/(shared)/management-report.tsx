@@ -103,7 +103,7 @@ export default function ManagementReportScreen() {
       const embedded = await mapWithProgress(
         photos,
         4,
-        (photo) => photoDataUri(thumbUrl(photo.filePath, 640) ?? photo.uri ?? ""),
+        (photo) => photoDataUri(thumbUrl(photo.filePath, 960) ?? photo.uri ?? ""),
         (done, total) => total && setStage(`Preparing photos... ${done} of ${total}`),
       );
       const photoData = new Map(photos.map((p, i) => [p.id, embedded[i]]));
@@ -119,7 +119,7 @@ export default function ManagementReportScreen() {
         reviewerName: currentUser?.name ?? "",
         reviewDateLabel: longDate(dayKey(now)),
         // A photo that could not be fetched falls back to its link, so the print engine can try once more.
-        photoSrc: (photo) => photoData.get(photo.id) ?? thumbUrl(photo.filePath, 640) ?? photo.uri ?? null,
+        photoSrc: (photo) => photoData.get(photo.id) ?? thumbUrl(photo.filePath, 960) ?? photo.uri ?? null,
       });
       // A4 explicitly: Android's print engine defaults to Letter.
       const printed = await Print.printToFileAsync({ html, base64: true, width: 595, height: 842 });
