@@ -2,15 +2,13 @@
 # wazzzzzzza
 
 # hollllllAaaaaaaa
-
  
 # lessses gooooo
 
 # yooooooo
-
+]
 
 # Ayyyyyooooo
-
 
 # eiiisssshhhhh
 
@@ -19,3 +17,5 @@
 # lets run
 
 # letsss gooooo
+
+# we are up
