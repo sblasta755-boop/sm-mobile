@@ -1,12 +1,9 @@
-name: Build signed Android APK (register via self-hosted runner)
+name: Build signed Android APK (self-hosted runner)
 
-# Same as build-apk-local.yml, except the backend is only reachable from the
-# VPN. The build and the public release stay on GitHub's runner; the final
-# "register the build with the backend" call runs in its own job on a
-# self-hosted runner that sits on the VPN. Manual trigger only, so it does not
-# double-build alongside build-apk-local.yml on every push. Register the runner
-# with the label "vpn" (Settings > Actions > Runners).
-#
+# Replica of build-apk-local.yml. Only the name, the concurrency group and the
+# runner differ: the build job runs on the self-hosted runner (labelled "vpn"),
+# which is on the VPN, so the final call to the backend can reach it.
+ 
 # Builds the native Android app entirely on GitHub's runner - no Expo
 # account, no EAS cloud, no local Docker image. `expo prebuild` generates
 # the android/ project from app.json (the Expo SDK libraries stay as
@@ -25,6 +22,8 @@ name: Build signed Android APK (register via self-hosted runner)
 # EXPO_PUBLIC_API_BASE_URL, RELEASES_REPO, APP_RELEASE_TOKEN and Firebase file;
 # see src/docs/ENVIRONMENTS.md.
 on:
+  push:
+    branches: [dev, develop, qa, subscription, main]
   workflow_dispatch:
     inputs:
       environment:
@@ -74,11 +73,8 @@ jobs:
     needs: target
     # Holds this build's variables and secrets (API address, release repo, Firebase file).
     environment: ${{ needs.target.outputs.environment }}
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, vpn]
     timeout-minutes: 60
-    outputs:
-      url: ${{ steps.public.outputs.url }}
-      version: ${{ steps.apk.outputs.version }}
     permissions:
       # Publishes the APK as a release so the emailed link has somewhere to point.
       contents: write
@@ -283,11 +279,21 @@ jobs:
             --notes "Signed release APK."
           url="https://github.com/$RELEASES_REPO/releases/download/$tag/${{ steps.apk.outputs.name }}"
           echo "url=$url" >> "$GITHUB_OUTPUT"
-          # Registering with the backend happens in the register job below,
-          # which runs on the self-hosted runner that can reach the VPN.
+          if [ -n "$APP_RELEASE_TOKEN" ] && [ -n "$EXPO_PUBLIC_API_BASE_URL" ]; then
+            notes="$(printf '%s' "$COMMIT_MESSAGE" | head -n 12)"
+            jq -n --arg code "${{ github.run_number }}" --arg name "$APP_VERSION_NAME" \
+              --arg url "$url" --arg notes "$notes" \
+              '{platform:"android",versionCode:($code|tonumber),versionName:$name,downloadUrl:$url,notes:$notes}' \
+              | curl -fsS -X POST "${EXPO_PUBLIC_API_BASE_URL%/}/app/releases" \
+                  -H "Content-Type: application/json" -H "X-Release-Token: $APP_RELEASE_TOKEN" -d @-
+          else
+            echo "::warning::APP_RELEASE_TOKEN or EXPO_PUBLIC_API_BASE_URL is not set, so the build was published but not registered for in-app updates."
+          fi
         env:
           GH_TOKEN: ${{ secrets.RELEASES_REPO_TOKEN }}
           RELEASES_REPO: ${{ vars.RELEASES_REPO }}
+          APP_RELEASE_TOKEN: ${{ secrets.APP_RELEASE_TOKEN }}
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
 
       - name: Email the download link
         if: ${{ vars.MAIL_TO != '' }}
@@ -321,31 +327,3 @@ jobs:
         if: ${{ vars.MAIL_TO == '' }}
         run: echo "::warning::MAIL_TO is not set, so no download email was sent. The APK is under Artifacts and in the build-${{ github.run_number }} release."
  
-  # Runs on your machine, which is on the VPN. The backend is not reachable
-  # from GitHub's hosted runners, so this is the only job that talks to it.
-  register:
-    name: Register build with the backend (VPN)
-    needs: [target, build-apk]
-    if: ${{ needs.build-apk.outputs.url != '' }}
-    environment: ${{ needs.target.outputs.environment }}
-    runs-on: [self-hosted, linux, vpn]
-    timeout-minutes: 10
-    steps:
-      - name: Register the build for in-app updates
-        run: |
-          if [ -z "$APP_RELEASE_TOKEN" ] || [ -z "$EXPO_PUBLIC_API_BASE_URL" ]; then
-            echo "::warning::APP_RELEASE_TOKEN or EXPO_PUBLIC_API_BASE_URL is not set, so the build was published but not registered for in-app updates."
-            exit 0
-          fi
-          notes="$(printf '%s' "$COMMIT_MESSAGE" | head -n 12)"
-          jq -n --arg code "${{ github.run_number }}" --arg name "$APP_VERSION_NAME" \
-            --arg url "$APK_URL" --arg notes "$notes" \
-            '{platform:"android",versionCode:($code|tonumber),versionName:$name,downloadUrl:$url,notes:$notes}' \
-            | curl -fsS --max-time 60 -X POST "${EXPO_PUBLIC_API_BASE_URL%/}/app/releases" \
-                -H "Content-Type: application/json" -H "X-Release-Token: $APP_RELEASE_TOKEN" -d @-
-        env:
-          EXPO_PUBLIC_API_BASE_URL: ${{ vars.EXPO_PUBLIC_API_BASE_URL }}
-          APP_RELEASE_TOKEN: ${{ secrets.APP_RELEASE_TOKEN }}
-          APK_URL: ${{ needs.build-apk.outputs.url }}
-          APP_VERSION_NAME: ${{ needs.build-apk.outputs.version }}
-          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
