@@ -9,7 +9,7 @@ import { AppearanceRow, FeedbackRow } from "@/components/ProfilePreferences";
 import { BiometricLockRow } from "@/components/BiometricLockRow";
 import { useSmartClean } from "@/features/store";
 import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
-import { APP_VERSION } from "@/constants/version";
+import { TAG } from "@/constants/version";
 
 /**
  * A platform operator's own account - the one screen this tab bar was
@@ -81,7 +81,7 @@ export default function PlatformProfile() {
         Sign out
       </Button>
 
-      <Text style={styles.version}>Šoma360 {APP_VERSION}</Text>
+      <Text style={styles.version}>Šoma360 {TAG}</Text>
     </Screen>
   );
 }

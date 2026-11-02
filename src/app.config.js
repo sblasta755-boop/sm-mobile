@@ -10,10 +10,10 @@ const { execSync } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
 
-// CI passes APP_VERSION_NAME so the APK, release and email agree; otherwise ask git;
+// CI passes TAG so the APK, release and email agree; otherwise ask git;
 // with no git (a Docker build without .git) keep the number in app.json.
 function appVersion(fallback) {
-  if (process.env.APP_VERSION_NAME) return process.env.APP_VERSION_NAME;
+  if (process.env.TAG) return process.env.TAG;
   try {
     return execSync("git describe --tags --always", { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim() || fallback;
   } catch {

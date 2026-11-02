@@ -4,7 +4,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Location from "expo-location";
 import * as Notifications from "expo-notifications";
 import * as TaskManager from "expo-task-manager";
-import { buildConfig, freshState, reconcile, step, type Fix, type GeofenceAction, type GeofenceConfig, type MachineState } from "@/domain/geofenceClock";
+import { buildConfig, classify, freshState, reconcile, step, type Fix, type GeofenceAction, type GeofenceConfig, type MachineState } from "@/domain/geofenceClock";
+import { distanceM } from "@/domain/nearestBeacon";
 import { enqueueMutation } from "@/features/outbox";
 import { ANDROID_CHANNEL_ID } from "@/features/pushNotifications";
 import { useSmartClean } from "@/features/store";
@@ -17,6 +18,7 @@ import { useSmartClean } from "@/features/store";
 const TASK_LOCATION = "soma-geofence-location";
 const TASK_REGION = "soma-geofence-region";
 const STORAGE_KEY = "soma.geofenceClock.v1";
+const LAST_FIX_KEY = "soma.geofenceClock.lastFix.v1";
 const PROMPT_KEY = "soma.overtimePrompt.v1";
 /** While the app is open and has no background permission, it still checks this often. */
 const FOREGROUND_CHECK_MS = 60_000;
@@ -32,6 +34,42 @@ async function readSnapshot(): Promise<Snapshot | null> {
     return raw ? (JSON.parse(raw) as Snapshot) : null;
   } catch {
     return null;
+  }
+}
+
+/** The latest fix handled and what it was judged to be, for the hidden diagnostics on Profile. */
+export interface LastFixRecord {
+  at: string;
+  result: "inside" | "outside" | "unsure" | "unusable";
+  distanceM: number;
+  accuracy: number | null;
+  /** When the person was last clocked out or in automatically, if ever. */
+  lastAutoAction?: { type: "clock_out" | "clock_in"; at: string };
+}
+
+export async function readAutoClockDiagnostics(): Promise<LastFixRecord | null> {
+  try {
+    const raw = await AsyncStorage.getItem(LAST_FIX_KEY);
+    return raw ? (JSON.parse(raw) as LastFixRecord) : null;
+  } catch {
+    return null;
+  }
+}
+
+async function writeLastFix(snapshot: Snapshot, fix: Fix, actions: GeofenceAction[]) {
+  try {
+    const previous = await readAutoClockDiagnostics();
+    const done = actions.find((a) => a.type === "clock_out" || a.type === "clock_in");
+    const record: LastFixRecord = {
+      at: fix.at,
+      result: classify(fix, snapshot.config),
+      distanceM: Math.round(distanceM(fix, { latitude: snapshot.config.latitude, longitude: snapshot.config.longitude })),
+      accuracy: fix.accuracy ?? null,
+      lastAutoAction: done && (done.type === "clock_out" || done.type === "clock_in") ? { type: done.type, at: done.at } : previous?.lastAutoAction,
+    };
+    await AsyncStorage.setItem(LAST_FIX_KEY, JSON.stringify(record));
+  } catch {
+    /* diagnostics only */
   }
 }
 
@@ -99,6 +137,7 @@ export function processFix(fix: Fix, now: Date = new Date()): Promise<void> {
     if (!snapshot) return;
     const result = step({ state: snapshot.state, config: snapshot.config, fix, now });
     await writeSnapshot({ config: snapshot.config, state: result.state });
+    await writeLastFix(snapshot, fix, result.actions);
     for (const action of result.actions) await carryOut(snapshot.config, action);
   });
   return chain as Promise<void>;
@@ -215,7 +254,7 @@ async function startTracking(config: GeofenceConfig) {
 }
 
 /** For a screen to say whether automatic clocking applies to this person and whether the phone lets it work. */
-export function useAutoClockStatus(): { enabled: boolean; permission: TrackingPermission } {
+export function useAutoClockStatus(): { enabled: boolean; permission: TrackingPermission; disabledReason: string | null } {
   const { state, currentUser } = useSmartClean();
   const [permission, setPermission] = useState<TrackingPermission>("unknown");
   const site = state.sites.find((s) => currentUser?.siteIds.includes(s.id));
@@ -230,7 +269,17 @@ export function useAutoClockStatus(): { enabled: boolean; permission: TrackingPe
     });
     return () => sub.remove();
   }, [enabled]);
-  return { enabled, permission };
+  const policy = state.subscription?.policy?.attendance?.autoClock;
+  const disabledReason = enabled
+    ? null
+    : !site
+      ? "no site assigned"
+      : !policy
+        ? "no auto clock-out policy yet"
+        : (typeof site.autoClock === "boolean" ? !site.autoClock : !policy.enabled)
+          ? "switched off for this site"
+          : "site has no location or radius set";
+  return { enabled, permission, disabledReason };
 }
 
 /**

@@ -10,7 +10,7 @@ import { BiometricLockRow } from "@/components/BiometricLockRow";
 import { useRoleLabel } from "@/features/roles";
 import { useSmartClean } from "@/features/store";
 import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
-import { APP_VERSION } from "@/constants/version";
+import { TAG } from "@/constants/version";
 
 /**
  * A manager's own account.
@@ -113,7 +113,7 @@ export default function ManageProfile() {
         Sign out
       </Button>
 
-      <Text style={styles.version}>Šoma360 {APP_VERSION}</Text>
+      <Text style={styles.version}>Šoma360 {TAG}</Text>
     </Screen>
   );
 }

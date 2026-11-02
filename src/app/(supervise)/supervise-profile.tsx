@@ -9,7 +9,7 @@ import { AppearanceRow, ScheduleRow, SyncRow, EvidenceViewRow, FeedbackRow, Repo
 import { BiometricLockRow } from "@/components/BiometricLockRow";
 import { useSmartClean } from "@/features/store";
 import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
-import { APP_VERSION } from "@/constants/version";
+import { TAG } from "@/constants/version";
 
 /**
  * A supervisor's own account and scope.
@@ -88,7 +88,7 @@ export default function SuperviseProfile() {
         Sign out
       </Button>
 
-      <Text style={styles.version}>Šoma360 {APP_VERSION}</Text>
+      <Text style={styles.version}>Šoma360 {TAG}</Text>
     </Screen>
   );
 }

@@ -96,7 +96,7 @@
 #           # Non-production builds say so in their version, so a screenshot or a
 #           # support request shows which build it was.
 #           if [ "$APP_ENV" != "prod" ]; then version="${APP_ENV}-${version}"; fi
-#           echo "APP_VERSION_NAME=$version" >> "$GITHUB_ENV"
+#           echo "TAG=$version" >> "$GITHUB_ENV"
 #           echo "App version: $version"
 
 #       - name: Check signing secrets are configured
@@ -224,7 +224,7 @@
 #       - name: Name the APK
 #         id: apk
 #         run: |
-#           version="$APP_VERSION_NAME"
+#           version="$TAG"
 #           name="soma360-${version}-build${{ github.run_number }}.apk"
 #           cp android/app/build/outputs/apk/release/app-release.apk "$name"
 #           echo "name=$name" >> "$GITHUB_OUTPUT"
@@ -277,7 +277,7 @@
 #           echo "url=$url" >> "$GITHUB_OUTPUT"
 #           if [ -n "$APP_RELEASE_TOKEN" ] && [ -n "$EXPO_PUBLIC_API_BASE_URL" ]; then
 #             notes="$(printf '%s' "$COMMIT_MESSAGE" | head -n 12)"
-#             jq -n --arg code "${{ github.run_number }}" --arg name "$APP_VERSION_NAME" \
+#             jq -n --arg code "${{ github.run_number }}" --arg name "$TAG" \
 #               --arg url "$url" --arg notes "$notes" \
 #               '{platform:"android",versionCode:($code|tonumber),versionName:$name,downloadUrl:$url,notes:$notes}' \
 #               | curl -fsS -X POST "${EXPO_PUBLIC_API_BASE_URL%/}/app/releases" \
@@ -300,7 +300,7 @@
 #           APK_URL: ${{ steps.public.outputs.url || steps.release.outputs.url }}
 #           APK_NAME: ${{ steps.apk.outputs.name }}
 #           APK_SIZE_MB: ${{ steps.apk.outputs.size }}
-#           APP_VERSION: ${{ steps.apk.outputs.version }}
+#           TAG: ${{ steps.apk.outputs.version }}
 #           VERSION_CODE: ${{ github.run_number }}
 #           BRANCH: ${{ github.ref_name }}
 #           COMMIT: ${{ github.sha }}

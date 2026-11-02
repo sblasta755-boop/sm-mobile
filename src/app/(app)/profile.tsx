@@ -13,11 +13,12 @@ import { BrokenGlassIcon } from "@/components/BrokenGlassIcon";
 import { AppearanceRow, ScheduleRow, SyncRow, EvidenceViewRow, FeedbackRow, ReportsRow } from "@/components/ProfilePreferences";
 import { BiometricLockRow } from "@/components/BiometricLockRow";
 import { useSmartClean } from "@/features/store";
+import { readAutoClockDiagnostics, useAutoClockStatus, type LastFixRecord } from "@/features/geofenceClock";
 import { useCanManageSiteLayout, useRoleLabel, useStaffRole } from "@/features/roles";
 import { fileUrl, getMyRatingSummary, toUserRecord, updateUser, uploadImage } from "@/api/client";
 import type { TableRatingSummary } from "@/types/smartclean";
 import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
-import { APP_VERSION } from "@/constants/version";
+import { TAG } from "@/constants/version";
 
 export default function ProfileScreen() {
   useThemeVersion(); // re-render with the new colours when the theme changes
@@ -40,6 +41,14 @@ export default function ProfileScreen() {
   // it's specific to this one screen.
   const roleLabel = useRoleLabel();
   const showsRating = !!useStaffRole()?.features.ratings;
+  // Hidden diagnostics: tap the version stamp 5 times to show them.
+  const autoClock = useAutoClockStatus();
+  const [stampTaps, setStampTaps] = useState(0);
+  const [lastFix, setLastFix] = useState<LastFixRecord | null>(null);
+  const showDiagnostics = stampTaps >= 5;
+  useEffect(() => {
+    if (showDiagnostics) void readAutoClockDiagnostics().then(setLastFix);
+  }, [showDiagnostics]);
   const [ratingSummary, setRatingSummary] = useState<TableRatingSummary | null>(null);
   useEffect(() => {
     if (!showsRating || !state.accessToken) return;
@@ -201,16 +210,30 @@ export default function ProfileScreen() {
         Sign out
       </Button>
 
-      {/* Build version stamp - APP_VERSION, generated at build/start
+      {/* Build version stamp - TAG, generated at build/start
           time by scripts/version.mjs (git describe --tags --always,
           same mechanism the web app's vite.config.ts uses for its own
-          VITE_GIT_VERSION - see mobile.profile.tsx there) into
+          VITE_TAG - see mobile.profile.tsx there) into
           src/constants/version.ts (gitignored, regenerated every run -
           see package.json's generate-version script, now actually
           wired into start/android/ios/web/export:web, which it wasn't
           before). Lets you confirm which build is actually running
           without digging through devtools. */}
-      <Text style={styles.versionStamp}>v{APP_VERSION}</Text>
+      <Text style={styles.versionStamp} onPress={() => setStampTaps((n) => n + 1)}>v{TAG}</Text>
+      {showDiagnostics && (
+        <View style={styles.diagnostics}>
+          <Text style={styles.diagnosticsText}>
+            Auto clock-out: {autoClock.enabled ? "on" : `off (${autoClock.disabledReason})`}
+          </Text>
+          <Text style={styles.diagnosticsText}>Location permission: {autoClock.permission}</Text>
+          <Text style={styles.diagnosticsText}>
+            Last check: {lastFix ? `${new Date(lastFix.at).toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit" })} - ${lastFix.result}, ${lastFix.distanceM} m from site (accuracy ${lastFix.accuracy != null ? Math.round(lastFix.accuracy) + " m" : "unknown"})` : "none yet"}
+          </Text>
+          <Text style={styles.diagnosticsText}>
+            Last automatic clocking: {lastFix?.lastAutoAction ? `${lastFix.lastAutoAction.type === "clock_out" ? "out" : "in"} at ${new Date(lastFix.lastAutoAction.at).toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit" })}` : "none"}
+          </Text>
+        </View>
+      )}
     </Screen>
   );
 }
@@ -380,6 +403,15 @@ const styles = themedStyles(() => StyleSheet.create({
   },
   versionStamp: {
     marginTop: spacing.lg,
+    textAlign: "center",
+    fontSize: 10,
+    color: colors.mutedForeground,
+  },
+  diagnostics: {
+    marginTop: spacing.sm,
+    gap: 2,
+  },
+  diagnosticsText: {
     textAlign: "center",
     fontSize: 10,
     color: colors.mutedForeground,
