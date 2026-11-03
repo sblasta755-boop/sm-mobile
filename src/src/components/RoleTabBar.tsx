@@ -21,19 +21,18 @@ import { colors, sizes, spacing, typography, themedStyles, useThemeVersion } fro
  * It mirrors each group's tab list. If a role gains a tab in its layout, add
  * it here too.
  */
-type Tab = { label: string; to: string; icon: keyof typeof Ionicons.glyphMap; primary?: boolean };
+export type RoleTab = { label: string; to: string; icon: keyof typeof Ionicons.glyphMap; primary?: boolean };
+type Tab = RoleTab;
 
-export function RoleTabBar() {
-  useThemeVersion();
+/** The signed-in role's tabs, in bar order. Also read by the guided tour, so it walks exactly what the bar shows. */
+export function useRoleTabs(): Tab[] {
   const { currentUser, state } = useSmartClean();
-  const insets = useSafeAreaInsets();
-  const pathname = usePathname();
   const hasCorrectiveActions = useHasModule("corrective_actions");
   const hasInspections = useHasModule("inspections");
   const hasQr = useHasCapability("qr_codes");
   const role = currentUser?.role;
 
-  if (!currentUser) return null;
+  if (!currentUser) return [];
 
   let tabs: Tab[];
   switch (role) {
@@ -87,6 +86,17 @@ export function RoleTabBar() {
       ];
     }
   }
+  return tabs;
+}
+
+export function RoleTabBar() {
+  useThemeVersion();
+  const { currentUser } = useSmartClean();
+  const insets = useSafeAreaInsets();
+  const pathname = usePathname();
+  const tabs = useRoleTabs();
+
+  if (!currentUser) return null;
 
   return (
     <View

@@ -10,6 +10,7 @@ import { useEvidenceQueue } from "@/features/evidenceQueue";
 import { syncHeadline, syncSummary } from "@/domain/syncStatus";
 import type { EvidenceViewMode } from "@/domain/evidenceSections";
 import { useSmartClean } from "@/features/store";
+import { startTour, useTourTarget } from "@/features/tour";
 import { colors, radius, spacing, themedStyles, typography, useTheme, type ThemePreference } from "@/theme";
 
 const EVIDENCE_OPTIONS: {
@@ -77,8 +78,9 @@ const OPTIONS: { value: ThemePreference; label: string; icon: keyof typeof Ionic
 /** Light / Dark / System. Used on every role's profile screen and in the profile menu. */
 export function AppearanceRow() {
   const { preference, setPreference } = useTheme();
+  const tourTarget = useTourTarget("profile:appearance");
   return (
-    <View style={styles.block}>
+    <View style={styles.block} {...tourTarget}>
       <View style={styles.titleRow}>
         <Ionicons name="contrast-outline" size={18} color={colors.foreground} />
         <Text style={styles.title}>Appearance</Text>
@@ -221,3 +223,18 @@ const styles = themedStyles(() =>
     linkText: { flex: 1 },
   }),
 );
+
+/** Replays the guided tour. On every role's profile screen. */
+export function TourRow() {
+  const tourTarget = useTourTarget("profile:tutorial");
+  return (
+    <Pressable style={styles.linkRow} onPress={() => startTour(true)} {...tourTarget}>
+      <Ionicons name="compass-outline" size={18} color={colors.foreground} />
+      <View style={styles.linkText}>
+        <Text style={styles.title}>App tutorial</Text>
+        <Text style={styles.sub}>Replay the guided tour</Text>
+      </View>
+      <Ionicons name="chevron-forward" size={16} color={colors.mutedForeground} />
+    </Pressable>
+  );
+}

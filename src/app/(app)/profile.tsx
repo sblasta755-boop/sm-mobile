@@ -10,7 +10,7 @@ import { UpdateBanner } from "@/components/UpdateBanner";
 import { Button } from "@/components/Button";
 import { StatusBadge } from "@/components/StatusBadge";
 import { BrokenGlassIcon } from "@/components/BrokenGlassIcon";
-import { AppearanceRow, ScheduleRow, SyncRow, EvidenceViewRow, FeedbackRow, ReportsRow } from "@/components/ProfilePreferences";
+import { AppearanceRow, TourRow, ScheduleRow, SyncRow, EvidenceViewRow, FeedbackRow, ReportsRow } from "@/components/ProfilePreferences";
 import { BiometricLockRow } from "@/components/BiometricLockRow";
 import { useSmartClean } from "@/features/store";
 import { readAutoClockDiagnostics, useAutoClockStatus, type LastFixRecord } from "@/features/geofenceClock";
@@ -189,6 +189,7 @@ export default function ProfileScreen() {
           <ScheduleRow />
           <SyncRow />
           <AppearanceRow />
+          <TourRow />
         <EvidenceViewRow />
         <FeedbackRow />
         </Card>

@@ -5,7 +5,7 @@ import { Screen } from "@/components/Screen";
 import { Card } from "@/components/Card";
 import { UpdateBanner } from "@/components/UpdateBanner";
 import { Button } from "@/components/Button";
-import { AppearanceRow, ScheduleRow, SyncRow, FeedbackRow, PayRunsRow, ReportsRow } from "@/components/ProfilePreferences";
+import { AppearanceRow, TourRow, ScheduleRow, SyncRow, FeedbackRow, PayRunsRow, ReportsRow } from "@/components/ProfilePreferences";
 import { BiometricLockRow } from "@/components/BiometricLockRow";
 import { useRoleLabel } from "@/features/roles";
 import { useSmartClean } from "@/features/store";
@@ -92,6 +92,7 @@ export default function ManageProfile() {
         <SyncRow />
         <PayRunsRow />
         <AppearanceRow />
+        <TourRow />
         <FeedbackRow />
       </Card>
 
