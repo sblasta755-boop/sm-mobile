@@ -241,6 +241,11 @@ async function refreshAccessToken(): Promise<string | null> {
   }
 }
 
+/** Tokens issued by impersonateOrganisation / refreshImpersonation. A 401 on one of these must NOT fall back to the
+ * operator's own refreshed session: the retry would run the same request (say, create a person) in the operator's
+ * platform tenant instead of the organisation. The caller refreshes it explicitly instead. */
+const impersonationTokens = new Set<string>();
+
 export async function request<T>(
   path: string,
   init: RequestInit = {},
@@ -256,7 +261,14 @@ export async function request<T>(
       ...(init.headers ?? {}),
     },
   });
-  if (response.status === 401 && accessToken && !_isRetry && path !== "/auth/refresh" && path !== "/auth/login") {
+  if (
+    response.status === 401 &&
+    accessToken &&
+    !_isRetry &&
+    !impersonationTokens.has(accessToken) &&
+    path !== "/auth/refresh" &&
+    path !== "/auth/login"
+  ) {
     const newAccessToken = await refreshAccessToken();
     if (newAccessToken) {
       return request<T>(path, init, newAccessToken, true);
@@ -1107,6 +1119,32 @@ export function listPlatformOrganisations(accessToken: string, page = 1, pageSiz
     {},
     accessToken,
   );
+}
+
+/**
+ * A short-lived token that acts inside one organisation as its administrator, for a platform operator. The web
+ * console's "Enter" uses the same endpoint. Every action taken with it is recorded in that organisation's audit trail
+ * under the operator's own name (see _resolve_impersonated_user on the backend). It has no refresh token; trade a
+ * still-valid one for a fresh one with refreshImpersonation.
+ */
+export async function impersonateOrganisation(accessToken: string, tenantId: string) {
+  const result = await request<{ accessToken: string; expiresIn: number; tenantId: string; tenantName: string }>(
+    `/platform/organisations/${tenantId}/impersonate`,
+    { method: "POST" },
+    accessToken,
+  );
+  impersonationTokens.add(result.accessToken);
+  return result;
+}
+
+export async function refreshImpersonation(impersonationToken: string) {
+  const result = await request<{ accessToken: string; expiresIn: number }>(
+    "/auth/impersonation/refresh",
+    { method: "POST" },
+    impersonationToken,
+  );
+  impersonationTokens.add(result.accessToken);
+  return result;
 }
 
 export function getPlatformOrganisation(accessToken: string, tenantId: string) {

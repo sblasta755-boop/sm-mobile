@@ -17,10 +17,11 @@ type Glyph = keyof typeof Ionicons.glyphMap;
 export function TeamCard({ summary }: { summary: TeamSummary }) {
   useThemeVersion();
   const parts = [
-    { label: "Managers", value: summary.managers, color: colors.primary },
-    { label: "Supervisors", value: summary.supervisors, color: colors.info },
-    { label: "Field staff", value: summary.field, color: colors.success },
-    ...(summary.auditors ? [{ label: "Auditors", value: summary.auditors, color: colors.neutral }] : []),
+    // Shades of the organisation's main colour, so the parts never clash with (or vanish into) a brand palette.
+    { label: "Managers", value: summary.managers, color: colors.primary, opacity: 1 },
+    { label: "Supervisors", value: summary.supervisors, color: colors.primary, opacity: 0.55 },
+    { label: "Field staff", value: summary.field, color: colors.primary, opacity: 0.25 },
+    ...(summary.auditors ? [{ label: "Auditors", value: summary.auditors, color: colors.neutral, opacity: 1 }] : []),
   ];
   const total = summary.total || 1;
   return (
@@ -42,13 +43,13 @@ export function TeamCard({ summary }: { summary: TeamSummary }) {
             {parts
               .filter((p) => p.value > 0)
               .map((p) => (
-                <View key={p.label} style={{ flex: p.value / total, backgroundColor: p.color, borderRadius: 4 }} />
+                <View key={p.label} style={{ flex: p.value / total, backgroundColor: p.color, opacity: p.opacity, borderRadius: 4 }} />
               ))}
           </View>
           <View style={styles.legend}>
             {parts.map((p) => (
               <View key={p.label} style={styles.legendItem}>
-                <View style={[styles.dot, { backgroundColor: p.color }]} />
+                <View style={[styles.dot, { backgroundColor: p.color, opacity: p.opacity }]} />
                 <Text style={styles.legendText}>
                   {p.label} {p.value}
                 </Text>
