@@ -9,7 +9,7 @@ import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { appAlert } from "@/components/Dialog";
 import { sendFeedback, uploadImage, type FeedbackPayload } from "@/api/client";
-import { APP_VERSION } from "@/constants/version";
+import { TAG } from "@/constants/version";
 import { prepareEvidencePhoto } from "@/services/photoPrep";
 import { useSmartClean } from "@/features/store";
 import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
@@ -76,7 +76,7 @@ export default function FeedbackScreen() {
         category,
         message: message.trim(),
         filePaths,
-        appVersion: APP_VERSION,
+        appVersion: TAG,
         platform: `${Platform.OS} ${Platform.Version}`,
       });
       appAlert("Thank you", "Your feedback was sent to the Šoma360 team.", [

@@ -5,7 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRoleLabel } from "@/features/roles";
 import { useSmartClean } from "@/features/store";
 import { Button } from "@/components/Button";
-import { AppearanceRow } from "@/components/ProfilePreferences";
+import { AppearanceBlock } from "@/components/ProfilePreferences";
 import { colors, radius, spacing, typography, themedStyles } from "@/theme";
 
 export function ProfileMenuSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
@@ -55,7 +55,7 @@ export function ProfileMenuSheet({ visible, onClose }: { visible: boolean; onClo
           </View>
         </View>
 
-        <AppearanceRow />
+        <AppearanceBlock />
 
         <Button variant="outline" onPress={handleSignOut} style={styles.signOut}>
           Sign out

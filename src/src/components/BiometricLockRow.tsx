@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
-import { ActivityIndicator, StyleSheet, Switch, Text, View } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { ActivityIndicator, StyleSheet, Switch, View } from "react-native";
 import {
   getCapability,
   isLockEnabled,
@@ -9,7 +8,8 @@ import {
   setLockEnabled,
   type BiometricKind,
 } from "@/services/biometrics";
-import { colors, spacing, typography, themedStyles } from "@/theme";
+import { SettingsRow } from "@/components/SettingsKit";
+import { colors, spacing, themedStyles } from "@/theme";
 
 /**
  * The biometric lock toggle, shared by every role's profile screen.
@@ -66,30 +66,26 @@ export function BiometricLockRow() {
   }
 
   return (
-    <View style={styles.row}>
-      <Ionicons
-        // Only a face-ONLY device gets the face glyph. A device with
-        // both is represented by the fingerprint, which is the more
-        // recognisable "biometrics" mark of the two.
-        name={kind === "face" ? "scan-outline" : "finger-print-outline"}
-        size={18}
-        color={colors.foreground}
-      />
-      <View style={styles.copy}>
-        <Text style={styles.label}>Unlock with {label}</Text>
-        <Text style={styles.hint}>
-          {enabled
-            ? `${sentenceLabel} will be required when you open the app.`
-            : "The app currently opens straight to your session."}
-        </Text>
-      </View>
-      <Switch
-        value={enabled}
-        onValueChange={(next) => void toggle(next)}
-        trackColor={{ true: colors.primary, false: colors.neutral }}
-        accessibilityLabel={`Unlock with ${label}`}
-      />
-    </View>
+    <SettingsRow
+      // Only a face-ONLY device gets the face glyph. A device with
+      // both is represented by the fingerprint, which is the more
+      // recognisable "biometrics" mark of the two.
+      icon={kind === "face" ? "scan-outline" : "finger-print-outline"}
+      title={`Unlock with ${label}`}
+      sub={
+        enabled
+          ? `${sentenceLabel} will be required when you open the app.`
+          : "The app currently opens straight to your session."
+      }
+      right={
+        <Switch
+          value={enabled}
+          onValueChange={(next) => void toggle(next)}
+          trackColor={{ true: colors.primary, false: colors.neutral }}
+          accessibilityLabel={`Unlock with ${label}`}
+        />
+      }
+    />
   );
 }
 
@@ -100,20 +96,5 @@ const styles = themedStyles(() => StyleSheet.create({
     gap: spacing.sm,
     paddingVertical: spacing.sm,
     minHeight: 44,
-  },
-  copy: {
-    flex: 1,
-    minWidth: 0,
-    gap: 2,
-  },
-  label: {
-    fontSize: typography.body,
-    fontWeight: "600",
-    color: colors.foreground,
-  },
-  hint: {
-    fontSize: typography.small,
-    color: colors.mutedForeground,
-    lineHeight: 17,
   },
 }));

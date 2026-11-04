@@ -14,6 +14,7 @@ import { useEvidenceUploader } from "@/features/evidenceUploader";
 import { useRememberLocation } from "@/features/lastLocation";
 import { useGeofenceClock } from "@/features/geofenceClock";
 import { OvertimePrompt } from "@/components/OvertimePrompt";
+import { TourOverlay } from "@/components/TourOverlay";
 
 // Keep the native splash image up until our animated in-app splash
 // (rendered from app/index.tsx while the session restores) has actually
@@ -36,6 +37,7 @@ export default function RootLayout() {
           <Stack screenOptions={{ headerShown: false }} />
           <UpdateRequiredGate />
           <OvertimePrompt />
+          <TourOverlay />
           <DialogHost />
         </SmartCleanProvider>
       </ThemeProvider>

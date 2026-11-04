@@ -19,7 +19,7 @@ const {
   APK_URL,
   APK_NAME = "app-release.apk",
   APK_SIZE_MB = "",
-  APP_VERSION = "",
+  TAG = "",
   VERSION_CODE = "",
   BRANCH = "",
   COMMIT = "",
@@ -49,9 +49,9 @@ if (usingBrevo) {
 }
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
-const subject = `Šoma360 ${APP_VERSION ? `v${APP_VERSION} ` : ""}build ${VERSION_CODE} is ready to install`;
+const subject = `Šoma360 ${TAG ? `v${TAG} ` : ""}build ${VERSION_CODE} is ready to install`;
 const rows = [
-  ["Version", APP_VERSION && `${APP_VERSION} (build ${VERSION_CODE})`],
+  ["Version", TAG && `${TAG} (build ${VERSION_CODE})`],
   ["Branch", BRANCH],
   ["Commit", COMMIT && `${COMMIT.slice(0, 7)}${COMMIT_MESSAGE ? ` - ${COMMIT_MESSAGE.split("\n")[0]}` : ""}`],
   ["File", `${APK_NAME}${APK_SIZE_MB ? ` (${APK_SIZE_MB} MB)` : ""}`],

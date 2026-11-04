@@ -1,9 +1,9 @@
 import { execSync } from "child_process";
 import { mkdirSync, writeFileSync } from "fs";
 
-let version = "dev";
+let version = process.env.TAG || "dev";
 
-try {
+if (!process.env.TAG) try {
   version = execSync("git describe --tags --always", {
     encoding: "utf8",
   }).trim();
@@ -13,7 +13,7 @@ try {
 
 const output = `// Auto-generated file. Do not edit.
 
-export const APP_VERSION = "${version}";
+export const TAG = "${version}";
 `;
 
 // src/constants, not a top-level constants/ (this app's actual source
@@ -27,4 +27,4 @@ export const APP_VERSION = "${version}";
 mkdirSync("src/constants", { recursive: true });
 writeFileSync("src/constants/version.ts", output);
 
-console.log("✅ APP_VERSION:", version);
+console.log("✅ TAG:", version);

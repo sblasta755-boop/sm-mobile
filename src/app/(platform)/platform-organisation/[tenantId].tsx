@@ -184,36 +184,83 @@ export default function PlatformOrganisationDetail() {
   }
 
   return (
-    <Screen title={organisation?.name ?? "Organisation"} backTo="/platform-organisations">
+    <Screen title="Organisation" backTo="/platform-organisations">
       {error && (
         <Card style={styles.errorCard}>
           <Text style={styles.errorText}>{error}</Text>
         </Card>
       )}
 
-      <Card style={styles.section}>
-        <View style={styles.headerRow}>
-          <StatusBadge
-            tone={STATUS_TONE[status] ?? "neutral"}
-            label={status.replace(/_/g, " ")}
-          />
-          {organisation?.subscription && (
-            <Text style={styles.tier}>
-              {organisation.subscription.tierLabel ?? organisation.subscription.tier}
+      {/* Same parts as the Overview and the Organisations list: a header card, two figure cards, a details card. */}
+      <View style={styles.oCard}>
+        <View style={styles.oTop}>
+          <View style={styles.oAvatar}>
+            <Text style={styles.oAvatarText}>{(organisation?.name ?? "?").slice(0, 2).toUpperCase()}</Text>
+          </View>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={styles.oName} numberOfLines={1}>
+              {organisation?.name ?? "-"}
             </Text>
-          )}
+            {organisation?.createdAt ? (
+              <Text style={styles.oSub}>
+                Created {new Date(organisation.createdAt).toLocaleDateString("en-ZA", { day: "2-digit", month: "short", year: "numeric" })}
+              </Text>
+            ) : null}
+          </View>
+          <StatusBadge tone={STATUS_TONE[status] ?? "neutral"} label={status.replace(/_/g, " ")} />
         </View>
+      </View>
+
+      <View style={styles.oPair}>
+        <View style={[styles.oCard, styles.oHalf]}>
+          <View style={styles.oLabel}>
+            <Ionicons name="people-outline" size={16} color={colors.mutedForeground} />
+            <Text style={styles.oLabelText}>Seats used</Text>
+          </View>
+          <Text style={styles.oBig}>
+            {organisation?.userCount ?? 0}
+            <Text style={styles.oUnit}>
+              {"  / "}
+              {organisation?.subscription?.seats ? organisation.subscription.seats : "unlimited"}
+            </Text>
+          </Text>
+          <View style={styles.oTrack}>
+            <View
+              style={[
+                styles.oFill,
+                {
+                  width: `${
+                    organisation?.subscription?.seats
+                      ? Math.min(100, ((organisation.userCount ?? 0) / organisation.subscription.seats) * 100)
+                      : 6
+                  }%`,
+                },
+              ]}
+            />
+          </View>
+        </View>
+        <View style={[styles.oCard, styles.oHalf]}>
+          <View style={styles.oLabel}>
+            <Ionicons name="card-outline" size={16} color={colors.mutedForeground} />
+            <Text style={styles.oLabelText}>Plan</Text>
+          </View>
+          <Text style={[styles.oBig, { fontSize: 24, marginTop: spacing.md }]} numberOfLines={1}>
+            {organisation?.subscription?.tierLabel ?? organisation?.subscription?.tier ?? "None"}
+          </Text>
+          <Text style={styles.oSub}>
+            {organisation?.subscription?.trialEndsAt && status === "trialing"
+              ? `Trial ends ${new Date(organisation.subscription.trialEndsAt).toLocaleDateString("en-ZA", { day: "2-digit", month: "short" })}`
+              : organisation?.subscription?.currentPeriodEnd
+                ? `Renews ${new Date(organisation.subscription.currentPeriodEnd).toLocaleDateString("en-ZA", { day: "2-digit", month: "short" })}`
+                : "Open-ended"}
+          </Text>
+        </View>
+      </View>
+
+      <View style={[styles.oCard, { paddingVertical: spacing.xs }]}>
         <Row label="Users" value={String(organisation?.userCount ?? 0)} />
-        <Row
-          label="Seats"
-          value={
-            organisation?.subscription?.seats
-              ? String(organisation.subscription.seats)
-              : "Unlimited"
-          }
-        />
         <Row label="Billing email" value={organisation?.subscription?.billingEmail ?? "-"} />
-      </Card>
+      </View>
 
       {grant && (
         <Card style={styles.section}>
@@ -383,6 +430,27 @@ function Row({ label, value }: { label: string; value: string }) {
 }
 
 const styles = themedStyles(() => StyleSheet.create({
+  oCard: {
+    backgroundColor: colors.card,
+    borderRadius: radius.xl + 6,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.lg,
+    marginBottom: spacing.sm + 2,
+  },
+  oTop: { flexDirection: "row", alignItems: "center", gap: spacing.md },
+  oAvatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: colors.secondary, alignItems: "center", justifyContent: "center" },
+  oAvatarText: { fontSize: typography.body, fontWeight: "700", color: colors.mutedForeground },
+  oName: { fontSize: typography.h1, fontWeight: "600", color: colors.foreground },
+  oSub: { fontSize: typography.small, color: colors.mutedForeground, marginTop: 2 },
+  oPair: { flexDirection: "row", gap: spacing.sm + 2 },
+  oHalf: { flex: 1 },
+  oLabel: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  oLabelText: { fontSize: typography.small + 1, color: colors.mutedForeground },
+  oBig: { fontSize: 36, fontWeight: "300", color: colors.foreground, marginTop: spacing.sm },
+  oUnit: { fontSize: typography.body, fontWeight: "400", color: colors.mutedForeground },
+  oTrack: { height: 5, borderRadius: 3, backgroundColor: colors.secondary, marginTop: spacing.md, overflow: "hidden" },
+  oFill: { height: 5, borderRadius: 3, backgroundColor: colors.primary },
   siteList: {
     gap: spacing.sm,
   },

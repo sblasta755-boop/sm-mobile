@@ -1,325 +1,325 @@
-# name: Build signed Android APK
+name: Build signed Android APK
  
-# # Builds the native Android app entirely on GitHub's runner - no Expo
-# # account, no EAS cloud, no local Docker image. `expo prebuild` generates
-# # the android/ project from app.json (the Expo SDK libraries stay as
-# # normal npm dependencies), then Gradle builds and signs a release APK.
-# #
-# # One-time setup (keystore + secrets): src/docs/ANDROID_APK_BUILD.md
-# #
-# # One push builds ONE environment's app, chosen by the branch:
-# #
-# #   dev (or develop)       -> dev         (installs as "Šoma360 DEV", id ...mobile.dev)
-# #   qa                     -> qa          (installs as "Šoma360 QA",  id ...mobile.qa)
-# #   subscription / main    -> production  (the normal app, unchanged)
-# #
-# # The three install side by side on one phone and each talks to its own backend.
-# # Each GitHub Environment (dev, qa, production) holds that environment's own
-# # EXPO_PUBLIC_API_BASE_URL, RELEASES_REPO, APP_RELEASE_TOKEN and Firebase file;
-# # see src/docs/ENVIRONMENTS.md.
-# on:
-#   push:
-#     branches: [dev, develop, qa, subscription, main]
-#   workflow_dispatch:
-#     inputs:
-#       environment:
-#         description: "Build the selected branch for this environment"
-#         type: choice
-#         options:
-#           - dev
-#           - qa
-#           - production
-#         required: true
+# Builds the native Android app entirely on GitHub's runner - no Expo
+# account, no EAS cloud, no local Docker image. `expo prebuild` generates
+# the android/ project from app.json (the Expo SDK libraries stay as
+# normal npm dependencies), then Gradle builds and signs a release APK.
+#
+# One-time setup (keystore + secrets): src/docs/ANDROID_APK_BUILD.md
+#
+# One push builds ONE environment's app, chosen by the branch:
+#
+#   dev (or develop)       -> dev         (installs as "Šoma360 DEV", id ...mobile.dev)
+#   qa                     -> qa          (installs as "Šoma360 QA",  id ...mobile.qa)
+#   subscription / main    -> production  (the normal app, unchanged)
+#
+# The three install side by side on one phone and each talks to its own backend.
+# Each GitHub Environment (dev, qa, production) holds that environment's own
+# EXPO_PUBLIC_API_BASE_URL, RELEASES_REPO, APP_RELEASE_TOKEN and Firebase file;
+# see src/docs/ENVIRONMENTS.md.
+on:
+  push:
+    branches: [dev, develop, qa, subscription, main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Build the selected branch for this environment"
+        type: choice
+        options:
+          - dev
+          - qa
+          - production
+        required: true
 
-# # A newer push supersedes a build still running for the same branch.
-# concurrency:
-#   group: build-apk-local-${{ github.ref }}
-#   cancel-in-progress: true
+# A newer push supersedes a build still running for the same branch.
+concurrency:
+  group: build-apk-local-${{ github.ref }}
+  cancel-in-progress: true
 
-# jobs:
-#   target:
-#     name: Pick the environment
-#     runs-on: ubuntu-latest
-#     outputs:
-#       environment: ${{ steps.pick.outputs.environment }}
-#       app_env: ${{ steps.pick.outputs.app_env }}
-#     steps:
-#       - id: pick
-#         env:
-#           CHOSEN: ${{ inputs.environment }}
-#           BRANCH: ${{ github.ref_name }}
-#         run: |
-#           env_name="$CHOSEN"
-#           if [ -z "$env_name" ]; then
-#             case "$BRANCH" in
-#               dev|develop) env_name=dev ;;
-#               qa) env_name=qa ;;
-#               subscription|main) env_name=production ;;
-#               *) echo "::error::No environment is configured for branch '$BRANCH'"; exit 1 ;;
-#             esac
-#           fi
-#           app_env="$env_name"
-#           if [ "$env_name" = "production" ]; then app_env=prod; fi
-#           echo "environment=$env_name" >> "$GITHUB_OUTPUT"
-#           echo "app_env=$app_env" >> "$GITHUB_OUTPUT"
-#           echo "Building $BRANCH for $env_name"
+jobs:
+  target:
+    name: Pick the environment
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.pick.outputs.environment }}
+      app_env: ${{ steps.pick.outputs.app_env }}
+    steps:
+      - id: pick
+        env:
+          CHOSEN: ${{ inputs.environment }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          env_name="$CHOSEN"
+          if [ -z "$env_name" ]; then
+            case "$BRANCH" in
+              dev|develop) env_name=dev ;;
+              qa) env_name=qa ;;
+              subscription|main) env_name=production ;;
+              *) echo "::error::No environment is configured for branch '$BRANCH'"; exit 1 ;;
+            esac
+          fi
+          app_env="$env_name"
+          if [ "$env_name" = "production" ]; then app_env=prod; fi
+          echo "environment=$env_name" >> "$GITHUB_OUTPUT"
+          echo "app_env=$app_env" >> "$GITHUB_OUTPUT"
+          echo "Building $BRANCH for $env_name"
 
-#   build-apk:
-#     name: Gradle release build (${{ needs.target.outputs.environment }})
-#     needs: target
-#     # Holds this build's variables and secrets (API address, release repo, Firebase file).
-#     environment: ${{ needs.target.outputs.environment }}
-#     runs-on: ubuntu-latest
-#     timeout-minutes: 60
-#     permissions:
-#       # Publishes the APK as a release so the emailed link has somewhere to point.
-#       contents: write
-#     defaults:
-#       run:
-#         working-directory: src
-#     env:
-#       # Baked into the app at bundle time (read via process.env in
-#       # src/api/client.ts). Set it as a repository *variable*.
-#       EXPO_PUBLIC_API_BASE_URL: ${{ vars.EXPO_PUBLIC_API_BASE_URL }}
-#       # dev | qa | prod: read by app.config.js to name the app and set its id.
-#       APP_ENV: ${{ needs.target.outputs.app_env }}
-#     steps:
-#       - name: Check out repository
-#         uses: actions/checkout@v5
-#         with:
-#           # Full history and tags, so git describe can name the build.
-#           fetch-depth: 0
+  build-apk:
+    name: Gradle release build (${{ needs.target.outputs.environment }})
+    needs: target
+    # Holds this build's variables and secrets (API address, release repo, Firebase file).
+    environment: ${{ needs.target.outputs.environment }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      # Publishes the APK as a release so the emailed link has somewhere to point.
+      contents: write
+    defaults:
+      run:
+        working-directory: src
+    env:
+      # Baked into the app at bundle time (read via process.env in
+      # src/api/client.ts). Set it as a repository *variable*.
+      EXPO_PUBLIC_API_BASE_URL: ${{ vars.EXPO_PUBLIC_API_BASE_URL }}
+      # dev | qa | prod: read by app.config.js to name the app and set its id.
+      APP_ENV: ${{ needs.target.outputs.app_env }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+        with:
+          # Full history and tags, so git describe can name the build.
+          fetch-depth: 0
 
-#       - name: Compute version
-#         run: |
-#           version="$(git describe --tags --always)"
-#           # Non-production builds say so in their version, so a screenshot or a
-#           # support request shows which build it was.
-#           if [ "$APP_ENV" != "prod" ]; then version="${APP_ENV}-${version}"; fi
-#           echo "APP_VERSION_NAME=$version" >> "$GITHUB_ENV"
-#           echo "App version: $version"
+      - name: Compute version
+        run: |
+          version="$(git describe --tags --always)"
+          # Non-production builds say so in their version, so a screenshot or a
+          # support request shows which build it was.
+          if [ "$APP_ENV" != "prod" ]; then version="${APP_ENV}-${version}"; fi
+          echo "TAG=$version" >> "$GITHUB_ENV"
+          echo "App version: $version"
 
-#       - name: Check signing secrets are configured
-#         run: |
-#           missing=0
-#           for name in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
-#             if [ -z "${!name}" ]; then echo "::error::Missing repository secret $name (see src/docs/ANDROID_APK_BUILD.md)"; missing=1; fi
-#           done
-#           exit $missing
-#         env:
-#           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-#           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-#           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-#           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+      - name: Check signing secrets are configured
+        run: |
+          missing=0
+          for name in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            if [ -z "${!name}" ]; then echo "::error::Missing repository secret $name (see src/docs/ANDROID_APK_BUILD.md)"; missing=1; fi
+          done
+          exit $missing
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
 
-#       - name: Configure Firebase (push notifications)
-#         id: firebase
-#         run: |
-#           # google-services.json is the Firebase *client* config for this Android app
-#           # (package za.co.smartclean.mobile, plus .dev or .qa for those builds). It is a secret here, not a committed file.
-#           if [ -z "$GOOGLE_SERVICES_JSON_BASE64" ]; then
-#             echo "::warning::GOOGLE_SERVICES_JSON_BASE64 is not set - this APK will build but cannot receive push notifications (see src/docs/ANDROID_APK_BUILD.md)."
-#             echo "enabled=false" >> "$GITHUB_OUTPUT"
-#             exit 0
-#           fi
-#           printf '%s' "$GOOGLE_SERVICES_JSON_BASE64" | tr -d '[:space:]' | base64 --decode > google-services.json \
-#             || { echo "::error::GOOGLE_SERVICES_JSON_BASE64 is not valid base64. Re-create it with: base64 -w0 google-services.json"; exit 1; }
-#           # A cut-off paste decodes to JSON that stops part way: say so, it is a different mistake from a wrong file.
-#           jq empty google-services.json 2>/dev/null \
-#             || { echo "::error::GOOGLE_SERVICES_JSON_BASE64 decodes to an INCOMPLETE file ($(wc -c < google-services.json) bytes, not valid JSON). The secret was probably cut off when pasted. Re-create it on one line with: base64 -w0 google-services.json, and set it again on the '${{ needs.target.outputs.environment }}' environment."; exit 1; }
-#           # Wrong file (e.g. the service-account/admin-SDK key) or wrong app = silent push failure later.
-#           jq -e '.project_info.project_id and (.client | length > 0)' google-services.json > /dev/null \
-#             || { echo "::error::That is not a google-services.json (the Android client file from Firebase console > Project settings > Your apps). A service-account key will not work here."; exit 1; }
-#           # The id this build installs as: dev and qa builds add a suffix (see app.config.js).
-#           package="za.co.smartclean.mobile"
-#           if [ "$APP_ENV" != "prod" ]; then package="${package}.${APP_ENV}"; fi
-#           jq -e --arg package "$package" '[.client[].client_info.android_client_info.package_name] | index($package)' google-services.json > /dev/null \
-#             || { echo "::error::google-services.json has no Android app with package $package. Register that package in Firebase and download the file again."; exit 1; }
-#           echo "Firebase project: $(jq -r .project_info.project_id google-services.json)"
-#           echo "enabled=true" >> "$GITHUB_OUTPUT"
-#         env:
-#           GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
+      - name: Configure Firebase (push notifications)
+        id: firebase
+        run: |
+          # google-services.json is the Firebase *client* config for this Android app
+          # (package za.co.smartclean.mobile, plus .dev or .qa for those builds). It is a secret here, not a committed file.
+          if [ -z "$GOOGLE_SERVICES_JSON_BASE64" ]; then
+            echo "::warning::GOOGLE_SERVICES_JSON_BASE64 is not set - this APK will build but cannot receive push notifications (see src/docs/ANDROID_APK_BUILD.md)."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          printf '%s' "$GOOGLE_SERVICES_JSON_BASE64" | tr -d '[:space:]' | base64 --decode > google-services.json \
+            || { echo "::error::GOOGLE_SERVICES_JSON_BASE64 is not valid base64. Re-create it with: base64 -w0 google-services.json"; exit 1; }
+          # A cut-off paste decodes to JSON that stops part way: say so, it is a different mistake from a wrong file.
+          jq empty google-services.json 2>/dev/null \
+            || { echo "::error::GOOGLE_SERVICES_JSON_BASE64 decodes to an INCOMPLETE file ($(wc -c < google-services.json) bytes, not valid JSON). The secret was probably cut off when pasted. Re-create it on one line with: base64 -w0 google-services.json, and set it again on the '${{ needs.target.outputs.environment }}' environment."; exit 1; }
+          # Wrong file (e.g. the service-account/admin-SDK key) or wrong app = silent push failure later.
+          jq -e '.project_info.project_id and (.client | length > 0)' google-services.json > /dev/null \
+            || { echo "::error::That is not a google-services.json (the Android client file from Firebase console > Project settings > Your apps). A service-account key will not work here."; exit 1; }
+          # The id this build installs as: dev and qa builds add a suffix (see app.config.js).
+          package="za.co.smartclean.mobile"
+          if [ "$APP_ENV" != "prod" ]; then package="${package}.${APP_ENV}"; fi
+          jq -e --arg package "$package" '[.client[].client_info.android_client_info.package_name] | index($package)' google-services.json > /dev/null \
+            || { echo "::error::google-services.json has no Android app with package $package. Register that package in Firebase and download the file again."; exit 1; }
+          echo "Firebase project: $(jq -r .project_info.project_id google-services.json)"
+          echo "enabled=true" >> "$GITHUB_OUTPUT"
+        env:
+          GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
 
-#       - name: Setup Node.js
-#         uses: actions/setup-node@v5
-#         with:
-#           node-version: 22
-#           cache: npm
-#           cache-dependency-path: src/package-lock.json
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: src/package-lock.json
 
-#       - name: Setup Java
-#         uses: actions/setup-java@v5
-#         with:
-#           distribution: temurin
-#           java-version: 17
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
 
-#       - name: Setup Gradle
-#         uses: gradle/actions/setup-gradle@v4
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
 
-#       - name: Install dependencies
-#         run: npm ci
+      - name: Install dependencies
+        run: npm ci
 
-#       - name: Generate native Android project
-#         run: npx expo prebuild --platform android --no-install
+      - name: Generate native Android project
+        run: npx expo prebuild --platform android --no-install
 
-#       - name: Decode release keystore 
-#         run: |
-#           # Strip whitespace/newlines a copy-paste may have added, and restore
-#           # trailing "=" padding, which copy-paste often drops.
-#           clean="$(printf '%s' "$ANDROID_KEYSTORE_BASE64" | tr -d '[:space:]')"
-#           while [ $(( ${#clean} % 4 )) -ne 0 ]; do clean="${clean}="; done
-#           printf '%s' "$clean" | base64 --decode > "$RUNNER_TEMP/release.jks" \
-#             || { echo "::error::ANDROID_KEYSTORE_BASE64 is not valid base64. Re-create it with: base64 -w0 soma360-release.jks (see src/docs/ANDROID_APK_BUILD.md)"; exit 1; }
-#           # Fails here, with a clear message, on a wrong file or wrong password
-#           # instead of deep inside Gradle.
-#           echo "decoded keystore size: $(stat -c %s "$RUNNER_TEMP/release.jks") bytes"
-#           echo "--- aliases in the keystore (opened with the storepass) ---"
-#           keytool -list -keystore "$RUNNER_TEMP/release.jks" -storepass "$ANDROID_KEYSTORE_PASSWORD" 2>&1 | grep -viE "^$|warning|keystore (type|provider)" \
-#             || true
-#           keytool -list -keystore "$RUNNER_TEMP/release.jks" -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias "$ANDROID_KEY_ALIAS" > /dev/null 2>&1 \
-#             || { echo "::error::Keystore could not be opened - see the keytool output above. Wrong ANDROID_KEYSTORE_PASSWORD, an ANDROID_KEY_ALIAS that is not in the list above, or a truncated ANDROID_KEYSTORE_BASE64."; exit 1; }
-#           echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
-#         env:
-#           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-#           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-#           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      - name: Decode release keystore 
+        run: |
+          # Strip whitespace/newlines a copy-paste may have added, and restore
+          # trailing "=" padding, which copy-paste often drops.
+          clean="$(printf '%s' "$ANDROID_KEYSTORE_BASE64" | tr -d '[:space:]')"
+          while [ $(( ${#clean} % 4 )) -ne 0 ]; do clean="${clean}="; done
+          printf '%s' "$clean" | base64 --decode > "$RUNNER_TEMP/release.jks" \
+            || { echo "::error::ANDROID_KEYSTORE_BASE64 is not valid base64. Re-create it with: base64 -w0 soma360-release.jks (see src/docs/ANDROID_APK_BUILD.md)"; exit 1; }
+          # Fails here, with a clear message, on a wrong file or wrong password
+          # instead of deep inside Gradle.
+          echo "decoded keystore size: $(stat -c %s "$RUNNER_TEMP/release.jks") bytes"
+          echo "--- aliases in the keystore (opened with the storepass) ---"
+          keytool -list -keystore "$RUNNER_TEMP/release.jks" -storepass "$ANDROID_KEYSTORE_PASSWORD" 2>&1 | grep -viE "^$|warning|keystore (type|provider)" \
+            || true
+          keytool -list -keystore "$RUNNER_TEMP/release.jks" -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias "$ANDROID_KEY_ALIAS" > /dev/null 2>&1 \
+            || { echo "::error::Keystore could not be opened - see the keytool output above. Wrong ANDROID_KEYSTORE_PASSWORD, an ANDROID_KEY_ALIAS that is not in the list above, or a truncated ANDROID_KEYSTORE_BASE64."; exit 1; }
+          echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
 
-#       - name: Build release APK
-#         working-directory: src/android
-#         run: |
-#           # Dependencies come from Google's and Maven's servers, which now and then
-#           # stall on a shared runner (a "Read timed out" on a library download is
-#           # not a problem with the app). Fail a stalled download in 2 minutes
-#           # instead of hanging, and try the whole build up to three times; files
-#           # already downloaded are kept between attempts.
-#           for attempt in 1 2 3; do
-#             if ./gradlew assembleRelease \
-#               --init-script "$GITHUB_WORKSPACE/src/scripts/android-signing.init.gradle" \
-#               -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=1g" \
-#               -Dorg.gradle.internal.http.connectionTimeout=60000 \
-#               -Dorg.gradle.internal.http.socketTimeout=120000 \
-#               -Dorg.gradle.internal.repository.max.retries=5 \
-#               -PreactNativeArchitectures=arm64-v8a,armeabi-v7a \
-#               --no-daemon; then
-#               exit 0
-#             fi
-#             echo "::warning::Gradle build attempt $attempt failed"
-#             [ "$attempt" -lt 3 ] && sleep 30
-#           done
-#           echo "::error::The release build failed three times. If the log shows 'Read timed out' or 'Could not GET', it is a download problem: re-run the workflow."
-#           exit 1
-#         env:
-#           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-#           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-#           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-#           # Play/Android refuse to install an APK over one with a higher
-#           # versionCode, so it must only ever go up.
-#           ANDROID_VERSION_CODE: ${{ github.run_number }}
+      - name: Build release APK
+        working-directory: src/android
+        run: |
+          # Dependencies come from Google's and Maven's servers, which now and then
+          # stall on a shared runner (a "Read timed out" on a library download is
+          # not a problem with the app). Fail a stalled download in 2 minutes
+          # instead of hanging, and try the whole build up to three times; files
+          # already downloaded are kept between attempts.
+          for attempt in 1 2 3; do
+            if ./gradlew assembleRelease \
+              --init-script "$GITHUB_WORKSPACE/src/scripts/android-signing.init.gradle" \
+              -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=1g" \
+              -Dorg.gradle.internal.http.connectionTimeout=60000 \
+              -Dorg.gradle.internal.http.socketTimeout=120000 \
+              -Dorg.gradle.internal.repository.max.retries=5 \
+              -PreactNativeArchitectures=arm64-v8a,armeabi-v7a \
+              --no-daemon; then
+              exit 0
+            fi
+            echo "::warning::Gradle build attempt $attempt failed"
+            [ "$attempt" -lt 3 ] && sleep 30
+          done
+          echo "::error::The release build failed three times. If the log shows 'Read timed out' or 'Could not GET', it is a download problem: re-run the workflow."
+          exit 1
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          # Play/Android refuse to install an APK over one with a higher
+          # versionCode, so it must only ever go up.
+          ANDROID_VERSION_CODE: ${{ github.run_number }}
 
-#       - name: Verify APK signature
-#         run: |
-#           apksigner="$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)"
-#           "$apksigner" verify --print-certs android/app/build/outputs/apk/release/app-release.apk
+      - name: Verify APK signature
+        run: |
+          apksigner="$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)"
+          "$apksigner" verify --print-certs android/app/build/outputs/apk/release/app-release.apk
 
-#       - name: Name the APK
-#         id: apk
-#         run: |
-#           version="$APP_VERSION_NAME"
-#           name="soma360-${version}-build${{ github.run_number }}.apk"
-#           cp android/app/build/outputs/apk/release/app-release.apk "$name"
-#           echo "name=$name" >> "$GITHUB_OUTPUT"
-#           echo "version=$version" >> "$GITHUB_OUTPUT"
-#           echo "size=$(du -m "$name" | cut -f1)" >> "$GITHUB_OUTPUT"
+      - name: Name the APK
+        id: apk
+        run: |
+          version="$TAG"
+          name="soma360-${version}-build${{ github.run_number }}.apk"
+          cp android/app/build/outputs/apk/release/app-release.apk "$name"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "size=$(du -m "$name" | cut -f1)" >> "$GITHUB_OUTPUT"
 
-#       - name: Upload APK
-#         uses: actions/upload-artifact@v4
-#         with:
-#           name: soma360-release-${{ github.run_number }}
-#           path: src/${{ steps.apk.outputs.name }}
-#           if-no-files-found: error
-#           retention-days: 30
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: soma360-release-${{ github.run_number }}
+          path: src/${{ steps.apk.outputs.name }}
+          if-no-files-found: error
+          retention-days: 30
 
-#       - name: Publish release (gives the email a download link)
-#         id: release
-#         run: |
-#           tag="build-${{ github.run_number }}"
-#           if [ "$APP_ENV" != "prod" ]; then tag="${APP_ENV}-${tag}"; fi
-#           gh release create "$tag" "${{ steps.apk.outputs.name }}" \
-#             --repo "$GITHUB_REPOSITORY" --prerelease \
-#             --title "Šoma360 ${{ steps.apk.outputs.version }} (build ${{ github.run_number }})" \
-#             --notes "Branch \`${{ github.ref_name }}\`, commit ${GITHUB_SHA::7}. Signed release APK."
-#           echo "url=https://github.com/$GITHUB_REPOSITORY/releases/download/$tag/${{ steps.apk.outputs.name }}" >> "$GITHUB_OUTPUT"
-#         env:
-#           GH_TOKEN: ${{ github.token }}
+      - name: Publish release (gives the email a download link)
+        id: release
+        run: |
+          tag="build-${{ github.run_number }}"
+          if [ "$APP_ENV" != "prod" ]; then tag="${APP_ENV}-${tag}"; fi
+          gh release create "$tag" "${{ steps.apk.outputs.name }}" \
+            --repo "$GITHUB_REPOSITORY" --prerelease \
+            --title "Šoma360 ${{ steps.apk.outputs.version }} (build ${{ github.run_number }})" \
+            --notes "Branch \`${{ github.ref_name }}\`, commit ${GITHUB_SHA::7}. Signed release APK."
+          echo "url=https://github.com/$GITHUB_REPOSITORY/releases/download/$tag/${{ steps.apk.outputs.name }}" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ github.token }}
 
-#       # Public hosting: this repository is private, so its release link only
-#       # opens for members. The APK is also published as a release on a separate
-#       # PUBLIC repo (variable RELEASES_REPO, token secret RELEASES_REPO_TOKEN),
-#       # and the build is registered with the backend so installed apps can offer
-#       # it. Skipped until RELEASES_REPO is set; see src/docs/ANDROID_APK_BUILD.md.
-#       - name: Publish to the public releases repo and register the build
-#         id: public
-#         if: ${{ vars.RELEASES_REPO != '' }}
-#         run: |
-#           # Accept "owner/repo", or a pasted URL such as
-#           # https://github.com/owner/repo.git, and reduce it to owner/repo.
-#           RELEASES_REPO="${RELEASES_REPO#https://github.com/}"
-#           RELEASES_REPO="${RELEASES_REPO#http://github.com/}"
-#           RELEASES_REPO="${RELEASES_REPO%.git}"
-#           RELEASES_REPO="${RELEASES_REPO%/}"
-#           tag="build-${{ github.run_number }}"
-#           if [ "$APP_ENV" != "prod" ]; then tag="${APP_ENV}-${tag}"; fi
-#           gh release create "$tag" "${{ steps.apk.outputs.name }}" \
-#             --repo "$RELEASES_REPO" \
-#             --title "Šoma360 ${{ steps.apk.outputs.version }} (build ${{ github.run_number }})" \
-#             --notes "Signed release APK."
-#           url="https://github.com/$RELEASES_REPO/releases/download/$tag/${{ steps.apk.outputs.name }}"
-#           echo "url=$url" >> "$GITHUB_OUTPUT"
-#           if [ -n "$APP_RELEASE_TOKEN" ] && [ -n "$EXPO_PUBLIC_API_BASE_URL" ]; then
-#             notes="$(printf '%s' "$COMMIT_MESSAGE" | head -n 12)"
-#             jq -n --arg code "${{ github.run_number }}" --arg name "$APP_VERSION_NAME" \
-#               --arg url "$url" --arg notes "$notes" \
-#               '{platform:"android",versionCode:($code|tonumber),versionName:$name,downloadUrl:$url,notes:$notes}' \
-#               | curl -fsS -X POST "${EXPO_PUBLIC_API_BASE_URL%/}/app/releases" \
-#                   -H "Content-Type: application/json" -H "X-Release-Token: $APP_RELEASE_TOKEN" -d @-
-#           else
-#             echo "::warning::APP_RELEASE_TOKEN or EXPO_PUBLIC_API_BASE_URL is not set, so the build was published but not registered for in-app updates."
-#           fi
-#         env:
-#           GH_TOKEN: ${{ secrets.RELEASES_REPO_TOKEN }}
-#           RELEASES_REPO: ${{ vars.RELEASES_REPO }}
-#           APP_RELEASE_TOKEN: ${{ secrets.APP_RELEASE_TOKEN }}
-#           COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+      # Public hosting: this repository is private, so its release link only
+      # opens for members. The APK is also published as a release on a separate
+      # PUBLIC repo (variable RELEASES_REPO, token secret RELEASES_REPO_TOKEN),
+      # and the build is registered with the backend so installed apps can offer
+      # it. Skipped until RELEASES_REPO is set; see src/docs/ANDROID_APK_BUILD.md.
+      - name: Publish to the public releases repo and register the build
+        id: public
+        if: ${{ vars.RELEASES_REPO != '' }}
+        run: |
+          # Accept "owner/repo", or a pasted URL such as
+          # https://github.com/owner/repo.git, and reduce it to owner/repo.
+          RELEASES_REPO="${RELEASES_REPO#https://github.com/}"
+          RELEASES_REPO="${RELEASES_REPO#http://github.com/}"
+          RELEASES_REPO="${RELEASES_REPO%.git}"
+          RELEASES_REPO="${RELEASES_REPO%/}"
+          tag="build-${{ github.run_number }}"
+          if [ "$APP_ENV" != "prod" ]; then tag="${APP_ENV}-${tag}"; fi
+          gh release create "$tag" "${{ steps.apk.outputs.name }}" \
+            --repo "$RELEASES_REPO" \
+            --title "Šoma360 ${{ steps.apk.outputs.version }} (build ${{ github.run_number }})" \
+            --notes "Signed release APK."
+          url="https://github.com/$RELEASES_REPO/releases/download/$tag/${{ steps.apk.outputs.name }}"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          if [ -n "$APP_RELEASE_TOKEN" ] && [ -n "$EXPO_PUBLIC_API_BASE_URL" ]; then
+            notes="$(printf '%s' "$COMMIT_MESSAGE" | head -n 12)"
+            jq -n --arg code "${{ github.run_number }}" --arg name "$TAG" \
+              --arg url "$url" --arg notes "$notes" \
+              '{platform:"android",versionCode:($code|tonumber),versionName:$name,downloadUrl:$url,notes:$notes}' \
+              | curl -fsS -X POST "${EXPO_PUBLIC_API_BASE_URL%/}/app/releases" \
+                  -H "Content-Type: application/json" -H "X-Release-Token: $APP_RELEASE_TOKEN" -d @-
+          else
+            echo "::warning::APP_RELEASE_TOKEN or EXPO_PUBLIC_API_BASE_URL is not set, so the build was published but not registered for in-app updates."
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.RELEASES_REPO_TOKEN }}
+          RELEASES_REPO: ${{ vars.RELEASES_REPO }}
+          APP_RELEASE_TOKEN: ${{ secrets.APP_RELEASE_TOKEN }}
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
 
-#       - name: Email the download link
-#         if: ${{ vars.MAIL_TO != '' }}
-#         run: |
-#           npm install --no-save nodemailer
-#           node scripts/send-build-email.mjs
-#         env:
-#           APK_URL: ${{ steps.public.outputs.url || steps.release.outputs.url }}
-#           APK_NAME: ${{ steps.apk.outputs.name }}
-#           APK_SIZE_MB: ${{ steps.apk.outputs.size }}
-#           APP_VERSION: ${{ steps.apk.outputs.version }}
-#           VERSION_CODE: ${{ github.run_number }}
-#           BRANCH: ${{ github.ref_name }}
-#           COMMIT: ${{ github.sha }}
-#           COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
-#           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-#           PUSH_ENABLED: ${{ steps.firebase.outputs.enabled }}
-#           EMAIL_PROVIDER: ${{ vars.EMAIL_PROVIDER || 'smtp' }}
-#           SMTP_HOST: ${{ secrets.SMTP_HOST }}
-#           SMTP_PORT: ${{ vars.SMTP_PORT || '587' }}
-#           SMTP_SECURE: ${{ vars.SMTP_SECURE || 'false' }}
-#           SMTP_USER: ${{ secrets.SMTP_USER }}
-#           SMTP_PASS: ${{ secrets.SMTP_PASS }}
-#           MAIL_FROM: ${{ vars.MAIL_FROM }}
-#           MAIL_TO: ${{ vars.MAIL_TO }}
-#           BREVO_API_KEY: ${{ secrets.BREVO_API_KEY }}
-#           BREVO_FROM_EMAIL: ${{ vars.BREVO_FROM_EMAIL }}
-#           BREVO_FROM_NAME: ${{ vars.BREVO_FROM_NAME || 'Šoma360' }}
+      - name: Email the download link
+        if: ${{ vars.MAIL_TO != '' }}
+        run: |
+          npm install --no-save nodemailer
+          node scripts/send-build-email.mjs
+        env:
+          APK_URL: ${{ steps.public.outputs.url || steps.release.outputs.url }}
+          APK_NAME: ${{ steps.apk.outputs.name }}
+          APK_SIZE_MB: ${{ steps.apk.outputs.size }}
+          TAG: ${{ steps.apk.outputs.version }}
+          VERSION_CODE: ${{ github.run_number }}
+          BRANCH: ${{ github.ref_name }}
+          COMMIT: ${{ github.sha }}
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          PUSH_ENABLED: ${{ steps.firebase.outputs.enabled }}
+          EMAIL_PROVIDER: ${{ vars.EMAIL_PROVIDER || 'smtp' }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ vars.SMTP_PORT || '587' }}
+          SMTP_SECURE: ${{ vars.SMTP_SECURE || 'false' }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          MAIL_FROM: ${{ vars.MAIL_FROM }}
+          MAIL_TO: ${{ vars.MAIL_TO }}
+          BREVO_API_KEY: ${{ secrets.BREVO_API_KEY }}
+          BREVO_FROM_EMAIL: ${{ vars.BREVO_FROM_EMAIL }}
+          BREVO_FROM_NAME: ${{ vars.BREVO_FROM_NAME || 'Šoma360' }}
 
-#       - name: Warn when no email is configured
-#         if: ${{ vars.MAIL_TO == '' }}
-#         run: echo "::warning::MAIL_TO is not set, so no download email was sent. The APK is under Artifacts and in the build-${{ github.run_number }} release."
+      - name: Warn when no email is configured
+        if: ${{ vars.MAIL_TO == '' }}
+        run: echo "::warning::MAIL_TO is not set, so no download email was sent. The APK is under Artifacts and in the build-${{ github.run_number }} release."
  

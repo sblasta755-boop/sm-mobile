@@ -151,9 +151,10 @@ export function Screen({
       <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
         {headerContent ? (
           <View style={styles.headerRow}>
-            {BackButton ?? <View style={styles.headerSpacer} />}
+            {/* Same width as the two buttons on the right, so the content between them is truly centred. */}
+            <View style={styles.headerSide}>{BackButton}</View>
             <View style={styles.headerCenter}>{headerContent}</View>
-            {HeaderActions}
+            <View style={[styles.headerSide, styles.headerSideEnd]}>{HeaderActions}</View>
           </View>
         ) : (
           <>
@@ -275,8 +276,13 @@ const styles = themedStyles(() => StyleSheet.create({
     justifyContent: "space-between",
     gap: spacing.sm,
   },
-  headerSpacer: {
-    width: 32,
+  // Two 32px buttons and the 6px gap between them: the width of HeaderActions.
+  headerSide: {
+    width: 70,
+    alignItems: "flex-start",
+  },
+  headerSideEnd: {
+    alignItems: "flex-end",
   },
   headerCenter: {
     flex: 1,

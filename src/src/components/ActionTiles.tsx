@@ -1,9 +1,10 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { hexAlpha, mixHex } from "@/domain/calendarGrid";
+import { reportTiles, tourTargetRef } from "@/features/tour";
 import { colors, radius, spacing, themedStyles, typography, useThemeVersion } from "@/theme";
 
 export type ActionTile = {
@@ -32,6 +33,19 @@ export function ActionTiles({ items, max = MAX_TILES }: { items: ActionTile[]; m
   useThemeVersion();
   const insets = useSafeAreaInsets();
   const [moreOpen, setMoreOpen] = useState(false);
+  // Tell the guided tour what is really here, so every shortcut that is switched on gets a step.
+  const signature = items.map((i) => `${i.key}\u0000${i.label}\u0000${i.hint ?? ""}`).join("|");
+  useEffect(() => {
+    if (items.length === 0) return;
+    const ordered = [...items].sort((a, b) => (b.badge ? 1 : 0) - (a.badge ? 1 : 0));
+    const over = ordered.length > max;
+    const pick = (i: ActionTile) => ({ key: i.key, label: i.label, hint: i.hint });
+    reportTiles({
+      shown: (over ? ordered.slice(0, max - 1) : ordered).map(pick),
+      rest: over ? ordered.slice(max - 1).map(pick) : [],
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signature, max]);
   if (items.length === 0) return null;
 
   // What needs attention first, otherwise in the order given.
@@ -66,6 +80,8 @@ export function ActionTiles({ items, max = MAX_TILES }: { items: ActionTile[]; m
           return (
             <Pressable
               key={item.key}
+              ref={tourTargetRef(`tile:${item.key}`)}
+              collapsable={false}
               accessibilityRole="button"
               accessibilityLabel={
                 item.badge
