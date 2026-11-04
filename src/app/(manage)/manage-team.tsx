@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { StyleSheet, Text, TextInput, View } from "react-native";
 import { SvgXml } from "react-native-svg";
 import { Ionicons } from "@expo/vector-icons";
 import { Screen } from "@/components/Screen";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { StatusBadge } from "@/components/StatusBadge";
-import { useRoleLabel } from "@/features/roles";
+import { resolveStaffRole, useRoleLabel } from "@/features/roles";
+import { GroupCard, GroupSection, PersonRow, TeamCard, ViewSwitch } from "@/components/TeamKit";
+import { groupByRole, groupBySite, sitesText, teamSummary } from "@/domain/teamGroups";
 import { useSmartClean } from "@/features/store";
 import {
   fetchStaffOnboardingQrSvg,
@@ -44,6 +46,8 @@ export default function ManageTeam() {
   useThemeVersion(); // re-render with the new colours when the theme changes
   const { state, currentUser } = useSmartClean();
   const roleLabel = useRoleLabel();
+  // Management roles come back lower case ("site manager"); under a name it reads better as "Site manager".
+  const roleName = (role: string) => roleLabel(role).replace(/^./, (c) => c.toUpperCase());
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<DemoUser | null>(null);
   const [grant, setGrant] = useState<StaffGrant | null>(null);
@@ -51,26 +55,52 @@ export default function ManageTeam() {
   const [busy, setBusy] = useState(false);
   const [loadingGrant, setLoadingGrant] = useState(false);
 
+  const [view, setView] = useState<"site" | "role">("site");
+  const [openKeys, setOpenKeys] = useState<ReadonlySet<string>>(new Set());
+
+  // Everyone but me, narrowed by the search.
   const team = useMemo(() => {
     const needle = query.trim().toLowerCase();
     const rows = state.users.filter((user) => user.id !== currentUser?.id);
-    const matched = needle
+    return needle
       ? rows.filter(
           (user) =>
             user.name.toLowerCase().includes(needle) ||
             (user.email ?? "").toLowerCase().includes(needle) ||
-            user.role.toLowerCase().includes(needle),
+            user.role.toLowerCase().includes(needle) ||
+            roleLabel(user.role).toLowerCase().includes(needle),
         )
       : rows;
-    // Anyone who has not finished onboarding floats to the top: they are
-    // the only rows that need the manager to do something.
-    return [...matched].sort((a, b) => {
-      const aPending = statusOf(a) === "Pending Activation" ? 0 : 1;
-      const bPending = statusOf(b) === "Pending Activation" ? 0 : 1;
-      if (aPending !== bPending) return aPending - bPending;
-      return a.name.localeCompare(b.name);
+    // roleLabel is rebuilt each render from state.staffRoles, which is already a dependency through state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.users, state.staffRoles, currentUser, query]);
+
+  const people = useMemo(() => team.map((user) => ({ ...user, status: statusOf(user) })), [team]);
+  // The app's Site has no ownerId field, but bootstrap passes the backend's record through; an operations manager's
+  // sites hang off it.
+  const sites = useMemo(
+    () => state.sites.map((site) => ({ id: site.id, name: site.name, ownerId: (site as { ownerId?: string }).ownerId })),
+    [state.sites],
+  );
+  const summary = useMemo(
+    () => teamSummary(state.users.filter((user) => user.id !== currentUser?.id).map((user) => ({ ...user, status: statusOf(user) }))),
+    [state.users, currentUser],
+  );
+  const bySite = useMemo(() => groupBySite(people, sites), [people, sites]);
+  const byRole = useMemo(
+    () => groupByRole(people, (role) => resolveStaffRole(state.staffRoles, role)?.pluralLabel),
+    [people, state.staffRoles],
+  );
+  // While searching every group is open, so a match is never hidden in a closed one.
+  const searching = query.trim().length > 0;
+  const isOpen = (key: string) => searching || openKeys.has(key);
+  const toggle = (key: string) =>
+    setOpenKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
     });
-  }, [state.users, currentUser, query]);
 
   const loadGrant = useCallback(
     async (user: DemoUser) => {
@@ -192,6 +222,7 @@ export default function ManageTeam() {
 
   return (
     <Screen title="Team">
+      <TeamCard summary={summary} />
       <View style={styles.searchRow}>
         <Ionicons name="search" size={16} color={colors.mutedForeground} />
         <TextInput
@@ -204,6 +235,14 @@ export default function ManageTeam() {
           onChangeText={setQuery}
         />
       </View>
+      <ViewSwitch
+        value={view}
+        onChange={setView}
+        options={[
+          { value: "site", label: "By site" },
+          { value: "role", label: "By role" },
+        ]}
+      />
 
       {team.length === 0 ? (
         <Card>
@@ -213,28 +252,120 @@ export default function ManageTeam() {
               : "Nothing matches that search."}
           </Text>
         </Card>
+      ) : view === "site" ? (
+        <>
+          {bySite.acrossSites.length > 0 && (
+            <GroupCard
+              icon="globe-outline"
+              title="Across sites"
+              subtitle={plural(bySite.acrossSites.length, "admin or operations manager", "admins and operations managers")}
+              initials={bySite.acrossSites.map((u) => u.initials)}
+              open={isOpen("across")}
+              onToggle={() => toggle("across")}
+            >
+              {bySite.acrossSites.map((user, i) => (
+                <PersonRow
+                  key={user.id}
+                  first={i === 0}
+                  initials={user.initials}
+                  name={user.name}
+                  detail={`${roleName(user.role)} · ${sitesText(user, sites)}`}
+                  status={user.status}
+                  onPress={() => setSelected(user)}
+                />
+              ))}
+            </GroupCard>
+          )}
+          {bySite.sites.map((group) => (
+            <GroupCard
+              key={group.site.id}
+              icon="business-outline"
+              title={group.site.name}
+              subtitle={plural(group.people.length, "person", "people")}
+              initials={group.people.map((u) => u.initials)}
+              open={isOpen(`site:${group.site.id}`)}
+              onToggle={() => toggle(`site:${group.site.id}`)}
+            >
+              {group.sections.map((section) => (
+                <View key={section.key}>
+                  <GroupSection title={section.title} />
+                  {section.people.map((user, i) => (
+                    <PersonRow
+                      key={user.id}
+                      first={i === 0}
+                      initials={user.initials}
+                      name={user.name}
+                      detail={roleName(user.role)}
+                      status={user.status}
+                      onPress={() => setSelected(user)}
+                    />
+                  ))}
+                </View>
+              ))}
+            </GroupCard>
+          ))}
+          {bySite.noSite.length > 0 && (
+            <GroupCard
+              icon="help-circle-outline"
+              title="No site yet"
+              subtitle={plural(bySite.noSite.length, "person", "people")}
+              initials={bySite.noSite.map((u) => u.initials)}
+              open={isOpen("nosite")}
+              onToggle={() => toggle("nosite")}
+            >
+              {bySite.noSite.map((user, i) => (
+                <PersonRow
+                  key={user.id}
+                  first={i === 0}
+                  initials={user.initials}
+                  name={user.name}
+                  detail={roleName(user.role)}
+                  status={user.status}
+                  onPress={() => setSelected(user)}
+                />
+              ))}
+            </GroupCard>
+          )}
+        </>
       ) : (
-        team.map((user) => (
-          <Pressable key={user.id} onPress={() => setSelected(user)}>
-            <Card style={styles.row}>
-              <View style={styles.avatar}>
-                <Text style={styles.avatarText}>{user.initials}</Text>
-              </View>
-              <View style={styles.rowInfo}>
-                <Text style={styles.rowName} numberOfLines={1}>
-                  {user.name}
-                </Text>
-                <Text style={styles.muted} numberOfLines={1}>
-                  {roleLabel(user.role)}
-                </Text>
-              </View>
-              <StatusBadge tone={statusTone(statusOf(user))} label={statusOf(user)} />
-            </Card>
-          </Pressable>
+        byRole.map((group) => (
+          <GroupCard
+            key={group.role}
+            icon={ROLE_ICON[group.role] ?? "person-outline"}
+            title={group.title}
+            subtitle={String(group.people.length)}
+            initials={group.people.map((u) => u.initials)}
+            open={isOpen(`role:${group.role}`)}
+            onToggle={() => toggle(`role:${group.role}`)}
+          >
+            {group.people.map((user, i) => (
+              <PersonRow
+                key={user.id}
+                first={i === 0}
+                initials={user.initials}
+                name={user.name}
+                detail={sitesText(user, sites)}
+                status={user.status}
+                onPress={() => setSelected(user)}
+              />
+            ))}
+          </GroupCard>
         ))
       )}
     </Screen>
   );
+}
+
+const ROLE_ICON: Record<string, keyof typeof Ionicons.glyphMap> = {
+  org_admin: "shield-checkmark-outline",
+  operations_manager: "briefcase-outline",
+  site_manager: "business-outline",
+  supervisor: "eye-outline",
+  client_auditor: "clipboard-outline",
+};
+
+function plural(n: number, one: string, many: string) {
+  return `${n} ${n === 1 ? one : many}`;
 }
 
 /** A user's account status.
@@ -254,44 +385,16 @@ const styles = themedStyles(() => StyleSheet.create({
     alignItems: "center",
     gap: spacing.sm,
     borderWidth: 1,
-    borderColor: colors.input,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.md,
+    borderColor: colors.border,
+    borderRadius: radius.round,
+    paddingHorizontal: spacing.lg,
     backgroundColor: colors.card,
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm + 2,
   },
   searchInput: {
     flex: 1,
     minHeight: 44,
     fontSize: typography.body,
-    color: colors.foreground,
-  },
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-    marginBottom: spacing.sm,
-  },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.round,
-    backgroundColor: colors.primary,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  avatarText: {
-    fontSize: typography.small,
-    fontWeight: "800",
-    color: colors.primaryForeground,
-  },
-  rowInfo: {
-    flex: 1,
-    minWidth: 0,
-  },
-  rowName: {
-    fontSize: typography.body,
-    fontWeight: "700",
     color: colors.foreground,
   },
   detailCard: {
