@@ -65,6 +65,41 @@ const TAB_COPY: Record<string, { title: string; body: string }> = {
   "/corrective-actions": { title: "Actions", body: "Work you need to redo after an inspection, and when it is due." },
 };
 
+/**
+ * What each home shortcut is for, by its key. A shortcut only exists when its module is switched on for the
+ * organisation and the role may use it, so a step here appears only then. A shortcut with no entry (a module added
+ * later) still gets a step, built from its own name and hint, so nothing a person can tap is skipped.
+ */
+const TILE_COPY: Record<string, { title: string; body: string }> = {
+  rounds: { title: "Hourly checks", body: "Your hourly compliance rounds: check each item on your list and sign it off." },
+  corrective: { title: "Corrective actions", body: "Work to redo after an inspection, with the deadline for each." },
+  stock: { title: "Stock", body: "Issue, waste and restock supplies, and count what is on the shelf." },
+  incident: { title: "Report an incident", body: "Report a problem at a location, with photos. It goes straight to the people who deal with it." },
+  schedule: { title: "Schedule", body: "Where and when people are booked, with a map of the sites." },
+  leave: { title: "Leave", body: "Ask for time off, or approve requests, and see the holiday calendar." },
+  progress: { title: "My progress", body: "Your score, streak and how you are doing against your goals." },
+  report: { title: "Management report", body: "Make a PDF report of how your sites are doing." },
+  payruns: { title: "Pay runs", body: "Work out pay from approved attendance, with a PDF and a spreadsheet." },
+  overtime: { title: "Overtime", body: "Staff still on site after their shift ask here; you decide." },
+  board: { title: "Task board", body: "Every task on one board, by status. Drag work along as it moves." },
+  signs: { title: "Wayfinding signs", body: "Install the beacons that guide visitors around the building." },
+  walk: { title: "Walk a path", body: "Walk a route with your phone to record the path visitors will be guided along." },
+};
+
+export type TourTile = { key: string; label: string; hint?: string };
+export type TourTiles = { shown: TourTile[]; rest: TourTile[] };
+
+function tileStep(tile: TourTile, to: string, target: string): TourStep {
+  const copy = TILE_COPY[tile.key];
+  return {
+    id: `tile:${tile.key}`,
+    title: copy?.title ?? tile.label,
+    body: copy?.body ?? (tile.hint ? `${tile.label}: ${tile.hint}.` : `Opens ${tile.label}.`),
+    target: [target],
+    to,
+  };
+}
+
 function isProfile(tab: RoleTab) {
   return /profile$/.test(tab.to);
 }
@@ -73,6 +108,7 @@ export function buildSteps(
   user: { name?: string; role: string },
   tabs: RoleTab[],
   roleName: string | undefined,
+  tiles: TourTiles | null = null,
 ): TourStep[] {
   if (tabs.length === 0) return [];
   const first = user.name?.trim().split(/\s+/)[0];
@@ -96,6 +132,19 @@ export function buildSteps(
     if (isProfile(tab)) return;
     const copy = TAB_COPY[tab.to] ?? { title: tab.label, body: `Opens ${tab.label}.` };
     steps.push({ id: `tab:${tab.to}`, title: copy.title, body: copy.body, target: [`tab:${index}`], to: tab.to });
+    // The home screen's shortcuts come straight after Home, while the tour is still on it.
+    if (index === 0 && tiles) {
+      for (const tile of tiles.shown) steps.push(tileStep(tile, tab.to, `tile:${tile.key}`));
+      if (tiles.rest.length > 0) {
+        steps.push({
+          id: "tile:more",
+          title: "More shortcuts",
+          body: `${tiles.rest.map((t) => TILE_COPY[t.key]?.title ?? t.label).join(", ")}. Tap More to open them.`,
+          target: ["tile:more"],
+          to: tab.to,
+        });
+      }
+    }
   });
   const profileIndex = tabs.findIndex(isProfile);
   if (profileIndex >= 0) {
@@ -167,19 +216,58 @@ export async function markTourSeen(userId: string) {
 
 const registry = new Map<string, View[]>();
 
+function bind(id: string, getPrevious: () => View | null, setCurrent: (node: View | null) => void) {
+  return (node: View | null) => {
+    const previous = getPrevious();
+    if (previous) registry.set(id, (registry.get(id) ?? []).filter((n) => n !== previous));
+    setCurrent(node);
+    if (node) registry.set(id, [...(registry.get(id) ?? []), node]);
+  };
+}
+
 /** Makes a control a spotlight target: `<View {...useTourTarget("profile:tutorial")}>`. */
 export function useTourTarget(id: string) {
   const ref = useRef<View | null>(null);
   const setRef = useCallback(
-    (node: View | null) => {
-      const list = registry.get(id) ?? [];
-      if (ref.current) registry.set(id, list.filter((n) => n !== ref.current));
-      ref.current = node;
-      if (node) registry.set(id, [...(registry.get(id) ?? []), node]);
-    },
+    (node: View | null) => bind(id, () => ref.current, (n) => (ref.current = n))(node),
     [id],
   );
   return { ref: setRef, collapsable: false } as const;
+}
+
+// For targets made in a loop, where a hook cannot be called: one stable ref function per id.
+const loopRefs = new Map<string, (node: View | null) => void>();
+export function tourTargetRef(id: string): (node: View | null) => void {
+  let fn = loopRefs.get(id);
+  if (!fn) {
+    let current: View | null = null;
+    fn = bind(id, () => current, (n) => (current = n));
+    loopRefs.set(id, fn);
+  }
+  return fn;
+}
+
+// ---- The home screen's shortcuts ----
+// ActionTiles reports what it really shows. The shortcuts are built from the organisation's modules, so this is
+// what turns "module on" into "tour step", with no list of modules to keep in step here.
+
+let tiles: TourTiles | null = null;
+const tileListeners = new Set<() => void>();
+export function reportTiles(next: TourTiles | null) {
+  tiles = next;
+  tileListeners.forEach((l) => l());
+}
+function useTiles(): TourTiles | null {
+  return useSyncExternalStore(
+    (l) => {
+      tileListeners.add(l);
+      return () => {
+        tileListeners.delete(l);
+      };
+    },
+    () => tiles,
+    () => tiles,
+  );
 }
 
 export type Rect = { x: number; y: number; width: number; height: number };
@@ -238,9 +326,10 @@ export function useAutoStartTour() {
 export function useTourSteps(): TourStep[] {
   const { currentUser, state: app } = useSmartClean();
   const tabs = useRoleTabs();
+  const homeTiles = useTiles();
   if (!currentUser) return [];
   const staff = app.staffRoles?.find((r) => r.key === currentUser.role);
-  return buildSteps(currentUser, tabs, staff?.label?.toLowerCase());
+  return buildSteps(currentUser, tabs, staff?.label?.toLowerCase(), homeTiles);
 }
 
 /** Where to leave the person when the tour ends. */

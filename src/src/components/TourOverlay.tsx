@@ -38,7 +38,9 @@ export function TourOverlay() {
 
 function ActiveTour() {
   const tour = useTourState();
-  const steps = useTourSteps();
+  // Frozen when the tour starts: the screens it visits mount and unmount, and the numbering must not move under the person.
+  const liveSteps = useTourSteps();
+  const [steps] = useState(liveSteps);
   const tabCount = useRoleTabs().length;
   const { currentUser } = useSmartClean();
   const insets = useSafeAreaInsets();

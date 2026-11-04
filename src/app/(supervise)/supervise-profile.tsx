@@ -1,14 +1,13 @@
 import { router } from "expo-router";
-import { Pressable, StyleSheet, Text, View } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { StyleSheet, Text } from "react-native";
 import { Screen } from "@/components/Screen";
-import { Card } from "@/components/Card";
 import { UpdateBanner } from "@/components/UpdateBanner";
-import { Button } from "@/components/Button";
+import { ProfileHero, SettingsRow, SettingsSection, SignOutButton } from "@/components/SettingsKit";
 import { AppearanceRow, TourRow, ScheduleRow, SyncRow, EvidenceViewRow, FeedbackRow, ReportsRow } from "@/components/ProfilePreferences";
 import { BiometricLockRow } from "@/components/BiometricLockRow";
+
 import { useSmartClean } from "@/features/store";
-import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
+import { colors, spacing, themedStyles, useThemeVersion } from "@/theme";
 import { TAG } from "@/constants/version";
 
 /**
@@ -30,64 +29,47 @@ export default function SuperviseProfile() {
   return (
     <Screen title="Profile">
       <UpdateBanner />
-      <Card style={styles.identityCard}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{currentUser?.initials ?? "?"}</Text>
-        </View>
-        <View style={styles.identityInfo}>
-          <Text style={styles.name}>{currentUser?.name ?? "-"}</Text>
-          <Text style={styles.role}>Supervisor</Text>
-          {currentUser?.email && <Text style={styles.muted}>{currentUser.email}</Text>}
-        </View>
-      </Card>
+      <ProfileHero
+        name={currentUser?.name ?? "-"}
+        subtitle="Supervisor"
+        detail={currentUser?.email}
+        initials={currentUser?.initials ?? "?"}
+        photoUrl={currentUser?.profilePhotoDataUrl}
+      />
 
-      <Card style={styles.section}>
-        <Text style={styles.sectionTitle}>Your sites</Text>
+      <SettingsSection title="Your sites">
         {mySites.length === 0 ? (
-          <Text style={styles.warningText}>
-            No sites assigned yet, so your screens will look empty. Ask your manager to
-            assign you one.
-          </Text>
+          <SettingsRow
+            icon="warning-outline"
+            title="No sites assigned yet"
+            sub="Your screens will look empty. Ask your manager to assign you one."
+          />
         ) : (
-          mySites.map((site) => (
-            <View key={site.id} style={styles.siteRow}>
-              <Ionicons name="business-outline" size={16} color={colors.mutedForeground} />
-              <Text style={styles.siteName}>{site.name}</Text>
-            </View>
-          ))
+          mySites.map((site) => <SettingsRow key={site.id} icon="business-outline" title={site.name} />)
         )}
-      </Card>
+      </SettingsSection>
 
-      <Card style={styles.section}>
-        <Text style={styles.sectionTitle}>Account</Text>
-        <Pressable style={styles.linkRow} onPress={() => router.push("/profile-edit")}>
-          <Ionicons name="person-outline" size={18} color={colors.foreground} />
-          <Text style={styles.linkText}>Edit profile</Text>
-          <Ionicons name="chevron-forward" size={16} color={colors.mutedForeground} />
-        </Pressable>
-        <Pressable style={styles.linkRow} onPress={() => router.push("/notification-settings" as never)}>
-          <Ionicons name="notifications-outline" size={18} color={colors.foreground} />
-          <Text style={styles.linkText}>Notifications</Text>
-          <Ionicons name="chevron-forward" size={16} color={colors.mutedForeground} />
-        </Pressable>
-        <Pressable style={styles.linkRow} onPress={() => router.push("/privacy")}>
-          <Ionicons name="lock-closed-outline" size={18} color={colors.foreground} />
-          <Text style={styles.linkText}>Privacy &amp; POPIA notice</Text>
-          <Ionicons name="chevron-forward" size={16} color={colors.mutedForeground} />
-        </Pressable>
+      <SettingsSection title="Settings">
+        <SettingsRow icon="person-outline" title="Edit profile" onPress={() => router.push("/profile-edit")} />
+        <SettingsRow icon="notifications-outline" title="Notifications" onPress={() => router.push("/notification-settings" as never)} />
         <BiometricLockRow />
+        <AppearanceRow />
+        <SyncRow />
+        <EvidenceViewRow />
+        <TourRow />
+      </SettingsSection>
+
+      <SettingsSection title="Work">
         <ReportsRow />
         <ScheduleRow />
-        <SyncRow />
-        <AppearanceRow />
-        <TourRow />
-        <EvidenceViewRow />
-        <FeedbackRow />
-      </Card>
+      </SettingsSection>
 
-      <Button variant="outline" onPress={() => signOut()}>
-        Sign out
-      </Button>
+      <SettingsSection title="Support & legal" defaultOpen={false}>
+        <FeedbackRow />
+        <SettingsRow icon="shield-checkmark-outline" title="Privacy & POPIA notice" onPress={() => router.push("/privacy")} />
+      </SettingsSection>
+
+      <SignOutButton onPress={() => signOut()} />
 
       <Text style={styles.version}>Šoma360 {TAG}</Text>
     </Screen>
@@ -95,86 +77,10 @@ export default function SuperviseProfile() {
 }
 
 const styles = themedStyles(() => StyleSheet.create({
-  identityCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-    marginBottom: spacing.md,
-  },
-  avatar: {
-    width: 56,
-    height: 56,
-    borderRadius: radius.round,
-    backgroundColor: colors.primary,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  avatarText: {
-    fontSize: typography.h2,
-    fontWeight: "800",
-    color: colors.primaryForeground,
-  },
-  identityInfo: {
-    flex: 1,
-    minWidth: 0,
-    gap: 2,
-  },
-  name: {
-    fontSize: typography.h1,
-    fontWeight: "800",
-    color: colors.foreground,
-  },
-  role: {
-    fontSize: typography.small,
-    fontWeight: "600",
-    color: colors.primary,
-  },
-  section: {
-    marginBottom: spacing.md,
-    gap: spacing.sm,
-  },
-  sectionTitle: {
-    fontSize: typography.h2,
-    fontWeight: "700",
-    color: colors.foreground,
-  },
-  siteRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-  },
-  siteName: {
-    fontSize: typography.body,
-    color: colors.foreground,
-  },
-  linkRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    paddingVertical: spacing.sm,
-  },
-  linkText: {
-    flex: 1,
-    fontSize: typography.body,
-    fontWeight: "600",
-    color: colors.foreground,
-  },
-  muted: {
-    fontSize: typography.small,
-    color: colors.mutedForeground,
-  },
-  warningText: {
-    fontSize: typography.small,
-    color: colors.warningForeground,
-    backgroundColor: colors.warningSoft,
-    padding: spacing.sm,
-    borderRadius: radius.md,
-    lineHeight: 19,
-  },
   version: {
     marginTop: spacing.lg,
     textAlign: "center",
-    fontSize: typography.tiny,
+    fontSize: 10,
     color: colors.mutedForeground,
   },
 }));
