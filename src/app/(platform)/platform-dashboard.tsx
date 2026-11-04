@@ -121,7 +121,7 @@ export default function PlatformDashboard() {
               {summary ? signups : "-"}
               <Text style={styles.unit}>  new organisations</Text>
             </Text>
-            <GrowthCurve values={series.map((d) => d.total)} labels={["30 days ago", "15 days ago", "Today"]} />
+            <GrowthCurve series={series} labels={["30 days ago", "15 days ago", "Today"]} />
           </>
         ) : chart === "plans" ? (
           <>

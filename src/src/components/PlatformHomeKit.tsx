@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import Svg, { Circle, Defs, LinearGradient, Path, Stop } from "react-native-svg";
+import Svg, { Circle, Defs, Line, LinearGradient, Path, Stop } from "react-native-svg";
+import { signupPointText } from "@/domain/platformHome";
 import { Ionicons } from "@expo/vector-icons";
 import { colors, radius, spacing, themedStyles, typography, useThemeVersion } from "@/theme";
 
@@ -28,19 +29,58 @@ function smoothPath(xs: number[], ys: number[]): string {
 }
 
 /** A smooth running-total curve with a soft fill and a dot on today. */
-export function GrowthCurve({ values, height = 120, labels }: { values: number[]; height?: number; labels: [string, string, string] }) {
+type SeriesPoint = { date: string; count: number; total: number };
+
+const TIP_WIDTH = 150;
+
+/** "2026-11-03" -> "Tue, 3 Nov", read as a local calendar day. */
+function dayLabel(key: string) {
+  return new Date(`${key}T00:00:00`).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
+}
+
+/**
+ * The 30-day signups curve. Touching it (or dragging sideways along it) shows a thin guide, a dot on that day and a
+ * small label: the date, that day's new organisations and the running total. A vertical swipe still scrolls the page.
+ */
+export function GrowthCurve({ series, height = 120, labels }: { series: SeriesPoint[]; height?: number; labels: [string, string, string] }) {
   useThemeVersion();
   const [width, setWidth] = useState(0);
+  const [active, setActive] = useState<number | null>(null);
+  const values = series.map((d) => d.total);
   const max = Math.max(...values, 1);
   const pad = 8;
   const xs = values.map((_, i) => pad + (i * (width - pad * 2)) / Math.max(values.length - 1, 1));
   const ys = values.map((v) => height - pad - (v / max) * (height - pad * 2 - 6));
   const line = width > 0 && values.length > 1 ? smoothPath(xs, ys) : "";
+
+  const pick = (x: number) => {
+    if (width <= pad * 2 || values.length === 0) return;
+    const i = Math.round(((x - pad) / (width - pad * 2)) * (values.length - 1));
+    setActive(Math.max(0, Math.min(values.length - 1, i)));
+  };
+  const clear = () => setActive(null);
+  const point = active !== null ? series[active] : null;
+  const tipLeft = active !== null ? Math.max(0, Math.min(width - TIP_WIDTH, xs[active] - TIP_WIDTH / 2)) : 0;
+
   return (
     <View>
-      <View onLayout={(e) => setWidth(e.nativeEvent.layout.width)} style={{ height }}>
+      <View
+        onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
+        style={{ height }}
+        onStartShouldSetResponder={() => true}
+        onMoveShouldSetResponder={() => true}
+        onResponderGrant={(e) => pick(e.nativeEvent.locationX)}
+        onResponderMove={(e) => pick(e.nativeEvent.locationX)}
+        onResponderRelease={clear}
+        onResponderTerminate={clear}
+        accessible
+        accessibilityRole="image"
+        accessibilityLabel={
+          series.length ? `Signups over the last 30 days: ${signupPointText(series[series.length - 1])}` : "Signups over the last 30 days"
+        }
+      >
         {line ? (
-          <Svg width={width} height={height}>
+          <Svg width={width} height={height} pointerEvents="none">
             <Defs>
               <LinearGradient id="growthFill" x1="0" y1="0" x2="0" y2="1">
                 <Stop offset="0" stopColor={colors.primary} stopOpacity={0.22} />
@@ -49,8 +89,30 @@ export function GrowthCurve({ values, height = 120, labels }: { values: number[]
             </Defs>
             <Path d={`${line} L${xs[xs.length - 1]},${height} L${xs[0]},${height} Z`} fill="url(#growthFill)" />
             <Path d={line} fill="none" stroke={colors.primary} strokeWidth={1.8} strokeLinecap="round" />
-            <Circle cx={xs[xs.length - 1]} cy={ys[ys.length - 1]} r={4.2} fill={colors.primary} stroke={colors.card} strokeWidth={2} />
+            {active !== null ? (
+              <>
+                <Line
+                  x1={xs[active]}
+                  x2={xs[active]}
+                  y1={0}
+                  y2={height}
+                  stroke={colors.mutedForeground}
+                  strokeOpacity={0.45}
+                  strokeWidth={1}
+                  strokeDasharray="3 3"
+                />
+                <Circle cx={xs[active]} cy={ys[active]} r={4.2} fill={colors.primary} stroke={colors.card} strokeWidth={2} />
+              </>
+            ) : (
+              <Circle cx={xs[xs.length - 1]} cy={ys[ys.length - 1]} r={4.2} fill={colors.primary} stroke={colors.card} strokeWidth={2} />
+            )}
           </Svg>
+        ) : null}
+        {point ? (
+          <View pointerEvents="none" style={[styles.tip, { left: tipLeft }]}>
+            <Text style={styles.tipTitle}>{dayLabel(point.date)}</Text>
+            <Text style={styles.tipText}>{signupPointText(point)}</Text>
+          </View>
         ) : null}
       </View>
       <View style={styles.axis}>
@@ -149,6 +211,19 @@ export function PillSelector<T extends string>({
 const styles = themedStyles(() =>
   StyleSheet.create({
     axis: { flexDirection: "row", justifyContent: "space-between", marginTop: spacing.xs },
+    tip: {
+      position: "absolute",
+      top: -4,
+      width: TIP_WIDTH,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card,
+    },
+    tipTitle: { fontSize: typography.tiny + 1, fontWeight: "700", color: colors.foreground },
+    tipText: { fontSize: typography.tiny + 1, color: colors.mutedForeground },
     axisText: { fontSize: typography.tiny + 1, color: colors.mutedForeground },
     barRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
     barLabel: { width: 84, fontSize: typography.small, color: colors.mutedForeground },

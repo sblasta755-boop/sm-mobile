@@ -3,6 +3,7 @@ import {
   attentionList,
   attentionReason,
   groupByDay,
+  signupPointText,
   paidCount,
   signupSeries,
   signupsTotal,
@@ -59,4 +60,9 @@ test("the signup series covers all 30 days with a running total", () => {
   expect(series[series.length - 1].total).toBe(3);
   expect(signupsTotal(s)).toBe(3);
   expect(paidCount(s)).toBe(19);
+});
+
+test("signupPointText says what one day on the curve means", () => {
+  expect(signupPointText({ count: 0, total: 4 })).toBe("No signups · 4 in total");
+  expect(signupPointText({ count: 2, total: 4 })).toBe("2 new · 4 in total");
 });

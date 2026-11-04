@@ -162,6 +162,12 @@ export function signupsTotal(s: SummaryLike): number {
 }
 
 /** Every one of the last 30 days, oldest first, with the running total: a gapped axis would read as a busier month. */
+/** What one day on the signups curve means, in words: that day's new organisations and the running total. */
+export function signupPointText(p: { count: number; total: number }): string {
+  const day = p.count === 0 ? "No signups" : `${p.count} new`;
+  return `${day} · ${p.total} in total`;
+}
+
 export function signupSeries(s: SummaryLike, now = new Date()): { date: string; count: number; total: number }[] {
   const days: { date: string; count: number; total: number }[] = [];
   let total = 0;
