@@ -51,18 +51,23 @@ function ActiveTour() {
   const [bubbleHeight, setBubbleHeight] = useState(150);
   const step = steps[tour.index];
   const last = tour.index >= steps.length - 1;
-  const userId = currentUser?.id;
   const role = currentUser?.role;
 
   const next = () => {
     if (last) {
       // Finishing, not closing early, is what marks the tour as seen.
-      if (userId) void markTourSeen(userId);
+      void markTourSeen();
       closeTour();
       leaveTour(role);
     } else {
       goToStep(tour.index + 1);
     }
+  };
+  // Skipping also counts as seen, so it does not come back next launch.
+  const skip = () => {
+    void markTourSeen();
+    closeTour();
+    leaveTour(role);
   };
   const close = () => {
     closeTour();
@@ -204,6 +209,11 @@ function ActiveTour() {
             <Text style={styles.counter}>
               {tour.index + 1}/{steps.length}
             </Text>
+            {!last && (
+              <Pressable accessibilityRole="button" accessibilityLabel="Skip the tour" onPress={skip} style={styles.skip}>
+                <Text style={styles.skipText}>Skip</Text>
+              </Pressable>
+            )}
             <Pressable accessibilityRole="button" onPress={next} style={styles.next}>
               <Text style={styles.nextText}>{last ? "OK" : "Next"}</Text>
             </Pressable>
@@ -271,6 +281,8 @@ const styles = themedStyles(() =>
       alignItems: "center",
       justifyContent: "center",
     },
+    skip: { minHeight: sizes.touchTarget, paddingHorizontal: spacing.md, alignItems: "center", justifyContent: "center", marginLeft: "auto", marginRight: spacing.sm },
+    skipText: { fontWeight: "700", color: colors.mutedForeground },
     nextText: { fontWeight: "700", color: colors.primaryForeground },
     close: {
       position: "absolute",

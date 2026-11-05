@@ -193,7 +193,11 @@ export function useTourState(): TourState {
   return useSyncExternalStore(subscribe, () => state, () => state);
 }
 
-const seenKey = (userId: string) => `soma.tour.seen.v1.${userId}`;
+// One flag per install (not per account), like the other app: a second person on the same phone is not shown it again.
+const SEEN_KEY = "soma.tour.seen.v1";
+const legacySeenKey = (userId: string) => `soma.tour.seen.v1.${userId}`;
+// Set the instant the tour ends, so nothing re-reads a storage write that has not landed yet and restarts it.
+let seenInMemory = false;
 
 export function startTour(replay: boolean) {
   set({ active: true, replay, index: 0 });
@@ -204,11 +208,31 @@ export function goToStep(index: number) {
 export function closeTour() {
   set({ active: false, index: 0 });
 }
-export async function markTourSeen(userId: string) {
+/** Finished or skipped: never auto-start again on this install. */
+export async function markTourSeen() {
+  seenInMemory = true;
   try {
-    await AsyncStorage.setItem(seenKey(userId), "1");
+    await AsyncStorage.setItem(SEEN_KEY, "1");
   } catch {
     // Not remembered: the tour may show once more. Better than blocking the app.
+  }
+}
+
+async function hasSeenTour(userId: string): Promise<boolean> {
+  if (seenInMemory) return true;
+  try {
+    const [seen, legacy] = await Promise.all([
+      AsyncStorage.getItem(SEEN_KEY),
+      AsyncStorage.getItem(legacySeenKey(userId)),
+    ]);
+    if (seen || legacy) {
+      seenInMemory = true;
+      return true;
+    }
+    return false;
+  } catch {
+    // Storage unreadable: counts as not seen, as before.
+    return false;
   }
 }
 
@@ -300,12 +324,12 @@ export function useAutoStartTour() {
   const checked = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!userId || !home || tour.active) return;
+    if (!userId || !home || tour.active || seenInMemory) return;
     if (!app.sessionRestored || !app.hasSeenWelcome || app.mustChangePassword || app.locked) return;
     if (pathname !== home || checked.current === userId) return;
     checked.current = userId;
     let cancelled = false;
-    AsyncStorage.getItem(seenKey(userId))
+    hasSeenTour(userId)
       .then((seen) => {
         if (cancelled || seen) return;
         // Let the home screen finish its first paint, so there is something to point at.
