@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
-import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Screen } from "@/components/Screen";
 import { Button } from "@/components/Button";
@@ -16,25 +16,42 @@ import {
   listUserRecords,
   loadBackendBootstrap,
   unlockUser,
+  updateSite,
   updateUser,
   type OrganisationUser,
 } from "@/api/client";
 import { STATE_INFO, formatWhen, initialsOf, roleLabel, userState } from "@/features/orgUsers";
 import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 
-/** Roles that cover a whole organisation rather than one site; their site and role are not edited here. */
-const WHOLE_ORGANISATION = ["org_admin", "operations_manager", "system_admin"];
+/** What an organisation administrator may assign, as on the web Users page. Field-staff roles come from the organisation. */
+const MANAGEMENT_ROLES = [
+  { key: "supervisor", label: "Supervisor" },
+  { key: "site_manager", label: "Site manager" },
+  { key: "operations_manager", label: "Operations manager" },
+  { key: "client_auditor", label: "Client auditor" },
+  { key: "org_admin", label: "Org admin" },
+];
 
+type EditSite = { id: string; name: string; ownerId?: string };
 type EditState = {
   record: Record<string, unknown>;
-  /** label -> key, for roles and sites. */
   roles: { key: string; label: string }[];
-  sites: { id: string; name: string }[];
+  sites: EditSite[];
+  /** Sites this person owned when the editor opened, so the save can release the ones no longer ticked. */
+  ownedBefore: string[];
+  ownerNames: Record<string, string>;
   roleKey: string;
+  /** Single-site roles. */
   siteId: string;
+  /** Operations managers own several sites. */
+  ownedIds: string[];
   status: string;
-  fixedRole: boolean;
 };
+
+const needsSingleSite = (role: string) => role !== "org_admin" && role !== "operations_manager";
+
+/** Sets (or clears, with null) which operations manager owns a site: the only place that link is stored. */
+const setSiteOwner = (t: string, siteId: string, ownerId: string | null) => updateSite(t, siteId, { geofence: { ownerId } });
 
 /**
  * One person in an organisation, for the platform operator. What is shown comes from the read-only roster. Changing
@@ -97,29 +114,59 @@ export default function PlatformOrganisationUser() {
       const t = await token();
       const [record, bootstrap] = await Promise.all([rawRecord(t), loadBackendBootstrap(t)]);
       const role = String(record.role ?? user.role);
-      const fixedRole = WHOLE_ORGANISATION.includes(role);
+      const tableService = !!bootstrap.tenants?.[0]?.tableServiceEnabled;
       const roles = [
-        { key: "site_manager", label: "Site manager" },
-        { key: "supervisor", label: "Supervisor" },
-        ...(bootstrap.staffRoles ?? []).map((r) => ({ key: r.key, label: r.label })),
+        ...(bootstrap.staffRoles ?? [])
+          .filter((r) => r.template !== "table_service" || tableService)
+          .map((r) => ({ key: r.key, label: r.label })),
+        ...MANAGEMENT_ROLES,
       ];
       if (!roles.some((r) => r.key === role)) roles.push({ key: role, label: roleLabel(role) });
       const siteIds = Array.isArray(record.siteIds) ? (record.siteIds as string[]) : [];
+      const sites = (bootstrap.sites ?? []).map((x) => ({
+        id: x.id,
+        name: x.name,
+        ownerId: (x as unknown as { ownerId?: string | null }).ownerId ?? undefined,
+      }));
+      const owned = sites.filter((x) => x.ownerId === user.id).map((x) => x.id);
+      const names: Record<string, string> = {};
+      for (const r of await listUserRecords(t)) names[String(r.id)] = String(r.displayName ?? r.name ?? "");
       setEdit({
         record,
         roles,
-        sites: (bootstrap.sites ?? []).map((s) => ({ id: s.id, name: s.name })),
+        sites,
+        ownedBefore: owned,
+        ownerNames: names,
         roleKey: role,
         siteId: siteIds[0] ?? "",
+        ownedIds: role === "operations_manager" ? owned : [],
         status: String(record.status ?? user.status),
-        fixedRole,
       });
     });
   }
 
+  // Moving between "owns sites" (operations manager) and "works at one site" swaps which field holds their sites, so
+  // the incoming picker starts from what they already have rather than blank.
+  function changeRole(roleKey: string) {
+    if (!edit || !user) return;
+    let { siteId, ownedIds } = edit;
+    if (roleKey === "operations_manager" && edit.roleKey !== "operations_manager") {
+      const carried = (Array.isArray(edit.record.siteIds) ? (edit.record.siteIds as string[]) : []).filter((id) => {
+        const site = edit.sites.find((x) => x.id === id);
+        return site && (!site.ownerId || site.ownerId === user.id);
+      });
+      ownedIds = Array.from(new Set([...edit.ownedBefore, ...carried]));
+    } else if (edit.roleKey === "operations_manager" && roleKey !== "operations_manager") {
+      const first = Array.isArray(edit.record.siteIds) ? (edit.record.siteIds as string[])[0] : undefined;
+      siteId = siteId || edit.ownedBefore[0] || first || "";
+    }
+    setEdit({ ...edit, roleKey, siteId, ownedIds });
+  }
+
   async function saveEdit() {
     if (!edit || !user) return;
-    if (!edit.fixedRole && !edit.siteId) {
+    const single = needsSingleSite(edit.roleKey);
+    if (single && !edit.siteId) {
       appAlert("Choose a site", "This role works at one site.");
       return;
     }
@@ -131,11 +178,25 @@ export default function PlatformOrganisationUser() {
         ...edit.record,
         role: edit.roleKey,
         status: edit.status,
-        siteIds: edit.fixedRole ? (edit.record.siteIds ?? []) : [edit.siteId],
+        // Operations managers and org admins hold no single-site assignment.
+        siteIds: single ? [edit.siteId] : [],
       });
+      // Site ownership follows the role: an operations manager's ticks are written to the sites; anyone else owns none.
+      const after = edit.roleKey === "operations_manager" ? edit.ownedIds : [];
+      let ownershipFailed = false;
+      try {
+        for (const id of after.filter((id) => !edit.ownedBefore.includes(id))) await setSiteOwner(t, id, user.id);
+        for (const id of edit.ownedBefore.filter((id) => !after.includes(id))) await setSiteOwner(t, id, null);
+      } catch {
+        ownershipFailed = true;
+      }
       setEdit(null);
       await load();
-      appAlert("Saved", `${user.name} was updated.`);
+      if (ownershipFailed) {
+        appAlert("Saved, but not their sites", `${user.name}'s role was saved, but updating their sites failed. Open Edit to check them.`);
+      } else {
+        appAlert("Saved", `${user.name} was updated.`);
+      }
     } catch (err) {
       appAlert("Could not save", err instanceof Error ? err.message : "Please try again.");
     } finally {
@@ -165,7 +226,13 @@ export default function PlatformOrganisationUser() {
           style: "destructive",
           onPress: () =>
             void act("delete", "Could not delete", async () => {
-              await deleteUser(await token(), user.id);
+              const t = await token();
+              // Release any sites they own first, so none is left pointing at a person who no longer exists.
+              const sites = (await loadBackendBootstrap(t)).sites ?? [];
+              for (const site of sites.filter((x) => (x as unknown as { ownerId?: string }).ownerId === user.id)) {
+                await setSiteOwner(t, site.id, null);
+              }
+              await deleteUser(t, user.id);
               backToList();
             }),
         },
@@ -252,15 +319,9 @@ export default function PlatformOrganisationUser() {
                 Archive
               </Button>
             )}
-            {user.role === "operations_manager" ? (
-              <Text style={styles.note}>
-                Operations managers own sites, so they are deleted from the web console, where those sites can be handed over first.
-              </Text>
-            ) : (
-              <Button variant="destructive" loading={busy === "delete"} onPress={confirmDelete} icon={<Ionicons name="trash-outline" size={18} color="#fff" />}>
-                Delete
-              </Button>
-            )}
+            <Button variant="destructive" loading={busy === "delete"} onPress={confirmDelete} icon={<Ionicons name="trash-outline" size={18} color="#fff" />}>
+              Delete
+            </Button>
             <Text style={styles.note}>Changes are made inside the organisation as its administrator and are recorded under your name.</Text>
           </View>
         </>
@@ -273,27 +334,52 @@ export default function PlatformOrganisationUser() {
             <Text style={styles.sheetTitle}>Edit {user?.name}</Text>
             {edit && (
               <>
-                {edit.fixedRole ? (
-                  <View style={styles.fixed}>
-                    <Text style={styles.muted}>Role</Text>
-                    <Text style={styles.rowValue}>{roleLabel(edit.roleKey)}</Text>
-                    <Text style={styles.note}>This role covers the whole organisation. Change it in the web console.</Text>
+                <SelectField
+                  label="Role"
+                  value={edit.roles.find((r) => r.key === edit.roleKey)?.label ?? roleLabel(edit.roleKey)}
+                  options={edit.roles.map((r) => r.label)}
+                  onChange={(label) => changeRole(edit.roles.find((r) => r.label === label)?.key ?? edit.roleKey)}
+                />
+                {edit.roleKey === "operations_manager" ? (
+                  <View style={styles.field}>
+                    <Text style={styles.fieldLabel}>Sites they own</Text>
+                    <ScrollView style={styles.ownedBox} nestedScrollEnabled>
+                      {edit.sites.length === 0 && <Text style={styles.muted}>No sites yet</Text>}
+                      {edit.sites.map((site) => {
+                        const on = edit.ownedIds.includes(site.id);
+                        const other = site.ownerId && site.ownerId !== user?.id && !on ? edit.ownerNames[site.ownerId] : undefined;
+                        return (
+                          <Pressable
+                            key={site.id}
+                            accessibilityRole="checkbox"
+                            accessibilityState={{ checked: on }}
+                            onPress={() =>
+                              setEdit({ ...edit, ownedIds: on ? edit.ownedIds.filter((id) => id !== site.id) : [...edit.ownedIds, site.id] })
+                            }
+                            style={styles.ownedRow}
+                          >
+                            <Ionicons name={on ? "checkbox" : "square-outline"} size={22} color={on ? colors.primary : colors.mutedForeground} />
+                            <Text style={styles.ownedName} numberOfLines={1}>
+                              {site.name}
+                            </Text>
+                            {other ? <Text style={styles.muted}>moves from {other}</Text> : null}
+                          </Pressable>
+                        );
+                      })}
+                    </ScrollView>
+                  </View>
+                ) : edit.roleKey === "org_admin" ? (
+                  <View style={styles.field}>
+                    <Text style={styles.fieldLabel}>Site</Text>
+                    <Text style={styles.muted}>All sites (the whole organisation)</Text>
                   </View>
                 ) : (
-                  <>
-                    <SelectField
-                      label="Role"
-                      value={edit.roles.find((r) => r.key === edit.roleKey)?.label ?? roleLabel(edit.roleKey)}
-                      options={edit.roles.map((r) => r.label)}
-                      onChange={(label) => setEdit({ ...edit, roleKey: edit.roles.find((r) => r.label === label)?.key ?? edit.roleKey })}
-                    />
-                    <SelectField
-                      label="Site"
-                      value={edit.sites.find((x) => x.id === edit.siteId)?.name ?? "Choose a site"}
-                      options={edit.sites.map((x) => x.name)}
-                      onChange={(name) => setEdit({ ...edit, siteId: edit.sites.find((x) => x.name === name)?.id ?? edit.siteId })}
-                    />
-                  </>
+                  <SelectField
+                    label="Site"
+                    value={edit.sites.find((x) => x.id === edit.siteId)?.name ?? "Choose a site"}
+                    options={edit.sites.map((x) => x.name)}
+                    onChange={(name) => setEdit({ ...edit, siteId: edit.sites.find((x) => x.name === name)?.id ?? edit.siteId })}
+                  />
                 )}
                 <SelectField
                   label="Status"
@@ -364,7 +450,11 @@ const styles = themedStyles(() =>
     },
     grab: { alignSelf: "center", width: 40, height: 4, borderRadius: 2, backgroundColor: colors.border, marginBottom: spacing.sm },
     sheetTitle: { fontSize: typography.h2, fontWeight: "700", color: colors.foreground },
-    fixed: { gap: 2 },
+    field: { gap: 6 },
+    fieldLabel: { fontSize: typography.small + 1, color: colors.mutedForeground },
+    ownedBox: { maxHeight: 132, borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, paddingHorizontal: spacing.md },
+    ownedRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, minHeight: 44 },
+    ownedName: { flex: 1, fontSize: typography.body, color: colors.foreground },
     sheetButtons: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.md },
   }),
 );
