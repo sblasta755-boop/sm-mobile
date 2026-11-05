@@ -814,6 +814,53 @@ export function updateUser(accessToken: string, userId: string, payload: Record<
   return request<Record<string, unknown>>(`/users/${userId}`, { method: "PUT", body: JSON.stringify(payload) }, accessToken);
 }
 
+/** Every user record of the organisation the token belongs to, as the backend stores it (raw, so a save can send
+ * back every field it does not touch: the backend replaces the whole record on PUT). */
+export async function listUserRecords(accessToken: string): Promise<Record<string, unknown>[]> {
+  const all: Record<string, unknown>[] = [];
+  for (let page = 1; page <= 50; page++) {
+    const result = await request<{ items: Record<string, unknown>[]; total: number }>(
+      `/users?page=${page}&pageSize=100`,
+      {},
+      accessToken,
+    );
+    all.push(...result.items);
+    if (all.length >= result.total || result.items.length === 0) break;
+  }
+  return all;
+}
+
+export function deleteUser(accessToken: string, userId: string) {
+  return request<{ success: boolean }>(`/users/${userId}`, { method: "DELETE" }, accessToken);
+}
+
+export function unlockUser(accessToken: string, userId: string) {
+  return request<Record<string, unknown>>(`/users/${userId}/unlock`, { method: "POST" }, accessToken);
+}
+
+export function inviteStaff(accessToken: string, userId: string, siteId?: string) {
+  return request<{ success: boolean; email: string }>(
+    `/users/${userId}/invite`,
+    { method: "POST", body: JSON.stringify({ siteId: siteId ?? null }) },
+    accessToken,
+  );
+}
+
+/** A user as the platform operator's roster lists it (GET /platform/organisations/{id}/users, read-only). */
+export interface OrganisationUser {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  status: string;
+  lastLogin: string | null;
+  createdAt: string | null;
+}
+
+export function listOrganisationUsers(accessToken: string, tenantId: string) {
+  return request<OrganisationUser[]>(`/platform/organisations/${tenantId}/users`, {}, accessToken);
+}
+
 /** Builds a backend UserRecord payload from a DemoUser plus any overrides, filling required
  * fields the mobile app doesn't track (username, status) with sensible defaults. */
 export function toUserRecord(user: DemoUser, overrides: Record<string, unknown> = {}): Record<string, unknown> {

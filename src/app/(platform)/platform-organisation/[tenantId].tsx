@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { useLocalSearchParams } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { Linking, Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { SvgXml } from "react-native-svg";
 import { Ionicons } from "@expo/vector-icons";
@@ -257,8 +257,25 @@ export default function PlatformOrganisationDetail() {
         </View>
       </View>
 
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Users"
+        onPress={() => router.push({ pathname: "/platform-org-users/[tenantId]", params: { tenantId: tenantId! } })}
+        style={[styles.oCard, styles.usersCard]}
+      >
+        <View style={styles.usersIcon}>
+          <Ionicons name="people-outline" size={20} color={colors.primary} />
+        </View>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={styles.oName}>Users</Text>
+          <Text style={styles.oSub}>
+            {organisation?.userCount ?? 0} {(organisation?.userCount ?? 0) === 1 ? "user" : "users"} · see everyone and manage them
+          </Text>
+        </View>
+        <Ionicons name="chevron-forward" size={18} color={colors.mutedForeground} />
+      </Pressable>
+
       <View style={[styles.oCard, { paddingVertical: spacing.xs }]}>
-        <Row label="Users" value={String(organisation?.userCount ?? 0)} />
         <Row label="Billing email" value={organisation?.subscription?.billingEmail ?? "-"} />
       </View>
 
@@ -443,6 +460,8 @@ const styles = themedStyles(() => StyleSheet.create({
   oAvatarText: { fontSize: typography.body, fontWeight: "700", color: colors.mutedForeground },
   oName: { fontSize: typography.h1, fontWeight: "600", color: colors.foreground },
   oSub: { fontSize: typography.small, color: colors.mutedForeground, marginTop: 2 },
+  usersCard: { flexDirection: "row", alignItems: "center", gap: spacing.md },
+  usersIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: colors.accent, alignItems: "center", justifyContent: "center" },
   oPair: { flexDirection: "row", gap: spacing.sm + 2 },
   oHalf: { flex: 1 },
   oLabel: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
