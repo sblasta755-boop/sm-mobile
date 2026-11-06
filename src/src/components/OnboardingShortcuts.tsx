@@ -23,8 +23,8 @@ export function OnboardingShortcuts() {
       </View>
       <Text style={styles.body}>You can bring new staff on to your site.</Text>
       <View style={styles.row}>
-        <Button onPress={() => router.push("/add-staff")}>Add staff</Button>
-        <Button variant="outline" onPress={() => router.push("/onboarding-approvals")}>
+        <Button onPress={() => router.push("/add-staff" as never)}>Add staff</Button>
+        <Button variant="outline" onPress={() => router.push("/onboarding-approvals" as never)}>
           Approvals
         </Button>
       </View>

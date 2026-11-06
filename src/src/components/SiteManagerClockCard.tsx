@@ -39,7 +39,7 @@ export function SiteManagerClockCard() {
       <Button
         variant={clocked ? "outline" : "primary"}
         icon={<Ionicons name={clocked ? "log-out-outline" : "scan"} size={18} color={clocked ? colors.foreground : colors.primaryForeground} />}
-        onPress={() => router.push("/site-manager-scan")}
+        onPress={() => router.push("/site-manager-scan" as never)}
       >
         {clocked ? "Scan site QR to clock out" : "Scan site QR to clock in"}
       </Button>

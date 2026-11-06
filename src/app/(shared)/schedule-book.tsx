@@ -8,6 +8,7 @@ import { Button } from "@/components/Button";
 import { appAlert } from "@/components/Dialog";
 import { bookStaff, listBookablePeople, listSiteBookings, listSiteShifts, type StaffBooking } from "@/api/client";
 import { ShiftSetup } from "@/components/ShiftSetup";
+import { MonthTiles, monthTitle } from "@/components/MonthCalendar";
 import type { StockShift } from "@/types/smartclean";
 import { addDays, dateKey, daysBetween, isPastDay } from "@/domain/schedule";
 import { useCanBook, useScheduleOn } from "@/features/schedule";
@@ -42,7 +43,10 @@ export default function ScheduleBookScreen() {
   const [chosen, setChosen] = useState<string[]>([]);
   const [from, setFrom] = useState(startDay);
   const [to, setTo] = useState(startDay);
-  const [weekdaysOnly, setWeekdaysOnly] = useState(false);
+  // The same three choices as a recurring task: every day, weekdays, or specific dates.
+  const [pattern, setPattern] = useState<"daily" | "weekdays" | "dates">("daily");
+  const [pickedDays, setPickedDays] = useState<string[]>([]);
+  const [calMonth, setCalMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
   // The shifts picked (several for a double shift), or custom hours for a half day.
@@ -76,7 +80,10 @@ export default function ScheduleBookScreen() {
   const chosenShifts = shifts.filter((s) => shiftIds.includes(s.id));
   const span = shiftSpan(chosenShifts);
 
-  const dates = useMemo(() => daysBetween(from, to, weekdaysOnly), [from, to, weekdaysOnly]);
+  const dates = useMemo(
+    () => (pattern === "dates" ? [...pickedDays].sort().slice(0, 31) : daysBetween(from, to, pattern === "weekdays")),
+    [from, to, pattern, pickedDays],
+  );
   // Who is already booked at this site on the chosen days, so the list can say so.
   const [existing, setExisting] = useState<StaffBooking[]>([]);
   useEffect(() => {
@@ -96,7 +103,7 @@ export default function ScheduleBookScreen() {
   const fullyBooked = (userId: string) => dates.length > 0 && bookedOn(userId) === dates.length;
   const pickable = people.filter((p) => !fullyBooked(p.id));
   const picked = chosen.filter((id) => pickable.some((p) => p.id === id));
-  const inPast = isPastDay(from);
+  const inPast = pattern !== "dates" && isPastDay(from);
   const timesOk = !custom && shifts.length > 0 ? true : (!startTime || TIME.test(startTime)) && (!endTime || (TIME.test(endTime) && !!startTime && endTime > startTime));
 
   if (!on || !canBook) return <Redirect href={homePath as never} />;
@@ -179,23 +186,66 @@ export default function ScheduleBookScreen() {
         })}
         {people.length === 0 && <Text style={styles.muted}>No one is assigned to this site.</Text>}
 
-        <Text style={styles.heading}>When?</Text>
+        <Text style={styles.heading}>Days</Text>
         <View style={styles.chips}>
-          {([["Today", "today"], ["Tomorrow", "tomorrow"], ["Next 7 days", "week"]] as const).map(([label, which]) => (
-            <Pressable key={label} style={styles.chip} onPress={() => preset(which)}>
-              <Text style={styles.chipText}>{label}</Text>
+          {([["Every day", "daily"], ["Weekdays", "weekdays"], ["Specific dates", "dates"]] as const).map(([label, value]) => (
+            <Pressable
+              key={value}
+              accessibilityRole="button"
+              accessibilityState={{ selected: pattern === value }}
+              style={[styles.chip, pattern === value && styles.chipOn]}
+              onPress={() => {
+                // Switching to hand-picked days starts from the day already chosen.
+                if (value === "dates" && pickedDays.length === 0 && !isPastDay(from) && /^\d{4}-\d{2}-\d{2}$/.test(from)) setPickedDays([from]);
+                setPattern(value);
+              }}
+            >
+              <Text style={[styles.chipText, pattern === value && styles.chipTextOn]}>{label}</Text>
             </Pressable>
           ))}
         </View>
-        <View style={styles.pair}>
-          <TextInput style={[styles.input, styles.flex]} value={from} onChangeText={(v) => { setFrom(v); if (to < v) setTo(v); }} placeholder="From 2026-11-03" placeholderTextColor={colors.mutedForeground} autoCapitalize="none" accessibilityLabel="From" />
-          <TextInput style={[styles.input, styles.flex]} value={to} onChangeText={setTo} placeholder="To 2026-11-05" placeholderTextColor={colors.mutedForeground} autoCapitalize="none" accessibilityLabel="To" />
-        </View>
-        {from !== to && (
-          <Pressable style={styles.person} accessibilityRole="checkbox" accessibilityState={{ checked: weekdaysOnly }} onPress={() => setWeekdaysOnly((w) => !w)}>
-            <View style={[styles.box, weekdaysOnly && styles.boxOn]}>{weekdaysOnly && <Ionicons name="checkmark" size={14} color={colors.white} />}</View>
-            <Text style={styles.personName}>Weekdays only</Text>
-          </Pressable>
+        <Text style={styles.muted}>
+          {pattern === "daily"
+            ? "Each day from the start to the end date, weekends included. Use the same day twice for one day."
+            : pattern === "weekdays"
+              ? "Monday to Friday between the start and end dates."
+              : "Only the days you tap."}
+        </Text>
+        {pattern === "dates" ? (
+          <>
+            <View style={styles.pair}>
+              <Pressable accessibilityRole="button" accessibilityLabel="Previous month" onPress={() => setCalMonth((m) => new Date(m.getFullYear(), m.getMonth() - 1, 1))}>
+                <Ionicons name="chevron-back" size={22} color={colors.foreground} />
+              </Pressable>
+              <Text style={[styles.heading, styles.flex, { textAlign: "center" }]}>{monthTitle(calMonth)}</Text>
+              <Pressable accessibilityRole="button" accessibilityLabel="Next month" onPress={() => setCalMonth((m) => new Date(m.getFullYear(), m.getMonth() + 1, 1))}>
+                <Ionicons name="chevron-forward" size={22} color={colors.foreground} />
+              </Pressable>
+            </View>
+            <MonthTiles
+              month={calMonth}
+              tile={(day) => (isPastDay(day) ? { tone: "muted", disabled: true } : {})}
+              selected={pickedDays}
+              onSelect={(day) => setPickedDays((current) => (current.includes(day) ? current.filter((d) => d !== day) : [...current, day]))}
+            />
+            <Text style={styles.muted}>
+              {pickedDays.length === 0 ? "Tap the days to book." : `${pickedDays.length} ${pickedDays.length === 1 ? "day" : "days"} picked${pickedDays.length > 31 ? ". Book up to 31 days at a time." : "."}`}
+            </Text>
+          </>
+        ) : (
+          <>
+            <View style={styles.chips}>
+              {([["Today", "today"], ["Tomorrow", "tomorrow"], ["Next 7 days", "week"]] as const).map(([label, which]) => (
+                <Pressable key={label} style={styles.chip} onPress={() => preset(which)}>
+                  <Text style={styles.chipText}>{label}</Text>
+                </Pressable>
+              ))}
+            </View>
+            <View style={styles.pair}>
+              <TextInput style={[styles.input, styles.flex]} value={from} onChangeText={(v) => { setFrom(v); if (to < v) setTo(v); }} placeholder="From 2026-11-03" placeholderTextColor={colors.mutedForeground} autoCapitalize="none" accessibilityLabel="From" />
+              <TextInput style={[styles.input, styles.flex]} value={to} onChangeText={setTo} placeholder="To 2026-11-05" placeholderTextColor={colors.mutedForeground} autoCapitalize="none" accessibilityLabel="To" />
+            </View>
+          </>
         )}
         <Text style={styles.heading}>Hours</Text>
         {shifts.length > 0 ? (
@@ -266,7 +316,7 @@ export default function ScheduleBookScreen() {
           {picked.length} {picked.length === 1 ? "person" : "people"} × {dates.length} {dates.length === 1 ? "day" : "days"}. Each person is told by notification and email.
         </Text>
       </Card>
-      <Button disabled={busy || !siteId || picked.length === 0 || dates.length === 0 || !timesOk || inPast} onPress={() => void submit()}>
+      <Button disabled={busy || !siteId || picked.length === 0 || dates.length === 0 || pickedDays.length > 31 || !timesOk || inPast} onPress={() => void submit()}>
         Book and notify
       </Button>
       <View style={styles.setup}>
