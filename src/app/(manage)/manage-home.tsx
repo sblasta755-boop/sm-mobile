@@ -12,6 +12,7 @@ import { useScheduleOn } from "@/features/schedule";
 import { useHasModule } from "@/features/modules";
 import { reportTiles, tourTargetRef } from "@/features/tour";
 import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
+import { SiteManagerClockCard } from "@/components/SiteManagerClockCard";
 
 /**
  * What a manager needs on opening the app: is anything wrong at my sites, and who is working right now.
@@ -91,6 +92,7 @@ export default function ManageHome() {
 
   return (
     <Screen title="Overview">
+      <SiteManagerClockCard />
       {needsSiteAssignment && (
         <View style={[styles.card, styles.warning]}>
           <Ionicons name="information-circle" size={20} color={colors.warningForeground} />
@@ -272,20 +274,22 @@ export default function ManageHome() {
         )}
       </View>
 
-      <Pressable
-        accessibilityRole="button"
-        onPress={() => router.push("/manage-add-staff")}
-        style={({ pressed }) => [styles.card, styles.cta, pressed && { opacity: 0.8 }]}
-      >
-        <View style={[styles.disc, { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.accent }]}>
-          <Ionicons name="person-add-outline" size={18} color={colors.primary} />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.rowTitle}>Add a team member</Text>
-          <Text style={styles.sub}>Create their account and show them a QR code - no email needed.</Text>
-        </View>
-        <Ionicons name="arrow-forward" size={18} color={colors.foreground} />
-      </Pressable>
+      {currentUser?.canOnboardStaff !== false && (
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push("/manage-add-staff")}
+          style={({ pressed }) => [styles.card, styles.cta, pressed && { opacity: 0.8 }]}
+        >
+          <View style={[styles.disc, { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.accent }]}>
+            <Ionicons name="person-add-outline" size={18} color={colors.primary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.rowTitle}>Add a team member</Text>
+            <Text style={styles.sub}>Create their account and show them a QR code - no email needed.</Text>
+          </View>
+          <Ionicons name="arrow-forward" size={18} color={colors.foreground} />
+        </Pressable>
+      )}
     </Screen>
   );
 }

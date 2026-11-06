@@ -33,6 +33,9 @@ export default function ManageTabsLayout() {
   useThemeVersion(); // re-render with the new colours when the theme changes
   const { currentUser, state } = useSmartClean();
   const insets = useSafeAreaInsets();
+  // Onboarding staff is a permission: admins and operations managers always have it, a site manager unless it was
+  // switched off. Fails open until the profile loads.
+  const canOnboard = currentUser ? currentUser.canOnboardStaff !== false : true;
 
   if (state.sessionRestored && !currentUser) {
     return <Redirect href="/login" />;
@@ -82,6 +85,7 @@ export default function ManageTabsLayout() {
       <Tabs.Screen
         name="manage-add-staff"
         options={{
+          ...(canOnboard ? {} : { href: null }),
           title: "Add staff",
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="person-add" color={color} size={size} />
@@ -91,6 +95,7 @@ export default function ManageTabsLayout() {
       <Tabs.Screen
         name="manage-approvals"
         options={{
+          ...(canOnboard ? {} : { href: null }),
           title: "Approvals",
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="shield-checkmark" color={color} size={size} />

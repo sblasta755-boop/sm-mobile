@@ -25,6 +25,7 @@ import { toneForTask, humanStatus } from "@/domain/status";
 import { taskDestination } from "@/domain/inspections";
 import { hexAlpha } from "@/domain/calendarGrid";
 import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
+import { OnboardingShortcuts } from "@/components/OnboardingShortcuts";
 
 /**
  * A supervisor's day: what is waiting to be inspected, and what they
@@ -103,6 +104,7 @@ export default function SuperviseHome() {
   return (
     <Screen title="Today">
       <TodayCard showTasks={false} next={nextBooking} progress={progress} />
+      <OnboardingShortcuts />
       {!noSites && hasAttendance && canScanClock && hasQr && (
         <Card padded={false} style={styles.shiftCard}>
           <View style={styles.shiftOverlay}>

@@ -57,6 +57,7 @@ export function isFieldRole(role: string | undefined): boolean {
 /** The QR scanner for this role: the cleaner's full scanner, or the supervisor's. Roles with no scanner fall back to their home. */
 export function scanPathForRole(role: string | undefined): string {
   if (role === "supervisor") return "/supervise-scan";
+  if (role === "site_manager") return "/site-manager-scan";
   if (isFieldRole(role)) return "/scan";
   return homePathForRole(role);
 }

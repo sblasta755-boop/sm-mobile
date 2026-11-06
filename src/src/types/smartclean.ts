@@ -130,6 +130,8 @@ export interface DemoUser {
   // editable from app/(shared)/profile-edit.tsx, see updateUser +
   // toUserRecord.
   phone?: string;
+  /** May onboard new staff (add a person, approve their scan). Set by an admin; the server enforces it. */
+  canOnboardStaff?: boolean;
   profilePhotoDataUrl?: string;
   notificationPrefs?: Partial<NotificationPrefs> & Record<string, unknown>;
   // ISO timestamp of account creation - always sent by the backend
@@ -479,6 +481,10 @@ export interface Tenant {
   // require_table_service in app/api/deps.py) so this is a UX nicety,
   // not the actual security boundary.
   tableServiceEnabled: boolean;
+  /** Site managers clock in and out (set by the platform operator). */
+  siteManagerClockEnabled?: boolean;
+  /** Site managers can be given tasks (set by the platform operator). */
+  siteManagerTasksEnabled?: boolean;
 }
 
 export interface LocationLayoutPoint {

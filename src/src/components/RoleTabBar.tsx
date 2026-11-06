@@ -51,8 +51,12 @@ export function useRoleTabs(): Tab[] {
       tabs = [
         { label: "Overview", to: "/manage-home", icon: "grid" },
         { label: "Team", to: "/manage-team", icon: "people" },
-        { label: "Add staff", to: "/manage-add-staff", icon: "person-add" },
-        { label: "Approvals", to: "/manage-approvals", icon: "shield-checkmark" },
+        ...(currentUser.canOnboardStaff !== false
+          ? [
+              { label: "Add staff", to: "/manage-add-staff", icon: "person-add" } as Tab,
+              { label: "Approvals", to: "/manage-approvals", icon: "shield-checkmark" } as Tab,
+            ]
+          : []),
         { label: "Profile", to: "/manage-profile", icon: "person" },
       ];
       break;

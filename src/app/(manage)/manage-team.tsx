@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { StyleSheet, Text, TextInput, View } from "react-native";
+import { StyleSheet, Switch, Text, TextInput, View } from "react-native";
 import { SvgXml } from "react-native-svg";
 import { Ionicons } from "@expo/vector-icons";
 import { Screen } from "@/components/Screen";
@@ -15,6 +15,7 @@ import {
   getStaffOnboardingStatus,
   reopenStaffOnboardingCode,
   revealStaffOnboardingCode,
+  updateUser,
   type StaffGrant,
 } from "@/api/client";
 import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
@@ -44,7 +45,7 @@ function statusTone(status: string): StatusTone {
 
 export default function ManageTeam() {
   useThemeVersion(); // re-render with the new colours when the theme changes
-  const { state, currentUser } = useSmartClean();
+  const { state, currentUser, dispatch } = useSmartClean();
   const roleLabel = useRoleLabel();
   // Management roles come back lower case ("site manager"); under a name it reads better as "Site manager".
   const roleName = (role: string) => roleLabel(role).replace(/^./, (c) => c.toUpperCase());
@@ -79,7 +80,7 @@ export default function ManageTeam() {
   // The app's Site has no ownerId field, but bootstrap passes the backend's record through; an operations manager's
   // sites hang off it.
   const sites = useMemo(
-    () => state.sites.map((site) => ({ id: site.id, name: site.name, ownerId: (site as { ownerId?: string }).ownerId })),
+    () => state.sites.map((site) => ({ id: site.id, name: site.name, ownerId: (site as { ownerId?: string }).ownerId, ownerIds: (site as { ownerIds?: string[] }).ownerIds })),
     [state.sites],
   );
   const summary = useMemo(
@@ -156,7 +157,36 @@ export default function ManageTeam() {
     }
   }
 
+  // Only an org admin or operations manager can grant this; the server ignores it from anyone else.
+  async function setCanOnboard(value: boolean) {
+    if (!selected || !state.accessToken) return;
+    setBusy(true);
+    try {
+      // The backend replaces the stored record on PUT, so send back everything it gave us (the roster spreads the raw
+      // record) plus the one change.
+      const raw = selected as DemoUser & { username?: string; status?: string };
+      await updateUser(state.accessToken, selected.id, {
+        ...raw,
+        displayName: raw.name,
+        username: raw.username ?? raw.email ?? raw.id,
+        email: raw.email ?? `${raw.id}@smartclean.local`,
+        status: raw.status ?? "Active",
+        canOnboardStaff: value,
+      });
+      dispatch({ type: "UPDATE_USER", userId: selected.id, patch: { canOnboardStaff: value } });
+      setSelected({ ...selected, canOnboardStaff: value });
+    } catch (err) {
+      appAlert("Could not save", err instanceof Error ? err.message : "Try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (selected) {
+    const canGrantOnboarding =
+      (currentUser?.role === "org_admin" || currentUser?.role === "operations_manager") &&
+      selected.role !== "org_admin" &&
+      selected.role !== "operations_manager";
     const pending = statusOf(selected) === "Pending Activation";
     return (
       <Screen title={selected.name} backTo="/manage-team">
@@ -167,6 +197,24 @@ export default function ManageTeam() {
           </View>
           {selected.email && <Text style={styles.muted}>{selected.email}</Text>}
         </Card>
+
+        {canGrantOnboarding && (
+          <Card style={styles.detailCard}>
+            <View style={styles.switchRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.sectionTitle}>Can onboard staff</Text>
+                <Text style={styles.muted}>Lets them add new staff at their own sites and approve their sign-in.</Text>
+              </View>
+              <Switch
+                value={selected.canOnboardStaff ?? false}
+                disabled={busy}
+                trackColor={{ true: colors.primary, false: colors.neutral }}
+                accessibilityLabel="Can onboard staff"
+                onValueChange={(value) => void setCanOnboard(value)}
+              />
+            </View>
+          </Card>
+        )}
 
         {pending && (
           <Card style={styles.detailCard}>
@@ -380,6 +428,7 @@ function statusOf(user: DemoUser): string {
 }
 
 const styles = themedStyles(() => StyleSheet.create({
+  switchRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   searchRow: {
     flexDirection: "row",
     alignItems: "center",

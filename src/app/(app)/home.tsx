@@ -34,6 +34,7 @@ import { useSmartClean } from "@/features/store";
 import { hexAlpha } from "@/domain/calendarGrid";
 import { colors, radius, spacing, typography, themedStyles, status, useThemeVersion } from "@/theme";
 import { appAlert } from "@/components/Dialog";
+import { OnboardingShortcuts } from "@/components/OnboardingShortcuts";
 
 /** The most tasks "Do now" lists. The rest are one tap away under View all. */
 const MAX_DO_NOW = 4;
@@ -239,6 +240,7 @@ export default function HomeScreen() {
           )}
         </ImageBackground>
       </Card>
+      <OnboardingShortcuts />
 
       {autoClock.enabled && autoClock.permission !== "always" && (
         <Pressable accessibilityRole="button" onPress={() => router.push("/location-always" as never)} style={styles.autoClockNotice}>
