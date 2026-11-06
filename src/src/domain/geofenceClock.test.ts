@@ -1,4 +1,4 @@
-import { buildConfig, classify, dayKey, freshState, reconcile, shiftEndAt, step, type Fix, type GeofenceConfig, type MachineState } from "./geofenceClock";
+import { buildConfig, classify, dayKey, freshState, reconcile, shiftEndAt, stateDayKey, step, type Fix, type GeofenceConfig, type MachineState } from "./geofenceClock";
 
 const config: GeofenceConfig = {
   userId: "u1",
@@ -138,6 +138,42 @@ describe("reconcile and shift end", () => {
   it("reads the shift end as a local time", () => {
     expect(shiftEndAt(at(9), "16:00")?.getHours()).toBe(16);
     expect(shiftEndAt(at(9), null)).toBeNull();
+  });
+
+  it("reads an end before the start as the next morning", () => {
+    // Evening of an overnight shift: it ends tomorrow at 04:00, so there is no overtime to ask about yet.
+    const evening = shiftEndAt(at(19), "04:00", "19:00");
+    expect(evening?.getHours()).toBe(4);
+    expect(evening!.getDate()).toBe(at(19).getDate() + 1);
+    // After midnight the same shift ends today at 04:00.
+    const night = shiftEndAt(at(1), "04:00", "19:00");
+    expect(night?.getDate()).toBe(at(1).getDate());
+    expect(night?.getHours()).toBe(4);
+    // A day shift is unchanged.
+    expect(shiftEndAt(at(9), "16:00", "06:00")?.getDate()).toBe(at(9).getDate());
+  });
+});
+
+describe("overnight tracking day", () => {
+  const night = { shiftStart: "19:00", shiftEnd: "04:00" };
+  const base = (h: number, m = 0) => new Date(2026, 9, 15, h, m, 0);
+
+  it("files the small hours of an overnight shift under the day it began", () => {
+    expect(stateDayKey(base(23), night)).toBe("2026-10-15");
+    expect(stateDayKey(new Date(2026, 9, 16, 1, 30), night)).toBe("2026-10-15");
+    // After the shift's end it is the new day again.
+    expect(stateDayKey(new Date(2026, 9, 16, 9, 0), night)).toBe("2026-10-16");
+    // A day shift is unchanged.
+    expect(stateDayKey(new Date(2026, 9, 16, 1, 30), { shiftStart: "06:00", shiftEnd: "18:00" })).toBe("2026-10-16");
+    expect(stateDayKey(new Date(2026, 9, 16, 1, 30))).toBe("2026-10-16");
+  });
+
+  it("keeps the outside-since note across midnight", () => {
+    const noted: MachineState = { ...freshState(base(23, 55), true, night), outsideSince: base(23, 55).toISOString() };
+    const after = reconcile(noted, true, new Date(2026, 9, 16, 0, 5), night);
+    expect(after.outsideSince).toBe(base(23, 55).toISOString());
+    // Without knowing the hours it would have been wiped, as before.
+    expect(reconcile(noted, true, new Date(2026, 9, 16, 0, 5)).outsideSince).toBeNull();
   });
 });
 

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { hoursText } from "@/domain/workingHours";
 import { router } from "expo-router";
 import { ImageBackground, Pressable, StyleSheet, Text, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
@@ -184,7 +185,7 @@ export default function HomeScreen() {
             <View style={styles.shiftInfo}>
               <Text style={styles.shiftEyebrow}>{staffRole?.homeTitle || "Today's shift"}</Text>
               <Text style={styles.shiftTime}>
-                {site?.workingHours ? `${site.workingHours.start} - ${site.workingHours.end}` : "07:00 - 16:00"}
+                {site?.workingHours ? hoursText(site.workingHours) : "07:00 - 16:00"}
               </Text>
               <View style={styles.shiftMetaRow}>
                 <Ionicons name="location" size={11} color={hexAlpha(colors.shiftForeground, 0.8)} />

@@ -309,8 +309,8 @@ export function useGeofenceClock(): { permission: TrackingPermission; enabled: b
       }
       const now = new Date();
       const existing = await readSnapshot();
-      const base = existing && existing.config.userId === cfg.userId ? existing.state : freshState(now, clockedIn);
-      const next = reconcile(base, clockedIn, now);
+      const base = existing && existing.config.userId === cfg.userId ? existing.state : freshState(now, clockedIn, cfg);
+      const next = reconcile(base, clockedIn, now, cfg);
       await writeSnapshot({ config: cfg, state: next });
       if (cancelled) return;
       const perm = await trackingPermission();

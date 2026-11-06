@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { hoursText } from "@/domain/workingHours";
 import { router } from "expo-router";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -265,7 +266,7 @@ export default function ManageHome() {
                   {site.name}
                 </Text>
                 <Text style={styles.sub} numberOfLines={1}>
-                  {site.workingHours ? `Open ${site.workingHours.start} – ${site.workingHours.end} · ` : ""}
+                  {site.workingHours ? `Open ${hoursText(site.workingHours, "–")} · ` : ""}
                   {onShiftBySite(site.id)} on shift
                 </Text>
               </View>
