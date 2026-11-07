@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHasCapability, useHasModule } from "@/features/modules";
 import { resolveStaffRole } from "@/features/roles";
 import { useSmartClean } from "@/features/store";
+import { useMaintenanceOn } from "@/features/maintenance";
 import { colors, sizes, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 
 /**
@@ -30,6 +31,7 @@ export function useRoleTabs(): Tab[] {
   const hasCorrectiveActions = useHasModule("corrective_actions");
   const hasInspections = useHasModule("inspections");
   const hasQr = useHasCapability("qr_codes");
+  const maintenanceOn = useMaintenanceOn();
   const role = currentUser?.role;
 
   if (!currentUser) return [];
@@ -51,11 +53,14 @@ export function useRoleTabs(): Tab[] {
       tabs = [
         { label: "Overview", to: "/manage-home", icon: "grid" },
         { label: "Team", to: "/manage-team", icon: "people" },
+        // Maintenance takes Add staff's place when it is on (see app/(manage)/_layout.tsx).
+        ...(maintenanceOn
+          ? [{ label: "Maintenance", to: "/manage-maintenance", icon: "construct" } as Tab]
+          : currentUser.canOnboardStaff !== false
+            ? [{ label: "Add staff", to: "/manage-add-staff", icon: "person-add" } as Tab]
+            : []),
         ...(currentUser.canOnboardStaff !== false
-          ? [
-              { label: "Add staff", to: "/manage-add-staff", icon: "person-add" } as Tab,
-              { label: "Approvals", to: "/manage-approvals", icon: "shield-checkmark" } as Tab,
-            ]
+          ? [{ label: "Approvals", to: "/manage-approvals", icon: "shield-checkmark" } as Tab]
           : []),
         { label: "Profile", to: "/manage-profile", icon: "person" },
       ];

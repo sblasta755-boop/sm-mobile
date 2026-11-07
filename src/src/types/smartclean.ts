@@ -130,6 +130,8 @@ export interface DemoUser {
   // editable from app/(shared)/profile-edit.tsx, see updateUser +
   // toUserRecord.
   phone?: string;
+  /** What an administrator has given this person in Maintenance. Set only from the web console's Access screen. */
+  maintenance?: { access?: boolean; handle?: boolean; approve?: boolean; pay?: boolean };
   /** May onboard new staff (add a person, approve their scan). Set by an admin; the server enforces it. */
   canOnboardStaff?: boolean;
   profilePhotoDataUrl?: string;
@@ -318,7 +320,7 @@ export interface Task {
    * instead. A generated instance is an ordinary task in every other
    * respect, so nothing on this screen needs to special-case it. See
    * app.services.recurring_tasks on the backend. */
-  recurrence?: { pattern: "daily" | "weekdays" | "dates"; dates: string[] };
+  recurrence?: { pattern: "daily" | "weekdays" | "days" | "dates"; dates: string[]; daysOfWeek?: number[] };
   /** Whether the template is still generating instances - null for a
    * task that doesn't repeat at all. */
   recurrenceActive?: boolean | null;

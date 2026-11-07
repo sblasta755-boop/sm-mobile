@@ -69,3 +69,8 @@ test("a leave tile shows when the module is on, after the schedule tile", () => 
   expect(keys({ ...off, schedule: true, leave: true })).toEqual(["schedule", "leave"]);
   expect(keys({ ...off, leave: false })).toEqual([]);
 });
+
+test("a maintenance tile shows when the module is on, after leave", () => {
+  expect(keys({ ...off, leave: true, maintenance: true })).toEqual(["leave", "maintenance"]);
+  expect(keys({ ...off, maintenance: false })).toEqual([]);
+});

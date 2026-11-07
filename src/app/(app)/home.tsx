@@ -18,6 +18,7 @@ import { focusTasks } from "@/domain/todayFocus";
 import { homeTaskView } from "@/domain/homeTasks";
 import { homeTiles } from "@/domain/homeTiles";
 import { useLeaveOn } from "@/features/leave";
+import { useMaintenanceOn } from "@/features/maintenance";
 import { useAutoClockStatus } from "@/features/geofenceClock";
 import { useScheduleOn } from "@/features/schedule";
 import { useNow } from "@/features/useNow";
@@ -54,6 +55,7 @@ export default function HomeScreen() {
   const hasIncidents = useHasModule("incidents");
   const scheduleOn = useScheduleOn();
   const leaveOn = useLeaveOn();
+  const maintenanceOn = useMaintenanceOn();
   const nextBooking = useUpcomingBooking();
   const progress = useMyProgress();
   // Stock is offered only to staff roles the organisation has switched on.
@@ -267,6 +269,7 @@ export default function HomeScreen() {
           hasQr,
           schedule: scheduleOn,
           leave: leaveOn,
+          maintenance: maintenanceOn,
           progress: !!progress,
         }).map((tile) => ({
           key: tile.key,

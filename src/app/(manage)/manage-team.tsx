@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { StyleSheet, Switch, Text, TextInput, View } from "react-native";
+import { router } from "expo-router";
 import { SvgXml } from "react-native-svg";
 import { Ionicons } from "@expo/vector-icons";
 import { Screen } from "@/components/Screen";
@@ -47,6 +48,8 @@ export default function ManageTeam() {
   useThemeVersion(); // re-render with the new colours when the theme changes
   const { state, currentUser, dispatch } = useSmartClean();
   const roleLabel = useRoleLabel();
+  // Admins and operations managers always can; a site manager unless it was switched off. Fails open until loaded.
+  const canOnboard = currentUser ? currentUser.canOnboardStaff !== false : true;
   // Management roles come back lower case ("site manager"); under a name it reads better as "Site manager".
   const roleName = (role: string) => roleLabel(role).replace(/^./, (c) => c.toUpperCase());
   const [query, setQuery] = useState("");
@@ -271,6 +274,16 @@ export default function ManageTeam() {
   return (
     <Screen title="Team">
       <TeamCard summary={summary} />
+      {/* Adding someone lives here as well as on Overview and Profile: when Maintenance is on it takes the Add
+          staff tab's place on the bar. Only for people allowed to onboard staff. */}
+      {canOnboard ? (
+        <Button
+          icon={<Ionicons name="person-add" size={16} color={colors.primaryForeground} />}
+          onPress={() => router.push("/manage-add-staff" as never)}
+        >
+          Add staff
+        </Button>
+      ) : null}
       <View style={styles.searchRow}>
         <Ionicons name="search" size={16} color={colors.mutedForeground} />
         <TextInput
@@ -296,7 +309,7 @@ export default function ManageTeam() {
         <Card>
           <Text style={styles.muted}>
             {state.users.length <= 1
-              ? "Nobody on your team yet. Add someone from the Add staff tab."
+              ? "Nobody on your team yet. Add someone with the Add staff button."
               : "Nothing matches that search."}
           </Text>
         </Card>

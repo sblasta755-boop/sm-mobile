@@ -1725,7 +1725,7 @@ export interface FeedbackPayload {
   platform?: string;
 }
 
-/** Emails the platform operators (server side: ADMIN_ALERT_EMAILS). */
+/** Sends it to the Šoma360 team: kept in their inbox, and emailed too when the server has mail set up. */
 export function sendFeedback(accessToken: string, payload: FeedbackPayload) {
   return request<{ sent: boolean; photosAttached: number; photosSkipped: number }>(
     "/feedback",
@@ -2233,3 +2233,189 @@ export const requestOvertime = (t: string, reason: string, requestedAt?: string)
   request<OvertimeRequest>("/attendance/overtime", { method: "POST", body: JSON.stringify({ reason, requestedAt }) }, t);
 
 export const cancelLeave = (t: string, id: string) => request<LeaveRequest>(`/leave/requests/${id}/cancel`, { method: "POST" }, t);
+
+// ---- Maintenance ----
+// Mirrors backend/src/app/api/v1/maintenance.py. The server decides who may do what from the
+// organisation's maintenance policy; `capabilities` on a job only tells the screen what to offer.
+
+export type MaintenanceState =
+  | "reported"
+  | "investigating"
+  | "awaiting_quote"
+  | "awaiting_approval"
+  | "approved"
+  | "scheduled"
+  | "in_progress"
+  | "awaiting_verification"
+  | "completed"
+  | "no_action"
+  | "rejected"
+  | "cancelled"
+  | "rework";
+export type MaintenanceSeverity = "low" | "medium" | "high" | "critical";
+export type MaintenanceQueue = "open" | "mine" | "need_quote" | "awaiting_approval" | "on_hold" | "scheduled" | "verify" | "closed";
+export type MaintenanceCapabilities = { report: boolean; handle: boolean; approve: boolean; pay: boolean };
+export type MaintenanceFile = { filePath: string; fileName?: string; label?: string; kind?: string };
+export type MaintenanceQuote = {
+  id: string;
+  supplierName: string;
+  amount: number;
+  depositAmount: number;
+  revision: number;
+  status: "submitted" | "approved" | "rejected" | "changes_requested" | "superseded";
+  files: { filePath: string; fileName: string }[];
+  decisionComment: string | null;
+  selfApproved: boolean;
+};
+export type MaintenanceInvoice = {
+  id: string;
+  supplierName: string;
+  kind: "deposit" | "invoice";
+  number: string | null;
+  amount: number;
+  paidAmount: number;
+  balance: number;
+  state: "unpaid" | "pop_recorded" | "part_paid" | "paid" | "disputed";
+  popFiles: { filePath: string; fileName: string; amount?: number }[];
+  popForwardedAt: string | null;
+  supplierAckAt: string | null;
+};
+export type MaintenanceHold = { id: string; reason: string; note: string; active: boolean; override: boolean; releasedAt: string | null };
+export type MaintenanceEvent = { id: string; kind: string; actorName: string | null; message: string; createdAt: string };
+export type MaintenanceJob = {
+  id: string;
+  siteId: string;
+  locationId: string | null;
+  assetLabel: string | null;
+  title: string;
+  description: string;
+  severity: MaintenanceSeverity;
+  handlerId: string | null;
+  path: "internal" | "contractor";
+  state: MaintenanceState;
+  approvedAmount: number | null;
+  visitAt: string | null;
+  evidence: { id: string; filePath: string; label: string }[];
+  createdAt: string;
+  updatedAt: string;
+  activeHolds: number;
+  clearedToProceed: boolean;
+  clearedBlockers: string[];
+  events?: MaintenanceEvent[];
+  holds?: MaintenanceHold[];
+  quotes?: MaintenanceQuote[];
+  invoices?: MaintenanceInvoice[];
+  capabilities?: MaintenanceCapabilities;
+};
+export type MaintenanceSupplier = { id: string; name: string; preferred: boolean };
+
+const maintenanceBody = (method: string, body?: unknown): RequestInit => ({
+  method,
+  body: body === undefined ? undefined : JSON.stringify(body),
+});
+
+export const listMaintenanceJobs = (token: string, queue: MaintenanceQueue = "open") =>
+  request<MaintenanceJob[]>(`/maintenance/jobs?queue=${queue}`, {}, token);
+export const getMaintenanceJob = (token: string, id: string) => request<MaintenanceJob>(`/maintenance/jobs/${id}`, {}, token);
+export const createMaintenanceJob = (
+  token: string,
+  body: {
+    siteId: string;
+    locationId?: string | null;
+    title: string;
+    description?: string;
+    severity?: MaintenanceSeverity;
+    path?: "internal" | "contractor";
+    origin?: { type: "task" | "incident" | "adhoc"; id?: string; checklistItemId?: string };
+    photos?: MaintenanceFile[];
+  },
+) => request<MaintenanceJob>("/maintenance/jobs", maintenanceBody("POST", body), token);
+export const commentOnMaintenanceJob = (
+  token: string,
+  id: string,
+  message: string,
+  kind: "comment" | "supplier_response" | "supplier_refused" = "comment",
+) => request<MaintenanceJob>(`/maintenance/jobs/${id}/comments`, maintenanceBody("POST", { message, kind }), token);
+export const moveMaintenanceJob = (
+  token: string,
+  id: string,
+  to: MaintenanceState,
+  extra: { note?: string; finalCost?: number; visitAt?: string } = {},
+) => request<MaintenanceJob>(`/maintenance/jobs/${id}/transition`, maintenanceBody("POST", { to, ...extra }), token);
+export const addMaintenanceQuote = (
+  token: string,
+  id: string,
+  body: { supplierId: string; reference?: string; amount: number; depositAmount?: number; files: MaintenanceFile[]; supersedesId?: string },
+) => request<MaintenanceJob>(`/maintenance/jobs/${id}/quotes`, maintenanceBody("POST", body), token);
+export const decideMaintenanceQuote = (
+  token: string,
+  id: string,
+  quoteId: string,
+  decision: "approve" | "reject" | "request_changes",
+  comment = "",
+) => request<MaintenanceJob>(`/maintenance/jobs/${id}/quotes/${quoteId}/decision`, maintenanceBody("POST", { decision, comment }), token);
+export const recordMaintenancePop = (token: string, invoiceId: string, files: MaintenanceFile[], amount: number) =>
+  request<MaintenanceInvoice>(`/maintenance/invoices/${invoiceId}/pop`, maintenanceBody("POST", { files, amount }), token);
+export const verifyMaintenancePayment = (token: string, invoiceId: string) =>
+  request<MaintenanceInvoice>(`/maintenance/invoices/${invoiceId}/verify`, maintenanceBody("POST"), token);
+export const forwardMaintenancePop = (token: string, invoiceId: string, supplierAcknowledged = false) =>
+  request<MaintenanceInvoice>(`/maintenance/invoices/${invoiceId}/forwarded`, maintenanceBody("POST", { supplierAcknowledged }), token);
+export const listMaintenanceSuppliers = (token: string) => request<MaintenanceSupplier[]>("/maintenance/suppliers", {}, token);
+
+// ---- Platform feedback inbox (Šoma360's own staff only) ----
+
+export type FeedbackStatus = "new" | "seen" | "resolved";
+export type PlatformFeedback = {
+  id: string;
+  tenantId: string;
+  organisation: string;
+  senderName: string;
+  senderEmail: string | null;
+  senderRole: string;
+  category: "bug" | "idea" | "question" | "other";
+  message: string;
+  filePaths: string[];
+  appVersion: string | null;
+  platform: string | null;
+  status: FeedbackStatus;
+  starred: boolean;
+  note: string;
+  resolvedAt: string | null;
+  createdAt: string;
+};
+export type PlatformFeedbackCounts = {
+  open: number;
+  new: number;
+  seen: number;
+  resolved: number;
+  starred: number;
+  thisWeek: number;
+  openByCategory: Record<"bug" | "idea" | "question" | "other", number>;
+};
+export type PlatformFeedbackPage = { items: PlatformFeedback[]; total: number; page: number; pageSize: number; counts: PlatformFeedbackCounts };
+
+export function listPlatformFeedback(
+  accessToken: string,
+  query: { status?: FeedbackStatus | "open"; category?: string; starred?: boolean; q?: string; page?: number; pageSize?: number } = {},
+) {
+  const params = new URLSearchParams();
+  if (query.status) params.set("status", query.status);
+  if (query.category) params.set("category", query.category);
+  if (query.starred) params.set("starred", "true");
+  if (query.q?.trim()) params.set("q", query.q.trim());
+  params.set("page", String(query.page ?? 1));
+  params.set("pageSize", String(query.pageSize ?? 30));
+  return request<PlatformFeedbackPage>(`/platform/feedback?${params.toString()}`, {}, accessToken);
+}
+export function updatePlatformFeedback(
+  accessToken: string,
+  id: string,
+  changes: { status?: FeedbackStatus; starred?: boolean; note?: string },
+) {
+  return request<PlatformFeedback>(`/platform/feedback/${id}`, { method: "PATCH", body: JSON.stringify(changes) }, accessToken);
+}
+
+export type MaintenanceSummary = Record<MaintenanceQueue | "critical", number>;
+export const getMaintenanceSummary = (token: string) => request<MaintenanceSummary>("/maintenance/summary", {}, token);
+export const getMaintenanceMe = (token: string) =>
+  request<{ capabilities: MaintenanceCapabilities }>("/maintenance/me", {}, token);

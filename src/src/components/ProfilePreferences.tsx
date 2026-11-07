@@ -2,6 +2,7 @@ import { router } from "expo-router";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useCanMakeReports } from "@/features/roles";
+import { useHasModule } from "@/features/modules";
 import { useEvidenceViewMode } from "@/features/evidenceView";
 import { useCanUsePayroll } from "@/features/payroll";
 import { useScheduleOn } from "@/features/schedule";
@@ -182,6 +183,9 @@ export function SyncRow() {
 
 /** A row that opens the feedback screen (a message and photos to the Šoma360 team). */
 export function FeedbackRow() {
+  // Switched off for an organisation by the platform: then there is nothing to send it to.
+  const feedbackOn = useHasModule("feedback");
+  if (!feedbackOn) return null;
   return (
     <SettingsRow
       icon="chatbubble-ellipses-outline"
