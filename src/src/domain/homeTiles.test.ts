@@ -69,3 +69,25 @@ test("a leave tile shows when the module is on, after the schedule tile", () => 
   expect(keys({ ...off, schedule: true, leave: true })).toEqual(["schedule", "leave"]);
   expect(keys({ ...off, leave: false })).toEqual([]);
 });
+
+test("a maintenance tile shows when the module is on, after leave", () => {
+  expect(keys({ ...off, leave: true, maintenance: true })).toEqual(["leave", "maintenance"]);
+  expect(keys({ ...off, maintenance: false })).toEqual([]);
+});
+
+describe("maintenance payments", () => {
+  const base = {
+    hourlyCompliance: false, roundsToClaim: 0, correctiveActions: false, openCorrective: { count: 0 }, stock: false,
+    incidents: false, hasQr: false, schedule: false, progress: false, maintenance: true,
+  } as never;
+  it("shows how many payments are waiting, as a badge and in the hint", () => {
+    const tile = homeTiles({ ...(base as object), maintenancePayments: 3 } as never).find((t) => t.key === "maintenance");
+    expect(tile?.badge).toBe(3);
+    expect(tile?.hint).toBe("3 to pay");
+  });
+  it("is quiet when nothing is owed", () => {
+    const tile = homeTiles(base).find((t) => t.key === "maintenance");
+    expect(tile?.badge).toBeUndefined();
+    expect(tile?.hint).toBe("Report a fault");
+  });
+});

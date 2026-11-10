@@ -70,7 +70,9 @@ export default function ManageProfile() {
         <ScheduleRow />
         <PayRunsRow />
         <SettingsRow icon="people-outline" title="View your team" onPress={() => router.push("/manage-team")} />
-        <SettingsRow icon="person-add-outline" title="Add a team member" onPress={() => router.push("/manage-add-staff")} />
+        {currentUser?.canOnboardStaff !== false && (
+          <SettingsRow icon="person-add-outline" title="Add a team member" onPress={() => router.push("/manage-add-staff")} />
+        )}
       </SettingsSection>
 
       <SettingsSection title="Support & legal" defaultOpen={false}>

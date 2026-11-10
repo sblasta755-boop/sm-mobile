@@ -1,5 +1,7 @@
+import { fuzzyFilter } from "@/domain/fuzzySearch";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { StyleSheet, Text, TextInput, View } from "react-native";
+import { StyleSheet, Switch, Text, TextInput, View } from "react-native";
+import { router } from "expo-router";
 import { SvgXml } from "react-native-svg";
 import { Ionicons } from "@expo/vector-icons";
 import { Screen } from "@/components/Screen";
@@ -15,6 +17,7 @@ import {
   getStaffOnboardingStatus,
   reopenStaffOnboardingCode,
   revealStaffOnboardingCode,
+  updateUser,
   type StaffGrant,
 } from "@/api/client";
 import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
@@ -44,8 +47,10 @@ function statusTone(status: string): StatusTone {
 
 export default function ManageTeam() {
   useThemeVersion(); // re-render with the new colours when the theme changes
-  const { state, currentUser } = useSmartClean();
+  const { state, currentUser, dispatch } = useSmartClean();
   const roleLabel = useRoleLabel();
+  // Admins and operations managers always can; a site manager unless it was switched off. Fails open until loaded.
+  const canOnboard = currentUser ? currentUser.canOnboardStaff !== false : true;
   // Management roles come back lower case ("site manager"); under a name it reads better as "Site manager".
   const roleName = (role: string) => roleLabel(role).replace(/^./, (c) => c.toUpperCase());
   const [query, setQuery] = useState("");
@@ -60,17 +65,8 @@ export default function ManageTeam() {
 
   // Everyone but me, narrowed by the search.
   const team = useMemo(() => {
-    const needle = query.trim().toLowerCase();
     const rows = state.users.filter((user) => user.id !== currentUser?.id);
-    return needle
-      ? rows.filter(
-          (user) =>
-            user.name.toLowerCase().includes(needle) ||
-            (user.email ?? "").toLowerCase().includes(needle) ||
-            user.role.toLowerCase().includes(needle) ||
-            roleLabel(user.role).toLowerCase().includes(needle),
-        )
-      : rows;
+    return fuzzyFilter(rows, query, (user) => [user.name, user.email, user.role, roleLabel(user.role)]);
     // roleLabel is rebuilt each render from state.staffRoles, which is already a dependency through state.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.users, state.staffRoles, currentUser, query]);
@@ -79,7 +75,7 @@ export default function ManageTeam() {
   // The app's Site has no ownerId field, but bootstrap passes the backend's record through; an operations manager's
   // sites hang off it.
   const sites = useMemo(
-    () => state.sites.map((site) => ({ id: site.id, name: site.name, ownerId: (site as { ownerId?: string }).ownerId })),
+    () => state.sites.map((site) => ({ id: site.id, name: site.name, ownerId: (site as { ownerId?: string }).ownerId, ownerIds: (site as { ownerIds?: string[] }).ownerIds })),
     [state.sites],
   );
   const summary = useMemo(
@@ -156,7 +152,36 @@ export default function ManageTeam() {
     }
   }
 
+  // Only an org admin or operations manager can grant this; the server ignores it from anyone else.
+  async function setCanOnboard(value: boolean) {
+    if (!selected || !state.accessToken) return;
+    setBusy(true);
+    try {
+      // The backend replaces the stored record on PUT, so send back everything it gave us (the roster spreads the raw
+      // record) plus the one change.
+      const raw = selected as DemoUser & { username?: string; status?: string };
+      await updateUser(state.accessToken, selected.id, {
+        ...raw,
+        displayName: raw.name,
+        username: raw.username ?? raw.email ?? raw.id,
+        email: raw.email ?? `${raw.id}@smartclean.local`,
+        status: raw.status ?? "Active",
+        canOnboardStaff: value,
+      });
+      dispatch({ type: "UPDATE_USER", userId: selected.id, patch: { canOnboardStaff: value } });
+      setSelected({ ...selected, canOnboardStaff: value });
+    } catch (err) {
+      appAlert("Could not save", err instanceof Error ? err.message : "Try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (selected) {
+    const canGrantOnboarding =
+      (currentUser?.role === "org_admin" || currentUser?.role === "operations_manager") &&
+      selected.role !== "org_admin" &&
+      selected.role !== "operations_manager";
     const pending = statusOf(selected) === "Pending Activation";
     return (
       <Screen title={selected.name} backTo="/manage-team">
@@ -167,6 +192,24 @@ export default function ManageTeam() {
           </View>
           {selected.email && <Text style={styles.muted}>{selected.email}</Text>}
         </Card>
+
+        {canGrantOnboarding && (
+          <Card style={styles.detailCard}>
+            <View style={styles.switchRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.sectionTitle}>Can onboard staff</Text>
+                <Text style={styles.muted}>Lets them add new staff at their own sites and approve their sign-in.</Text>
+              </View>
+              <Switch
+                value={selected.canOnboardStaff ?? false}
+                disabled={busy}
+                trackColor={{ true: colors.primary, false: colors.neutral }}
+                accessibilityLabel="Can onboard staff"
+                onValueChange={(value) => void setCanOnboard(value)}
+              />
+            </View>
+          </Card>
+        )}
 
         {pending && (
           <Card style={styles.detailCard}>
@@ -223,6 +266,16 @@ export default function ManageTeam() {
   return (
     <Screen title="Team">
       <TeamCard summary={summary} />
+      {/* Adding someone lives here as well as on Overview and Profile: when Maintenance is on it takes the Add
+          staff tab's place on the bar. Only for people allowed to onboard staff. */}
+      {canOnboard ? (
+        <Button
+          icon={<Ionicons name="person-add" size={16} color={colors.primaryForeground} />}
+          onPress={() => router.push("/manage-add-staff" as never)}
+        >
+          Add staff
+        </Button>
+      ) : null}
       <View style={styles.searchRow}>
         <Ionicons name="search" size={16} color={colors.mutedForeground} />
         <TextInput
@@ -248,7 +301,7 @@ export default function ManageTeam() {
         <Card>
           <Text style={styles.muted}>
             {state.users.length <= 1
-              ? "Nobody on your team yet. Add someone from the Add staff tab."
+              ? "Nobody on your team yet. Add someone with the Add staff button."
               : "Nothing matches that search."}
           </Text>
         </Card>
@@ -380,6 +433,7 @@ function statusOf(user: DemoUser): string {
 }
 
 const styles = themedStyles(() => StyleSheet.create({
+  switchRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   searchRow: {
     flexDirection: "row",
     alignItems: "center",

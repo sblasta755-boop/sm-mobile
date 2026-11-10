@@ -27,6 +27,8 @@ export interface GeofenceConfig {
   overtimeCheck: boolean;
   /** "HH:MM" local, or null when the site has no working hours. */
   shiftEnd: string | null;
+  /** "HH:MM" local start, so an end earlier than it is read as the next morning. Optional. */
+  shiftStart?: string | null;
 }
 
 export interface MachineState {
@@ -62,15 +64,51 @@ export type GeofenceAction =
 export const dayKey = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
-export function freshState(now: Date, clockedIn: boolean): MachineState {
-  return { clockedIn, outsideSince: null, lastInsideAt: null, insideSince: null, autoOutAt: null, overtimeAskedFor: null, day: dayKey(now) };
+export interface ShiftHours {
+  shiftStart?: string | null;
+  shiftEnd?: string | null;
 }
 
-/** The moment shift ends on `now`'s local day, or null without working hours. */
-export function shiftEndAt(now: Date, shiftEnd: string | null): Date | null {
-  const m = /^(\d{1,2}):(\d{2})$/.exec(shiftEnd ?? "");
-  if (!m) return null;
-  return new Date(now.getFullYear(), now.getMonth(), now.getDate(), Number(m[1]), Number(m[2]), 0, 0);
+/**
+ * The day the tracking notes are filed under. Normally today's date; but in the morning part of a shift that began
+ * yesterday (an overnight site, after midnight and before its end) it is yesterday's, so the notes (outside since,
+ * overtime already asked) survive midnight instead of being thrown away mid-shift.
+ */
+export function stateDayKey(now: Date, shift?: ShiftHours): string {
+  const start = hhmm(shift?.shiftStart);
+  const end = hhmm(shift?.shiftEnd);
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  if (start !== null && end !== null && end <= start && nowMinutes < end) {
+    return dayKey(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1));
+  }
+  return dayKey(now);
+}
+
+export function freshState(now: Date, clockedIn: boolean, shift?: ShiftHours): MachineState {
+  return { clockedIn, outsideSince: null, lastInsideAt: null, insideSince: null, autoOutAt: null, overtimeAskedFor: null, day: stateDayKey(now, shift) };
+}
+
+const hhmm = (value: string | null | undefined): number | null => {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(value ?? "");
+  return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+};
+
+/**
+ * The moment the current shift ends, or null without working hours.
+ *
+ * With a start, an end at or before it means the site runs past midnight (19:00 to 04:00): in the evening the
+ * shift ends tomorrow at 04:00, and after midnight (before that end) it ends today at 04:00. Without a start the
+ * end is read on `now`'s own day, as before.
+ */
+export function shiftEndAt(now: Date, shiftEnd: string | null, shiftStart?: string | null): Date | null {
+  const end = hhmm(shiftEnd);
+  if (end === null) return null;
+  const start = hhmm(shiftStart);
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  const overnight = start !== null && end <= start;
+  // In the evening part of an overnight shift the end is on the next day.
+  const dayOffset = overnight && nowMinutes >= start ? 1 : 0;
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate() + dayOffset, Math.floor(end / 60), end % 60, 0, 0);
 }
 
 const minutesBetween = (fromIso: string, to: Date) => (to.getTime() - new Date(fromIso).getTime()) / 60_000;
@@ -79,9 +117,9 @@ const minutesBetween = (fromIso: string, to: Date) => (to.getTime() - new Date(f
  * Brings the machine in line with what the app knows: a clock-in or clock-out made by hand (or
  * on another device) ends any automatic out-of-site tracking, and a new day starts clean.
  */
-export function reconcile(state: MachineState, clockedIn: boolean, now: Date): MachineState {
+export function reconcile(state: MachineState, clockedIn: boolean, now: Date, shift?: ShiftHours): MachineState {
   let next = state;
-  if (state.day !== dayKey(now)) next = freshState(now, clockedIn);
+  if (state.day !== stateDayKey(now, shift)) next = freshState(now, clockedIn, shift);
   if (next.clockedIn !== clockedIn) {
     next = { ...next, clockedIn, outsideSince: null, lastInsideAt: null, insideSince: null, autoOutAt: null };
   }
@@ -105,7 +143,7 @@ export function step(input: {
   now: Date;
 }): { state: MachineState; actions: GeofenceAction[] } {
   const { config, fix, now } = input;
-  let state = reconcile(input.state, input.state.clockedIn, now);
+  let state = reconcile(input.state, input.state.clockedIn, now, config);
   const actions: GeofenceAction[] = [];
   const where = classify(fix, config);
   if (where === "unusable") return { state, actions };
@@ -122,7 +160,7 @@ export function step(input: {
         state = { ...state, clockedIn: false, outsideSince: null, insideSince: null, autoOutAt: since };
       }
     }
-    const end = shiftEndAt(now, config.shiftEnd);
+    const end = shiftEndAt(now, config.shiftEnd, config.shiftStart);
     if (
       state.clockedIn &&
       where !== "outside" &&
@@ -140,7 +178,7 @@ export function step(input: {
   // Out because the geofence clocked them out: back inside long enough means back on the clock,
   // unless the shift is already over.
   if (state.autoOutAt) {
-    const end = shiftEndAt(now, config.shiftEnd);
+    const end = shiftEndAt(now, config.shiftEnd, config.shiftStart);
     if (end && now.getTime() >= end.getTime()) {
       return { state: { ...state, autoOutAt: null, insideSince: null }, actions };
     }
@@ -169,7 +207,8 @@ export function buildConfig(input: {
     longitude?: number | null;
     radiusMeters?: number | null;
     autoClock?: boolean | null;
-    workingHours?: { end: string } | null;
+    workingHours?: { start?: string; end: string } | null;
+    effectiveWorkingHours?: { start?: string; end: string } | null;
   } | null | undefined;
   autoClock: { enabled: boolean; graceMinutes: number; overtimeCheck: boolean } | null | undefined;
 }): GeofenceConfig | null {
@@ -186,6 +225,8 @@ export function buildConfig(input: {
     radiusMeters: site.radiusMeters,
     graceMinutes: autoClock.graceMinutes,
     overtimeCheck: autoClock.overtimeCheck,
-    shiftEnd: site.workingHours?.end ?? null,
+    // The hours counting any shift that runs on from them, so a Day shift into a Night shift is not cut at its own end.
+    shiftEnd: (site.effectiveWorkingHours ?? site.workingHours)?.end ?? null,
+    shiftStart: (site.effectiveWorkingHours ?? site.workingHours)?.start ?? null,
   };
 }

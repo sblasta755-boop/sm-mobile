@@ -7,6 +7,9 @@ export interface AppRelease {
   downloadUrl: string;
   notes: string;
   minSupportedCode: number;
+  /** The server's own answer for this install, when it knew the installed build. Beats comparing
+   * numbers, which mislead after the build numbering restarted. */
+  updateAvailable?: boolean;
 }
 
 export type UpdateState = "current" | "available" | "required";
@@ -17,6 +20,7 @@ export type UpdateState = "current" | "available" | "required";
 export function updateState(installed: number | null, release: AppRelease | null): UpdateState {
   if (!release || installed == null || !Number.isFinite(installed) || installed <= 0) return "current";
   if (release.minSupportedCode > 0 && installed < release.minSupportedCode) return "required";
+  if (typeof release.updateAvailable === "boolean") return release.updateAvailable ? "available" : "current";
   if (installed < release.versionCode) return "available";
   return "current";
 }
@@ -47,5 +51,6 @@ export function parseRelease(raw: unknown): AppRelease | null {
     downloadUrl: r.downloadUrl,
     notes: typeof r.notes === "string" ? r.notes : "",
     minSupportedCode: typeof r.minSupportedCode === "number" ? r.minSupportedCode : 0,
+    ...(typeof r.updateAvailable === "boolean" && { updateAvailable: r.updateAvailable }),
   };
 }

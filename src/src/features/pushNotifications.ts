@@ -6,6 +6,7 @@ import Constants from "expo-constants";
 import { router } from "expo-router";
 import { registerPushToken, unregisterPushToken } from "@/api/client";
 import { useSmartClean } from "@/features/store";
+import { isFieldRole } from "@/features/roles";
 
 // Foreground behavior: still show the banner/sound even while the app is
 // open, matching how the backend already treats a push as "a nudge to open
@@ -173,6 +174,8 @@ export function usePushRegistration() {
   // after a restart. Refetch whenever the app comes back to the front, and when
   // a notification is tapped (below), at most once every few seconds. The ref
   // keeps the listener pointing at the latest refresh function.
+  const roleRef = useRef(currentUser?.role);
+  roleRef.current = currentUser?.role;
   const refreshRef = useRef(refreshBackendData);
   refreshRef.current = refreshBackendData;
   const lastRefreshAt = useRef(0);
@@ -201,7 +204,7 @@ export function usePushRegistration() {
         | { category?: string; relatedId?: string }
         | undefined;
       refreshSoon();
-      navigateForNotificationData(data);
+      navigateForNotificationData(data, roleRef.current);
     });
     return () => sub.remove();
   }, [refreshSoon]);
@@ -225,32 +228,60 @@ export function usePushRegistration() {
 }
 
 /**
- * Maps a push's {category, relatedId} (set server-side in
- * app.services.notify.notify's `data` payload) to the screen it should
- * open and navigates there. Falls back to the notifications list for
- * anything without a single-item detail screen in this app (Incidents has
- * no detail view yet, only a creation form; Quality/hourly-compliance and
- * tenant-wide Users broadcasts don't map to a mobile screen at all) rather
- * than guessing. Router.push's typed routes need a literal template
- * prefix to infer the right overload, which is why this branches into
- * separate push() calls instead of building and returning one plain
- * string path.
+ * Maps a notification's {category, relatedId} (set server-side in app.services.notify.notify's `data` payload, and
+ * the `kind`/`relatedId` of a row in the notifications list) to the screen it should open. Falls back to the
+ * notifications list for anything without a screen in this app (Incidents has no detail view yet; account and
+ * subscription notices have no screen) rather than guessing. Role matters because the field app and the
+ * management app have different screens for the same thing.
  */
+export function routeForNotification(
+  data: { category?: string; relatedId?: string } | undefined,
+  role?: string,
+): string {
+  const category = (data?.category ?? "").toLowerCase().replace(/[\s_-]+/g, "");
+  const id = data?.relatedId ? encodeURIComponent(data.relatedId) : null;
+  const field = isFieldRole(role);
+  const manager = role === "org_admin" || role === "operations_manager" || role === "site_manager";
+
+  switch (category) {
+    case "tasks":
+    case "task":
+      return id ? `/tasks/${id}` : "/my-tasks";
+    case "correctiveaction":
+    case "correctiveactions":
+      if (id) return `/corrective-actions/${id}`;
+      return field ? "/corrective-actions" : "/notifications";
+    case "tableservice":
+    case "tablesessions":
+      if (!field) return "/notifications";
+      return id ? `/tables/${id}` : "/tables";
+    case "leave":
+      return "/leave";
+    case "overtime":
+      return "/overtime";
+    case "maintenance":
+      return id && manager ? `/maintenance/${id}` : "/maintenance";
+    case "schedule":
+    case "scheduling":
+      return "/schedule";
+    case "inventory":
+      return "/stock";
+    case "quality":
+      return "/hourly-compliance";
+    case "payroll":
+      return id && manager ? `/pay-runs/${id}` : "/pay-runs";
+    case "users":
+    case "usermanagement":
+      return manager ? "/manage-approvals" : "/notifications";
+    default:
+      return "/notifications";
+  }
+}
+
 export function navigateForNotificationData(
   data: { category?: string; relatedId?: string } | undefined,
+  role?: string,
 ): void {
-  const category = data?.category?.toLowerCase() ?? "";
-  const relatedId = data?.relatedId;
-
-  if (relatedId && category === "tasks") {
-    router.push(`/tasks/${relatedId}`);
-    return;
-  }
-  if (relatedId && category === "corrective action") {
-    router.push(`/corrective-actions/${relatedId}`);
-    return;
-  }
-  // Lives in app/(shared)/ now rather than the cleaner's tab group, so
-  // tapping a push lands correctly whichever app the role is in.
-  router.push("/notifications");
+  // Typed routes can't see a computed path; every path above is a real screen.
+  router.push(routeForNotification(data, role) as never);
 }

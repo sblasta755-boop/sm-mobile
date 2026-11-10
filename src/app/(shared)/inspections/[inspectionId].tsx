@@ -222,6 +222,25 @@ export default function InspectionScreen() {
               label="Started manually - no area scan"
             />
           )}
+          {(
+            task.metadata as
+              { offline?: { recordedOffline?: boolean } } | undefined
+          )?.offline?.recordedOffline && (
+            <StatusBadge tone="info" label="Recorded offline, sent later" />
+          )}
+          {(task.metadata as { offline?: { late?: boolean } } | undefined)
+            ?.offline?.late && (
+            <StatusBadge tone="warning" label="Finished after the due time" />
+          )}
+          {(
+            task.metadata as
+              { offline?: { clockInMissing?: boolean } } | undefined
+          )?.offline?.clockInMissing && (
+            <StatusBadge
+              tone="warning"
+              label="No clock-in found at that time"
+            />
+          )}
           {task.isSupervisorTask && (
             <StatusBadge tone="info" label="Supervisor task" />
           )}

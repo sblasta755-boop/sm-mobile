@@ -14,6 +14,7 @@ import { useMyProgress } from "@/components/ProgressCard";
 import { useUpcomingBooking } from "@/components/UpcomingBookingCard";
 import { TodayCard } from "@/components/TodayCard";
 import { useLeaveOn } from "@/features/leave";
+import { useMaintenanceOn } from "@/features/maintenance";
 import { useScheduleOn } from "@/features/schedule";
 import { ActionTiles } from "@/components/ActionTiles";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -25,6 +26,7 @@ import { toneForTask, humanStatus } from "@/domain/status";
 import { taskDestination } from "@/domain/inspections";
 import { hexAlpha } from "@/domain/calendarGrid";
 import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
+import { OnboardingShortcuts } from "@/components/OnboardingShortcuts";
 
 /**
  * A supervisor's day: what is waiting to be inspected, and what they
@@ -96,6 +98,7 @@ export default function SuperviseHome() {
 
   const scheduleOn = useScheduleOn();
   const leaveOn = useLeaveOn();
+  const maintenanceOn = useMaintenanceOn();
   const nextBooking = useUpcomingBooking();
   const progress = useMyProgress();
   const noSites = (currentUser?.siteIds?.length ?? 0) === 0;
@@ -103,6 +106,7 @@ export default function SuperviseHome() {
   return (
     <Screen title="Today">
       <TodayCard showTasks={false} next={nextBooking} progress={progress} />
+      <OnboardingShortcuts />
       {!noSites && hasAttendance && canScanClock && hasQr && (
         <Card padded={false} style={styles.shiftCard}>
           <View style={styles.shiftOverlay}>
@@ -181,6 +185,9 @@ export default function SuperviseHome() {
             : []),
           ...(leaveOn
             ? [{ key: "leave", label: "Leave", icon: <Ionicons name="airplane-outline" size={20} color={colors.primary} />, onPress: () => router.push("/leave" as never) }]
+            : []),
+          ...(maintenanceOn
+            ? [{ key: "maintenance", label: "Maintenance", icon: <Ionicons name="construct-outline" size={20} color={colors.primary} />, onPress: () => router.push("/maintenance" as never) }]
             : []),
           ...(canOpenStock
             ? [{ key: "stock", label: "Stock", icon: <Ionicons name="cube-outline" size={20} color={colors.primary} />, onPress: () => router.push("/stock" as never) }]

@@ -2,6 +2,7 @@ import { Redirect, Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useSmartClean } from "@/features/store";
+import { useMaintenanceOn } from "@/features/maintenance";
 import { colors, sizes, spacing, typography, useThemeVersion } from "@/theme";
 
 /**
@@ -33,6 +34,12 @@ export default function ManageTabsLayout() {
   useThemeVersion(); // re-render with the new colours when the theme changes
   const { currentUser, state } = useSmartClean();
   const insets = useSafeAreaInsets();
+  // Onboarding staff is a permission: admins and operations managers always have it, a site manager unless it was
+  // switched off. Fails open until the profile loads.
+  const canOnboard = currentUser ? currentUser.canOnboardStaff !== false : true;
+  // Maintenance, when it is on for this person, takes Add staff's place on the bar (it has room for five). Adding
+  // someone moves to a button on the Team screen; the Add staff screen is still reachable, just not as a tab.
+  const maintenanceOn = useMaintenanceOn();
 
   if (state.sessionRestored && !currentUser) {
     return <Redirect href="/login" />;
@@ -82,6 +89,7 @@ export default function ManageTabsLayout() {
       <Tabs.Screen
         name="manage-add-staff"
         options={{
+          ...(canOnboard && !maintenanceOn ? {} : { href: null }),
           title: "Add staff",
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="person-add" color={color} size={size} />
@@ -89,8 +97,17 @@ export default function ManageTabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="manage-maintenance"
+        options={{
+          ...(maintenanceOn ? {} : { href: null }),
+          title: "Maintenance",
+          tabBarIcon: ({ color, size }) => <Ionicons name="construct" color={color} size={size} />,
+        }}
+      />
+      <Tabs.Screen
         name="manage-approvals"
         options={{
+          ...(canOnboard ? {} : { href: null }),
           title: "Approvals",
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="shield-checkmark" color={color} size={size} />

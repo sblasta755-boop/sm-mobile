@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { hoursText } from "@/domain/workingHours";
 import { router } from "expo-router";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -12,6 +13,7 @@ import { useScheduleOn } from "@/features/schedule";
 import { useHasModule } from "@/features/modules";
 import { reportTiles, tourTargetRef } from "@/features/tour";
 import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
+import { SiteManagerClockCard } from "@/components/SiteManagerClockCard";
 
 /**
  * What a manager needs on opening the app: is anything wrong at my sites, and who is working right now.
@@ -58,7 +60,11 @@ export default function ManageHome() {
     .sort((a, b) => new Date(a.scheduledAt!).getTime() - new Date(b.scheduledAt!).getTime());
   const openIncidents = state.incidents.filter((i) => i.status !== "closed");
   const openActions = state.correctiveActions.filter((c) => c.status !== "closed");
-  const onShift = Object.values(state.attendance).filter((entry) => entry?.clockedInAt);
+  // Only people clocked in at this manager's own sites - state.attendance can hold every site's.
+  const mySiteIds = new Set(mySites.map((s) => s.id));
+  const onShift = Object.values(state.attendance).filter(
+    (entry) => entry?.clockedInAt && !!entry.siteId && mySiteIds.has(entry.siteId),
+  );
   const onShiftBySite = (siteId: string) => onShift.filter((e) => e.siteId === siteId).length;
   const staffedSites = mySites.filter((s) => onShiftBySite(s.id) > 0).length;
 
@@ -91,6 +97,7 @@ export default function ManageHome() {
 
   return (
     <Screen title="Overview">
+      <SiteManagerClockCard />
       {needsSiteAssignment && (
         <View style={[styles.card, styles.warning]}>
           <Ionicons name="information-circle" size={20} color={colors.warningForeground} />
@@ -263,7 +270,7 @@ export default function ManageHome() {
                   {site.name}
                 </Text>
                 <Text style={styles.sub} numberOfLines={1}>
-                  {site.workingHours ? `Open ${site.workingHours.start} – ${site.workingHours.end} · ` : ""}
+                  {site.workingHours ? `Open ${hoursText(site.workingHours, "–")} · ` : ""}
                   {onShiftBySite(site.id)} on shift
                 </Text>
               </View>
@@ -272,20 +279,22 @@ export default function ManageHome() {
         )}
       </View>
 
-      <Pressable
-        accessibilityRole="button"
-        onPress={() => router.push("/manage-add-staff")}
-        style={({ pressed }) => [styles.card, styles.cta, pressed && { opacity: 0.8 }]}
-      >
-        <View style={[styles.disc, { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.accent }]}>
-          <Ionicons name="person-add-outline" size={18} color={colors.primary} />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.rowTitle}>Add a team member</Text>
-          <Text style={styles.sub}>Create their account and show them a QR code - no email needed.</Text>
-        </View>
-        <Ionicons name="arrow-forward" size={18} color={colors.foreground} />
-      </Pressable>
+      {currentUser?.canOnboardStaff !== false && (
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push("/manage-add-staff")}
+          style={({ pressed }) => [styles.card, styles.cta, pressed && { opacity: 0.8 }]}
+        >
+          <View style={[styles.disc, { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.accent }]}>
+            <Ionicons name="person-add-outline" size={18} color={colors.primary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.rowTitle}>Add a team member</Text>
+            <Text style={styles.sub}>Create their account and show them a QR code - no email needed.</Text>
+          </View>
+          <Ionicons name="arrow-forward" size={18} color={colors.foreground} />
+        </Pressable>
+      )}
     </Screen>
   );
 }

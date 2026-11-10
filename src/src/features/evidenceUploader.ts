@@ -1,10 +1,11 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useSyncExternalStore } from "react";
 import { AppState } from "react-native";
 import { useSmartClean } from "@/features/store";
 import {
   addTaskEvidence,
   ApiError,
   freshestAccessToken,
+  ensureFreshAccessToken,
   clockIn,
   requestOvertime,
   clockOut,
@@ -24,9 +25,21 @@ import {
 } from "@/api/client";
 import { clockBodyFromMutation, type OutboxMutation } from "@/domain/outbox";
 import { markSynced } from "@/features/lastSynced";
-import { getOutbox, loadOutbox, removeMutation, subscribeOutbox, updateMutation } from "@/features/outbox";
+import {
+  getOutbox,
+  loadOutbox,
+  removeMutation,
+  subscribeOutbox,
+  updateMutation,
+} from "@/features/outbox";
 import type { Task } from "@/types/smartclean";
-import { getQueue, loadQueue, removePhoto, subscribeQueue, updatePhoto } from "@/features/evidenceQueue";
+import {
+  getQueue,
+  loadQueue,
+  removePhoto,
+  subscribeQueue,
+  updatePhoto,
+} from "@/features/evidenceQueue";
 
 // Sends queued photos to the server, one at a time and in the order they were
 // taken, whenever there is a connection. A photo leaves the phone only after
@@ -48,25 +61,71 @@ let running: Promise<void> | null = null;
 
 // A 401 that survived the refresh-and-retry is about the session, not the
 // photo or change: leave it queued to go once the session is good again.
-const isAuthFailure = (error: unknown) => error instanceof ApiError && error.status === 401;
-const isServerAnswer = (error: unknown) => error instanceof ApiError && !isAuthFailure(error);
+const isAuthFailure = (error: unknown) =>
+  error instanceof ApiError && error.status === 401;
+// True while the server keeps refusing the session itself (refresh could not
+// fix it), so the banner can ask the person to sign in instead of saying
+// "Sending..." forever. Cleared by any send that gets through.
+let authBlocked = false;
+const authListeners = new Set<() => void>();
+function setAuthBlocked(value: boolean) {
+  if (authBlocked === value) return;
+  authBlocked = value;
+  authListeners.forEach((l) => l());
+}
+export const getAuthBlocked = () => authBlocked;
+export function useAuthBlocked(): boolean {
+  return useSyncExternalStore(
+    (l) => {
+      authListeners.add(l);
+      return () => void authListeners.delete(l);
+    },
+    getAuthBlocked,
+    getAuthBlocked,
+  );
+}
 
-// A reply that means "this was already done" (a retry after a response was
-// lost): the change is in, so it counts as sent.
-const ALREADY_DONE = /already|current status|cannot be (started|submitted)|has already been/i;
+// A busy or restarting server (5xx, 408, 429) says nothing about the change
+// itself: it is tried again later like a dropped connection, never given up on.
+const isTransient = (error: unknown) =>
+  error instanceof ApiError &&
+  (error.status === undefined
+    ? false
+    : error.status >= 500 ||
+      error.status === 408 ||
+      error.status === 425 ||
+      error.status === 429);
 
-async function sendMutation(ctx: Context, m: OutboxMutation): Promise<Task | null> {
+const isServerAnswer = (error: unknown) =>
+  error instanceof ApiError && !isAuthFailure(error) && !isTransient(error);
+
+// The one reply that means "this was already done": a submit sent again after
+// its answer was lost, from a server that does not yet treat that as a success.
+// Anything else (an incomplete checklist, a closed task) is a real refusal and
+// must stay visible, not be thrown away.
+const ALREADY_SUBMITTED = /has already been submitted or decided/i;
+
+async function sendMutation(
+  ctx: Context,
+  m: OutboxMutation,
+): Promise<Task | null> {
   const p = m.payload as Record<string, never>;
   switch (m.kind) {
     case "task.start": {
-      const qrValue = typeof m.payload.qrValue === "string" ? m.payload.qrValue : null;
+      const qrValue =
+        typeof m.payload.qrValue === "string" ? m.payload.qrValue : null;
       return startTask(
         ctx.token,
         m.taskId!,
         qrValue
-          ? { qrValue, latitude: m.payload.latitude as number | undefined, longitude: m.payload.longitude as number | undefined }
+          ? {
+              qrValue,
+              latitude: m.payload.latitude as number | undefined,
+              longitude: m.payload.longitude as number | undefined,
+            }
           : undefined,
         String(m.payload.startedAt ?? m.createdAt),
+        true,
       );
     }
     case "task.scan": {
@@ -77,8 +136,16 @@ async function sendMutation(ctx: Context, m: OutboxMutation): Promise<Task | nul
         String(m.payload.value),
         m.payload.latitude as number | undefined,
         m.payload.longitude as number | undefined,
+        undefined,
+        {
+          actionAt: String(m.payload.at ?? m.createdAt),
+          offlineRecorded: true,
+        },
       );
-      if (resolved.valid === false) throw new ApiError(String(resolved.reason ?? "The scan was not accepted."));
+      if (resolved.valid === false)
+        throw new ApiError(
+          String(resolved.reason ?? "The scan was not accepted."),
+        );
       return null;
     }
     case "inspection.decide": {
@@ -95,7 +162,8 @@ async function sendMutation(ctx: Context, m: OutboxMutation): Promise<Task | nul
     }
     case "corrective.update": {
       await updateCorrectiveAction(ctx.token, String(m.payload.actionId), {
-        status: m.payload.status as "in_progress" | "awaiting_reinspection" | "closed",
+        status: m.payload.status as
+          "in_progress" | "awaiting_reinspection" | "closed",
         note: m.payload.note as string | undefined,
       });
       ctx.onStale();
@@ -125,7 +193,12 @@ async function sendMutation(ctx: Context, m: OutboxMutation): Promise<Task | nul
       ctx.onStale();
       return null;
     case "stock.count.enter":
-      await enterStockCount(ctx.token, String(m.payload.countId), String(m.payload.lineId), Number(m.payload.counted));
+      await enterStockCount(
+        ctx.token,
+        String(m.payload.countId),
+        String(m.payload.lineId),
+        Number(m.payload.counted),
+      );
       return null;
     case "stock.count.submit":
       await submitStockCount(ctx.token, String(m.payload.countId));
@@ -138,30 +211,59 @@ async function sendMutation(ctx: Context, m: OutboxMutation): Promise<Task | nul
       return null;
     }
     case "overtime.request":
-      await requestOvertime(ctx.token, String(m.payload.reason ?? ""), String(m.payload.at ?? m.createdAt));
+      await requestOvertime(
+        ctx.token,
+        String(m.payload.reason ?? ""),
+        String(m.payload.at ?? m.createdAt),
+      );
       return null;
     case "task.checklist":
       return updateChecklistItem(ctx.token, m.taskId!, String(p.itemId), {
         done: typeof m.payload.done === "boolean" ? m.payload.done : undefined,
-        value: typeof m.payload.value === "string" ? m.payload.value : undefined,
+        value:
+          typeof m.payload.value === "string" ? m.payload.value : undefined,
         note: typeof m.payload.note === "string" ? m.payload.note : undefined,
+        // Judged at the moment the person ticked it, not when it reached the server.
+        actionAt: m.createdAt,
+        offlineRecorded: true,
       }) as Promise<Task>;
     case "task.note":
-      return saveTaskNote(ctx.token, m.taskId!, String(m.payload.note ?? ""));
-    case "task.submit":
-      return submitTask(ctx.token, m.taskId!, String(m.payload.submittedAt ?? m.createdAt), {
-        signerName: m.payload.signerName as string | undefined,
-        signature: m.payload.signature as { strokes: number[][][]; width: number; height: number } | undefined,
-        // Queued, so it may be replayed after the sign-off rule changed.
+      return saveTaskNote(ctx.token, m.taskId!, String(m.payload.note ?? ""), {
+        actionAt: m.createdAt,
         offlineRecorded: true,
       });
+    case "task.submit":
+      return submitTask(
+        ctx.token,
+        m.taskId!,
+        String(m.payload.submittedAt ?? m.createdAt),
+        {
+          signerName: m.payload.signerName as string | undefined,
+          signature: m.payload.signature as
+            | { strokes: number[][][]; width: number; height: number }
+            | undefined,
+          // Queued, so it may be replayed after the sign-off rule changed.
+          offlineRecorded: true,
+        },
+      );
     case "incident.create": {
       // Photos for the report were kept on the phone; they go up first.
       const local = (m.payload.localPhotos as string[] | undefined) ?? [];
-      const filePaths: string[] = [...((m.payload.filePaths as string[] | undefined) ?? [])];
-      for (const uri of local) filePaths.push(await uploadImage(ctx.token, uri, `incident-${Date.now()}.jpg`));
+      const filePaths: string[] = [
+        ...((m.payload.filePaths as string[] | undefined) ?? []),
+      ];
+      for (const uri of local)
+        filePaths.push(
+          await uploadImage(ctx.token, uri, `incident-${Date.now()}.jpg`),
+        );
       const { localPhotos: _local, filePaths: _paths, ...rest } = m.payload;
-      await createIncident(ctx.token, { ...rest, filePaths } as Parameters<typeof createIncident>[1]);
+      await createIncident(ctx.token, {
+        ...rest,
+        filePaths,
+        // When it was really reported, not when it reached the server.
+        reportedAt: m.createdAt,
+        offlineOriginated: true,
+      } as Parameters<typeof createIncident>[1]);
       return null;
     }
   }
@@ -179,13 +281,19 @@ async function drainOnce(): Promise<void> {
   // always follows the photos for that task.
   const steps: Step[] = [];
 
-  for (const photo of getQueue().filter((p) => p.userId === ctx.userId && p.status !== "rejected")) {
+  for (const photo of getQueue().filter(
+    (p) => p.userId === ctx.userId && p.status !== "rejected",
+  )) {
     steps.push({
       at: photo.capturedAt,
       run: async () => {
         await updatePhoto(photo.id, { status: "uploading" });
         try {
-          const filePath = await uploadImage(ctx.token, photo.localUri, `${photo.kind}-${photo.id}.jpg`);
+          const filePath = await uploadImage(
+            ctx.token,
+            photo.localUri,
+            `${photo.kind}-${photo.id}.jpg`,
+          );
           const task = await addTaskEvidence(ctx.token, photo.taskId, {
             id: photo.id,
             kind: photo.kind,
@@ -198,24 +306,34 @@ async function drainOnce(): Promise<void> {
           });
           ctx.onTask(photo.taskId, task);
           await removePhoto(photo.id);
+          setAuthBlocked(false);
           return true;
         } catch (error) {
+          if (isAuthFailure(error)) setAuthBlocked(true);
           if (isServerAnswer(error)) {
             await updatePhoto(photo.id, {
               status: "rejected",
               attempts: photo.attempts + 1,
-              error: error instanceof Error ? error.message : "The server did not accept this photo.",
+              error:
+                error instanceof Error
+                  ? error.message
+                  : "The server did not accept this photo.",
             });
             return true;
           }
-          await updatePhoto(photo.id, { status: "queued", attempts: photo.attempts + 1 });
+          await updatePhoto(photo.id, {
+            status: "queued",
+            attempts: photo.attempts + 1,
+          });
           return false; // no signal: stop here, try again later
         }
       },
     });
   }
 
-  for (const m of getOutbox().filter((x) => x.userId === ctx.userId && x.status !== "rejected")) {
+  for (const m of getOutbox().filter(
+    (x) => x.userId === ctx.userId && x.status !== "rejected",
+  )) {
     steps.push({
       at: m.createdAt,
       run: async () => {
@@ -224,20 +342,32 @@ async function drainOnce(): Promise<void> {
           const task = await sendMutation(ctx, m);
           if (task && m.taskId) ctx.onTask(m.taskId, task);
           await removeMutation(m.id);
+          setAuthBlocked(false);
           return true;
         } catch (error) {
+          if (isAuthFailure(error)) setAuthBlocked(true);
           if (isServerAnswer(error)) {
-            const message = error instanceof Error ? error.message : "The server did not accept this change.";
-            if (ALREADY_DONE.test(message) && m.kind !== "task.checklist") {
+            const message =
+              error instanceof Error
+                ? error.message
+                : "The server did not accept this change.";
+            if (m.kind === "task.submit" && ALREADY_SUBMITTED.test(message)) {
               await removeMutation(m.id);
               ctx.onStale();
               return true;
             }
-            await updateMutation(m.id, { status: "rejected", attempts: m.attempts + 1, error: message });
+            await updateMutation(m.id, {
+              status: "rejected",
+              attempts: m.attempts + 1,
+              error: message,
+            });
             ctx.onStale();
             return true;
           }
-          await updateMutation(m.id, { status: "pending", attempts: m.attempts + 1 });
+          await updateMutation(m.id, {
+            status: "pending",
+            attempts: m.attempts + 1,
+          });
           return false;
         }
       },
@@ -247,6 +377,8 @@ async function drainOnce(): Promise<void> {
   steps.sort((a, b) => a.at.localeCompare(b.at));
   for (const step of steps) {
     if (!ctx.online()) return;
+    // Renew a token that is about to lapse before it costs a refused upload.
+    await ensureFreshAccessToken(ctx.token);
     if (!(await step.run())) return;
   }
 }
@@ -260,8 +392,12 @@ export function drainQueue(): Promise<void> {
         const ctx = context;
         if (!ctx || !ctx.online()) return;
         const left =
-          getQueue().filter((p) => p.userId === ctx.userId && p.status !== "rejected").length +
-          getOutbox().filter((m) => m.userId === ctx.userId && m.status !== "rejected").length;
+          getQueue().filter(
+            (p) => p.userId === ctx.userId && p.status !== "rejected",
+          ).length +
+          getOutbox().filter(
+            (m) => m.userId === ctx.userId && m.status !== "rejected",
+          ).length;
         if (left === 0) markSynced();
       })
       .finally(() => {
@@ -280,8 +416,10 @@ export async function flushTask(taskId: string): Promise<number> {
   // A pass that started before the last photo was queued may have missed it.
   await drainQueue();
   return (
-    getQueue().filter((p) => p.taskId === taskId && p.status !== "rejected").length +
-    getOutbox().filter((m) => m.taskId === taskId && m.status !== "rejected").length
+    getQueue().filter((p) => p.taskId === taskId && p.status !== "rejected")
+      .length +
+    getOutbox().filter((m) => m.taskId === taskId && m.status !== "rejected")
+      .length
   );
 }
 
@@ -297,6 +435,7 @@ export function useEvidenceUploader() {
   useEffect(() => {
     if (!token || !userId) {
       context = null;
+      setAuthBlocked(false);
       return;
     }
     context = {
@@ -306,9 +445,11 @@ export function useEvidenceUploader() {
       },
       userId,
       online: () => context !== null && onlineRef.current,
-      onTask: (taskId, task) => dispatch({ type: "UPDATE_TASK", taskId, patch: task }),
+      onTask: (taskId, task) =>
+        dispatch({ type: "UPDATE_TASK", taskId, patch: task }),
       onStale: () => void refreshRef.current(),
     };
+    setAuthBlocked(false);
     void drainQueue();
   }, [token, userId, dispatch]);
 
@@ -331,7 +472,11 @@ export function useEvidenceUploader() {
       if (next === "active") void drainQueue();
     });
     const timer = setInterval(() => {
-      if (onlineRef.current && (getQueue().some((p) => p.status === "queued") || getOutbox().some((m) => m.status === "pending")))
+      if (
+        onlineRef.current &&
+        (getQueue().some((p) => p.status === "queued") ||
+          getOutbox().some((m) => m.status === "pending"))
+      )
         void drainQueue();
     }, 30_000);
     return () => {

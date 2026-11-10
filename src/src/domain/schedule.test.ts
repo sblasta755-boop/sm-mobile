@@ -1,5 +1,5 @@
 import type { StaffBooking } from "@/api/client";
-import { addDays, bookingShifts, bookingTime, dateKey, dayHeading, daysBetween, groupByDay, isPastDay, mapsUrl, mondayOf } from "./schedule";
+import { addDays, bookingShifts, bookingTime, bookingTimeParts, dateKey, dayHeading, daysBetween, groupByDay, isPastDay, mapsUrl, mondayOf, summarizeTasks } from "./schedule";
 
 const site = { id: "s1", name: "Hazelwood Mall", address: "1 Main Rd", latitude: -26.1, longitude: 28.0 };
 const b = (over: Partial<StaffBooking>): StaffBooking => ({
@@ -56,4 +56,31 @@ test("a booking names its shifts, joined for a double shift, or nothing for cust
   expect(bookingShifts(b({ shiftNames: ["Day"] }))).toBe("Day");
   expect(bookingShifts(b({ shiftNames: ["Day", "Night"] }))).toBe("Day + Night");
   expect(bookingShifts(b({}))).toBe("");
+});
+
+describe("summarizeTasks", () => {
+  const t = (id: string, title: string, status = "assigned") => ({ id, title, status });
+  it("folds the hourly rounds into one line and keeps the other tasks", () => {
+    const out = summarizeTasks([
+      t("1", "Kitchen Area – Cleaning"),
+      t("2", "Hourly compliance 09:30 · Games room"),
+      t("3", "Hourly compliance 08:00 · Kitchen"),
+      t("4", "Hourly compliance 8:30 · Games room"),
+      t("5", "Bar – Restock", "approved"),
+    ]);
+    expect(out.rounds).toEqual({ count: 3, first: "08:00", last: "09:30", places: ["Games room", "Kitchen"] });
+    expect(out.others).toEqual([
+      { id: "1", title: "Kitchen Area – Cleaning", done: false },
+      { id: "5", title: "Bar – Restock", done: true },
+    ]);
+  });
+  it("has no rounds line when there are none", () => {
+    expect(summarizeTasks([t("1", "Mop")]).rounds).toBeNull();
+    expect(summarizeTasks([]).others).toEqual([]);
+  });
+  it("splits a booking time for the card", () => {
+    expect(bookingTimeParts({ startTime: "12:15", endTime: "12:20" })).toEqual({ main: "12:15", sub: "to 12:20" });
+    expect(bookingTimeParts({ startTime: "18:30", endTime: "04:00" }).sub).toBe("to 04:00 (+1 day)");
+    expect(bookingTimeParts({ startTime: null, endTime: null }).main).toBe("All day");
+  });
 });

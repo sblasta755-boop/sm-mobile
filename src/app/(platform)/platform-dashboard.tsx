@@ -7,6 +7,7 @@ import { BarRows, GrowthCurve, PillSelector, StackedBar } from "@/components/Pla
 import { useSmartClean } from "@/features/store";
 import {
   getPlatformSummary,
+  listPlatformFeedback,
   listPlatformOrganisations,
   type PlatformOrganisation,
   type PlatformSummary,
@@ -92,8 +93,39 @@ export default function PlatformDashboard() {
   const paidPct = total ? Math.round((paid / total) * 100) : 0;
   const signups = summary ? signupsTotal(summary) : 0;
 
+  // The feedback inbox card: how many messages nobody has opened yet.
+  const [feedbackNew, setFeedbackNew] = useState<number | null>(null);
+  useFocusEffect(
+    useCallback(() => {
+      if (!state.accessToken) return;
+      listPlatformFeedback(state.accessToken, { pageSize: 1 })
+        .then((page) => setFeedbackNew(page.counts.new))
+        .catch(() => setFeedbackNew(null));
+    }, [state.accessToken]),
+  );
+
   return (
     <Screen title="Platform" scroll>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Feedback inbox${feedbackNew ? `, ${feedbackNew} new` : ""}`}
+        onPress={() => router.push("/platform-feedback" as never)}
+        style={[styles.card, { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginBottom: spacing.md }]}
+      >
+        <Ionicons name="chatbubble-ellipses-outline" size={20} color={colors.primary} />
+        <View style={{ flex: 1 }}>
+          <Text style={styles.orgName}>Feedback inbox</Text>
+          <Text style={styles.sub}>
+            {feedbackNew ? `${feedbackNew} new message${feedbackNew === 1 ? "" : "s"}` : "What people are telling the team"}
+          </Text>
+        </View>
+        {feedbackNew ? (
+          <View style={{ backgroundColor: colors.destructive, borderRadius: radius.xl, paddingHorizontal: spacing.sm, paddingVertical: 2 }}>
+            <Text style={{ color: colors.white, fontSize: typography.tiny, fontWeight: "800" }}>{feedbackNew}</Text>
+          </View>
+        ) : null}
+        <Ionicons name="chevron-forward" size={18} color={colors.mutedForeground} />
+      </Pressable>
       {error ? (
         <View style={[styles.card, { borderColor: colors.destructive }]}>
           <Text style={{ color: colors.destructive }}>{error}</Text>

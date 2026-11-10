@@ -1,3 +1,4 @@
+import { fuzzyFilter } from "@/domain/fuzzySearch";
 import { useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -28,7 +29,7 @@ export function SelectField({
   const [query, setQuery] = useState("");
   const showSearch = searchable ?? options.length > SEARCH_FROM;
   const needle = query.trim().toLowerCase();
-  const shown = needle ? options.filter((option) => option.toLowerCase().includes(needle)) : options;
+  const shown = fuzzyFilter([...options], query, (option) => [option]);
   const close = () => {
     setOpen(false);
     setQuery("");

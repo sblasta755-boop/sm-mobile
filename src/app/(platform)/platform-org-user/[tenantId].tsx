@@ -21,6 +21,7 @@ import {
   type OrganisationUser,
 } from "@/api/client";
 import { STATE_INFO, formatWhen, initialsOf, roleLabel, userState } from "@/features/orgUsers";
+import { siteOwnerIds } from "@/domain/teamGroups";
 import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 
 /** What an organisation administrator may assign, as on the web Users page. Field-staff roles come from the organisation. */
@@ -32,7 +33,7 @@ const MANAGEMENT_ROLES = [
   { key: "org_admin", label: "Org admin" },
 ];
 
-type EditSite = { id: string; name: string; ownerId?: string };
+type EditSite = { id: string; name: string; ownerIds: string[] };
 type EditState = {
   record: Record<string, unknown>;
   roles: { key: string; label: string }[];
@@ -50,8 +51,14 @@ type EditState = {
 
 const needsSingleSite = (role: string) => role !== "org_admin" && role !== "operations_manager";
 
-/** Sets (or clears, with null) which operations manager owns a site: the only place that link is stored. */
-const setSiteOwner = (t: string, siteId: string, ownerId: string | null) => updateSite(t, siteId, { geofence: { ownerId } });
+/**
+ * Adds or removes one operations manager from a site's owners (a site can have several): the only place that link is
+ * stored. `current` is the site's owners now, so the others are kept.
+ */
+const setSiteOwner = (t: string, siteId: string, current: string[], userId: string, owns: boolean) =>
+  updateSite(t, siteId, {
+    geofence: { ownerIds: owns ? Array.from(new Set([...current, userId])) : current.filter((id) => id !== userId) },
+  });
 
 /**
  * One person in an organisation, for the platform operator. What is shown comes from the read-only roster. Changing
@@ -126,9 +133,9 @@ export default function PlatformOrganisationUser() {
       const sites = (bootstrap.sites ?? []).map((x) => ({
         id: x.id,
         name: x.name,
-        ownerId: (x as unknown as { ownerId?: string | null }).ownerId ?? undefined,
+        ownerIds: siteOwnerIds(x as unknown as { ownerId?: string | null; ownerIds?: string[] }),
       }));
-      const owned = sites.filter((x) => x.ownerId === user.id).map((x) => x.id);
+      const owned = sites.filter((x) => x.ownerIds.includes(user.id)).map((x) => x.id);
       const names: Record<string, string> = {};
       for (const r of await listUserRecords(t)) names[String(r.id)] = String(r.displayName ?? r.name ?? "");
       setEdit({
@@ -153,7 +160,7 @@ export default function PlatformOrganisationUser() {
     if (roleKey === "operations_manager" && edit.roleKey !== "operations_manager") {
       const carried = (Array.isArray(edit.record.siteIds) ? (edit.record.siteIds as string[]) : []).filter((id) => {
         const site = edit.sites.find((x) => x.id === id);
-        return site && (!site.ownerId || site.ownerId === user.id);
+        return Boolean(site);
       });
       ownedIds = Array.from(new Set([...edit.ownedBefore, ...carried]));
     } else if (edit.roleKey === "operations_manager" && roleKey !== "operations_manager") {
@@ -185,8 +192,9 @@ export default function PlatformOrganisationUser() {
       const after = edit.roleKey === "operations_manager" ? edit.ownedIds : [];
       let ownershipFailed = false;
       try {
-        for (const id of after.filter((id) => !edit.ownedBefore.includes(id))) await setSiteOwner(t, id, user.id);
-        for (const id of edit.ownedBefore.filter((id) => !after.includes(id))) await setSiteOwner(t, id, null);
+        const ownersOf = (id: string) => edit.sites.find((x) => x.id === id)?.ownerIds ?? [];
+        for (const id of after.filter((id) => !edit.ownedBefore.includes(id))) await setSiteOwner(t, id, ownersOf(id), user.id, true);
+        for (const id of edit.ownedBefore.filter((id) => !after.includes(id))) await setSiteOwner(t, id, ownersOf(id), user.id, false);
       } catch {
         ownershipFailed = true;
       }
@@ -229,8 +237,9 @@ export default function PlatformOrganisationUser() {
               const t = await token();
               // Release any sites they own first, so none is left pointing at a person who no longer exists.
               const sites = (await loadBackendBootstrap(t)).sites ?? [];
-              for (const site of sites.filter((x) => (x as unknown as { ownerId?: string }).ownerId === user.id)) {
-                await setSiteOwner(t, site.id, null);
+              for (const site of sites) {
+                const owners = siteOwnerIds(site as unknown as { ownerId?: string | null; ownerIds?: string[] });
+                if (owners.includes(user.id)) await setSiteOwner(t, site.id, owners, user.id, false);
               }
               await deleteUser(t, user.id);
               backToList();
@@ -347,7 +356,11 @@ export default function PlatformOrganisationUser() {
                       {edit.sites.length === 0 && <Text style={styles.muted}>No sites yet</Text>}
                       {edit.sites.map((site) => {
                         const on = edit.ownedIds.includes(site.id);
-                        const other = site.ownerId && site.ownerId !== user?.id && !on ? edit.ownerNames[site.ownerId] : undefined;
+                        const other = site.ownerIds
+                          .filter((id) => id !== user?.id)
+                          .map((id) => edit.ownerNames[id])
+                          .filter(Boolean)
+                          .join(", ");
                         return (
                           <Pressable
                             key={site.id}
@@ -362,7 +375,7 @@ export default function PlatformOrganisationUser() {
                             <Text style={styles.ownedName} numberOfLines={1}>
                               {site.name}
                             </Text>
-                            {other ? <Text style={styles.muted}>moves from {other}</Text> : null}
+                            {other ? <Text style={styles.muted}>shared with {other}</Text> : null}
                           </Pressable>
                         );
                       })}

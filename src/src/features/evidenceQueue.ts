@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as FileSystem from "expo-file-system/legacy";
-import type { QueuedPhoto } from "@/domain/evidenceQueue";
+import { healSavedQueue, isRetryableRejection, type QueuedPhoto } from "@/domain/evidenceQueue";
 
 // Photos taken on the phone wait here until they have been uploaded. The list
 // is kept in AsyncStorage and each image in the app's own document folder, so a
@@ -9,6 +9,8 @@ import type { QueuedPhoto } from "@/domain/evidenceQueue";
 // deleted from the phone only after the server has accepted it.
 const STORAGE_KEY = "soma.evidence.queue.v1";
 const FOLDER = `${FileSystem.documentDirectory ?? ""}evidence-queue/`;
+
+export { healSavedQueue, isRetryableRejection };
 
 let items: QueuedPhoto[] = [];
 let loaded = false;
@@ -37,11 +39,7 @@ export function loadQueue(): Promise<void> {
         const saved = raw ? (JSON.parse(raw) as QueuedPhoto[]) : [];
         // Photos refused only because the access token had expired were never
         // the photo's fault: put them back in line instead of making a retake.
-        items = saved.map((p) =>
-          p.status === "uploading" || (p.status === "rejected" && p.error === "Invalid authentication token")
-            ? { ...p, status: "queued" as const, error: undefined }
-            : p,
-        );
+        items = healSavedQueue(saved);
       } catch {
         items = [];
       }
@@ -90,6 +88,11 @@ export async function updatePhoto(id: string, patch: Partial<QueuedPhoto>) {
   items = items.map((p) => (p.id === id ? { ...p, ...patch } : p));
   emit();
   await persist();
+}
+
+/** Puts a refused photo back in line to upload again. */
+export async function retryPhoto(id: string) {
+  await updatePhoto(id, { status: "queued", error: undefined });
 }
 
 /** Removes a photo from the queue and deletes its file from the phone. */

@@ -50,3 +50,18 @@ describe("parseRelease", () => {
     expect(parseRelease({ versionCode: 3, downloadUrl: "http://x/y.apk" })).toBeNull();
   });
 });
+
+describe("updateState with the server's verdict", () => {
+  it("offers an update to a higher-numbered but older build", () => {
+    expect(updateState(80, release({ versionCode: 39, updateAvailable: true }))).toBe("available");
+  });
+  it("stays current when the server says so", () => {
+    expect(updateState(30, release({ versionCode: 39, updateAvailable: false }))).toBe("current");
+  });
+  it("still enforces the floor first", () => {
+    expect(updateState(10, release({ minSupportedCode: 15, updateAvailable: false }))).toBe("required");
+  });
+  it("parses the verdict", () => {
+    expect(parseRelease({ versionCode: 1, downloadUrl: "https://x/a.apk", updateAvailable: true })?.updateAvailable).toBe(true);
+  });
+});

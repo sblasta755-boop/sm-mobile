@@ -49,6 +49,7 @@ const TAB_COPY: Record<string, { title: string; body: string }> = {
   "/manage-home": { title: "Overview", body: "Today across your sites: who is on site, task completion and anything that needs you." },
   "/manage-team": { title: "Team", body: "Your people and where they are working. Open someone to see their record." },
   "/manage-add-staff": { title: "Add staff", body: "Add a new team member. They get a QR code and set up their own account." },
+  "/manage-maintenance": { title: "Maintenance", body: "Report a fault, get quotes, and follow each job to the end. What needs you comes first." },
   "/manage-approvals": { title: "Approvals", body: "Leave, overtime and other requests waiting for your decision." },
   // Supervisor
   "/supervise-home": { title: "Today", body: "Work waiting for your review and the checks due today, in the order to do them." },

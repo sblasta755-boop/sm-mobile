@@ -130,6 +130,10 @@ export interface DemoUser {
   // editable from app/(shared)/profile-edit.tsx, see updateUser +
   // toUserRecord.
   phone?: string;
+  /** What an administrator has given this person in Maintenance. Set only from the web console's Access screen. */
+  maintenance?: { access?: boolean; handle?: boolean; approve?: boolean; pay?: boolean };
+  /** May onboard new staff (add a person, approve their scan). Set by an admin; the server enforces it. */
+  canOnboardStaff?: boolean;
   profilePhotoDataUrl?: string;
   notificationPrefs?: Partial<NotificationPrefs> & Record<string, unknown>;
   // ISO timestamp of account creation - always sent by the backend
@@ -316,7 +320,7 @@ export interface Task {
    * instead. A generated instance is an ordinary task in every other
    * respect, so nothing on this screen needs to special-case it. See
    * app.services.recurring_tasks on the backend. */
-  recurrence?: { pattern: "daily" | "weekdays" | "dates"; dates: string[] };
+  recurrence?: { pattern: "daily" | "weekdays" | "days" | "dates"; dates: string[]; daysOfWeek?: number[] };
   /** Whether the template is still generating instances - null for a
    * task that doesn't repeat at all. */
   recurrenceActive?: boolean | null;
@@ -401,6 +405,10 @@ export interface Site {
   // banner and the backend's late clock-in watchdog
   // (app/services/attendance_watchdog.py).
   workingHours?: { start: string; end: string };
+  /** workingHours with the shifts that run on from them counted (Day into Night ends when Night does). */
+  effectiveWorkingHours?: { start: string; end: string };
+  /** The site's named shifts (Day, Night...), for the home card. */
+  shifts?: { id: string; name: string; startTime: string; endTime: string }[];
   // Floors + rooms layout (Enterprise-only "site_layout" module) - set
   // and mostly edited on the web app's Organisation setup screen.
   // Undefined for a site with no floors defined yet.
@@ -479,6 +487,10 @@ export interface Tenant {
   // require_table_service in app/api/deps.py) so this is a UX nicety,
   // not the actual security boundary.
   tableServiceEnabled: boolean;
+  /** Site managers clock in and out (set by the platform operator). */
+  siteManagerClockEnabled?: boolean;
+  /** Site managers can be given tasks (set by the platform operator). */
+  siteManagerTasksEnabled?: boolean;
 }
 
 export interface LocationLayoutPoint {

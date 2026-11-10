@@ -5,7 +5,18 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHasCapability, useHasModule } from "@/features/modules";
 import { resolveStaffRole } from "@/features/roles";
 import { useSmartClean } from "@/features/store";
-import { colors, sizes, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
+import {
+  useMaintenanceOn,
+  useMaintenancePayments,
+} from "@/features/maintenance";
+import {
+  colors,
+  sizes,
+  spacing,
+  typography,
+  themedStyles,
+  useThemeVersion,
+} from "@/theme";
 
 /**
  * The bottom navigation, for screens that live outside any role's tab group.
@@ -21,7 +32,13 @@ import { colors, sizes, spacing, typography, themedStyles, useThemeVersion } fro
  * It mirrors each group's tab list. If a role gains a tab in its layout, add
  * it here too.
  */
-export type RoleTab = { label: string; to: string; icon: keyof typeof Ionicons.glyphMap; primary?: boolean };
+export type RoleTab = {
+  label: string;
+  to: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  primary?: boolean;
+  badge?: number;
+};
 type Tab = RoleTab;
 
 /** The signed-in role's tabs, in bar order. Also read by the guided tour, so it walks exactly what the bar shows. */
@@ -30,6 +47,8 @@ export function useRoleTabs(): Tab[] {
   const hasCorrectiveActions = useHasModule("corrective_actions");
   const hasInspections = useHasModule("inspections");
   const hasQr = useHasCapability("qr_codes");
+  const maintenanceOn = useMaintenanceOn();
+  const maintenancePayments = useMaintenancePayments();
   const role = currentUser?.role;
 
   if (!currentUser) return [];
@@ -41,7 +60,11 @@ export function useRoleTabs(): Tab[] {
         { label: "Overview", to: "/platform-dashboard", icon: "grid" },
         { label: "Clients", to: "/platform-organisations", icon: "business" },
         { label: "Onboard", to: "/platform-onboard", icon: "qr-code" },
-        { label: "Approvals", to: "/platform-approvals", icon: "shield-checkmark" },
+        {
+          label: "Approvals",
+          to: "/platform-approvals",
+          icon: "shield-checkmark",
+        },
         { label: "Profile", to: "/platform-profile", icon: "person" },
       ];
       break;
@@ -51,36 +74,91 @@ export function useRoleTabs(): Tab[] {
       tabs = [
         { label: "Overview", to: "/manage-home", icon: "grid" },
         { label: "Team", to: "/manage-team", icon: "people" },
-        { label: "Add staff", to: "/manage-add-staff", icon: "person-add" },
-        { label: "Approvals", to: "/manage-approvals", icon: "shield-checkmark" },
+        // Maintenance takes Add staff's place when it is on (see app/(manage)/_layout.tsx).
+        ...(maintenanceOn
+          ? [
+              {
+                label: "Maintenance",
+                to: "/manage-maintenance",
+                icon: "construct",
+                badge: maintenancePayments,
+              } as Tab,
+            ]
+          : currentUser.canOnboardStaff !== false
+            ? [
+                {
+                  label: "Add staff",
+                  to: "/manage-add-staff",
+                  icon: "person-add",
+                } as Tab,
+              ]
+            : []),
+        ...(currentUser.canOnboardStaff !== false
+          ? [
+              {
+                label: "Approvals",
+                to: "/manage-approvals",
+                icon: "shield-checkmark",
+              } as Tab,
+            ]
+          : []),
         { label: "Profile", to: "/manage-profile", icon: "person" },
       ];
       break;
     case "supervisor":
       tabs = [
         { label: "Today", to: "/supervise-home", icon: "today" },
-        ...(hasInspections ? [{ label: "Inspections", to: "/supervise-inspections", icon: "clipboard" } as Tab] : []),
-        ...(hasCorrectiveActions ? [{ label: "Actions", to: "/supervise-actions", icon: "checkbox" } as Tab] : []),
+        ...(hasInspections
+          ? [
+              {
+                label: "Inspections",
+                to: "/supervise-inspections",
+                icon: "clipboard",
+              } as Tab,
+            ]
+          : []),
+        ...(hasCorrectiveActions
+          ? [
+              {
+                label: "Actions",
+                to: "/supervise-actions",
+                icon: "checkbox",
+              } as Tab,
+            ]
+          : []),
         { label: "Profile", to: "/supervise-profile", icon: "person" },
       ];
       break;
     case "client_auditor":
       tabs = [
         { label: "Overview", to: "/audit-home", icon: "analytics" },
-        ...(hasInspections ? [{ label: "Quality", to: "/audit-quality", icon: "ribbon" } as Tab] : []),
+        ...(hasInspections
+          ? [{ label: "Quality", to: "/audit-quality", icon: "ribbon" } as Tab]
+          : []),
         { label: "Profile", to: "/audit-profile", icon: "person" },
       ];
       break;
     default: {
       const staffRole = resolveStaffRole(state.staffRoles, role);
-      const hasTables = !!staffRole?.features.tables && !!state.tenant?.tableServiceEnabled;
+      const hasTables =
+        !!staffRole?.features.tables && !!state.tenant?.tableServiceEnabled;
       tabs = [
         { label: "Home", to: "/home", icon: "home" },
         { label: "Shifts", to: "/shifts", icon: "calendar" },
-        ...(hasQr ? [{ label: "Scan", to: "/scan", icon: "scan", primary: true } as Tab] : []),
-        ...(hasTables ? [{ label: "Tables", to: "/tables", icon: "restaurant" } as Tab] : []),
+        ...(hasQr
+          ? [{ label: "Scan", to: "/scan", icon: "scan", primary: true } as Tab]
+          : []),
+        ...(hasTables
+          ? [{ label: "Tables", to: "/tables", icon: "restaurant" } as Tab]
+          : []),
         ...(hasCorrectiveActions && staffRole?.features.actionsTab !== false
-          ? [{ label: "Actions", to: "/corrective-actions", icon: "checkbox" } as Tab]
+          ? [
+              {
+                label: "Actions",
+                to: "/corrective-actions",
+                icon: "checkbox",
+              } as Tab,
+            ]
           : []),
         { label: "Profile", to: "/profile", icon: "person" },
       ];
@@ -103,7 +181,10 @@ export function RoleTabBar() {
       accessibilityRole="tablist"
       style={[
         styles.bar,
-        { height: sizes.bottomNavHeight + insets.bottom, paddingBottom: insets.bottom + spacing.xs },
+        {
+          height: sizes.bottomNavHeight + insets.bottom,
+          paddingBottom: insets.bottom + spacing.xs,
+        },
       ]}
     >
       {tabs.map((tab) => {
@@ -120,12 +201,35 @@ export function RoleTabBar() {
           >
             {tab.primary ? (
               <View style={styles.primary}>
-                <Ionicons name={tab.icon} size={24} color={colors.primaryForeground} />
+                <Ionicons
+                  name={tab.icon}
+                  size={24}
+                  color={colors.primaryForeground}
+                />
               </View>
             ) : (
               <>
-                <Ionicons name={tab.icon} size={22} color={active ? colors.primary : colors.mutedForeground} />
-                <Text style={[styles.label, active && styles.labelActive]} numberOfLines={1}>
+                <View>
+                  <Ionicons
+                    name={tab.icon}
+                    size={22}
+                    color={active ? colors.primary : colors.mutedForeground}
+                  />
+                  {tab.badge ? (
+                    <View
+                      style={styles.badge}
+                      accessibilityLabel={`${tab.badge} to pay`}
+                    >
+                      <Text style={styles.badgeText}>
+                        {tab.badge > 99 ? "99+" : tab.badge}
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
+                <Text
+                  style={[styles.label, active && styles.labelActive]}
+                  numberOfLines={1}
+                >
                   {tab.label}
                 </Text>
               </>
@@ -137,30 +241,55 @@ export function RoleTabBar() {
   );
 }
 
-const styles = themedStyles(() => StyleSheet.create({
-  bar: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    paddingTop: spacing.xs,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    backgroundColor: colors.background,
-  },
-  tab: { flex: 1, alignItems: "center", justifyContent: "center", gap: 2, paddingTop: 4 },
-  label: { fontSize: typography.tiny, fontWeight: "600", color: colors.mutedForeground },
-  labelActive: { color: colors.primary },
-  primary: {
-    marginTop: -20,
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.primary,
-    shadowColor: "#000",
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 6,
-  },
-}));
+const styles = themedStyles(() =>
+  StyleSheet.create({
+    bar: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      paddingTop: spacing.xs,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+      backgroundColor: colors.background,
+    },
+    tab: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 2,
+      paddingTop: 4,
+    },
+    label: {
+      fontSize: typography.tiny,
+      fontWeight: "600",
+      color: colors.mutedForeground,
+    },
+    labelActive: { color: colors.primary },
+    badge: {
+      position: "absolute",
+      top: -4,
+      right: -10,
+      minWidth: 16,
+      height: 16,
+      paddingHorizontal: 4,
+      borderRadius: 8,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: colors.destructive,
+    },
+    badgeText: { fontSize: 10, fontWeight: "800", color: "#ffffff" },
+    primary: {
+      marginTop: -20,
+      width: 52,
+      height: 52,
+      borderRadius: 26,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: colors.primary,
+      shadowColor: "#000",
+      shadowOpacity: 0.25,
+      shadowRadius: 10,
+      shadowOffset: { width: 0, height: 6 },
+      elevation: 6,
+    },
+  }),
+);

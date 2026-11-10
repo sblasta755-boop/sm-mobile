@@ -48,6 +48,7 @@ const TAB_ROOT_PATHS = new Set([
   "/manage-home",
   "/manage-team",
   "/manage-add-staff",
+  "/manage-maintenance",
   "/manage-approvals",
   "/manage-profile",
   // (supervise)

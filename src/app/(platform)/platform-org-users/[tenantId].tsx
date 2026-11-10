@@ -1,3 +1,4 @@
+import { fuzzyFilter } from "@/domain/fuzzySearch";
 import { useCallback, useMemo, useState } from "react";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
@@ -65,12 +66,8 @@ export default function PlatformOrganisationUsers() {
   }, [users]);
 
   const shown = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    return (users ?? []).filter((u) => {
-      if (filter !== "all" && userState(u.status) !== filter) return false;
-      if (!needle) return true;
-      return `${u.name} ${u.email} ${roleLabel(u.role)}`.toLowerCase().includes(needle);
-    });
+    const byState = (users ?? []).filter((u) => filter === "all" || userState(u.status) === filter);
+    return fuzzyFilter(byState, query, (u) => [u.name, u.email, roleLabel(u.role)]);
   }, [users, query, filter]);
 
   const total = users?.length ?? 0;

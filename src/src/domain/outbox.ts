@@ -54,11 +54,14 @@ interface TaskLike {
 
 /**
  * Shows pending changes on top of the tasks the server last sent. Rejected
- * changes are left out: they did not happen, and the person is told so.
+ * changes are left out: they did not happen, and the person is told so. The
+ * one exception is a refused submit: the person has finished their part and
+ * can retry or ask for help from the banner, so the task keeps reading as
+ * submitted and does not hold them back from their next task.
  */
 export function applyMutations<T extends TaskLike>(tasks: T[], mutations: OutboxMutation[]): T[] {
   const live = mutations
-    .filter((m) => m.taskId && m.status !== "rejected")
+    .filter((m) => m.taskId && (m.status !== "rejected" || m.kind === "task.submit"))
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   if (live.length === 0) return tasks;
   const byTask = new Map<string, OutboxMutation[]>();

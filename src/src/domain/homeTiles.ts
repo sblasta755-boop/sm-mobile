@@ -4,7 +4,15 @@
 // tasks off the first screen. New features add ONE entry to homeTiles() instead, and the screen
 // draws them as a grid of tiles. Kept free of React so the rules can be tested on their own.
 
-export type HomeTileKey = "rounds" | "corrective" | "stock" | "incident" | "schedule" | "leave" | "progress";
+export type HomeTileKey =
+  | "rounds"
+  | "corrective"
+  | "stock"
+  | "incident"
+  | "schedule"
+  | "leave"
+  | "maintenance"
+  | "progress";
 
 export type HomeTileAction = { kind: "route"; path: string };
 
@@ -32,6 +40,10 @@ export interface HomeTileInput {
   schedule: boolean;
   /** The Leave module is on. */
   leave?: boolean;
+  /** The Maintenance module is on: report a fault, follow it through. */
+  maintenance?: boolean;
+  /** Deposits and invoices waiting to be paid; only people who pay for maintenance ever get a number. */
+  maintenancePayments?: number;
   /** Gamification is on for this person. */
   progress: boolean;
 }
@@ -45,7 +57,10 @@ export function homeTiles(input: HomeTileInput): HomeTile[] {
       label: "Hourly rounds",
       icon: "shield-checkmark-outline",
       action: { kind: "route", path: "/hourly-compliance" },
-      hint: input.roundsToClaim > 0 ? `${input.roundsToClaim} to claim` : "My checklist",
+      hint:
+        input.roundsToClaim > 0
+          ? `${input.roundsToClaim} to claim`
+          : "My checklist",
       badge: input.roundsToClaim > 0 ? input.roundsToClaim : undefined,
     });
   }
@@ -55,13 +70,25 @@ export function homeTiles(input: HomeTileInput): HomeTile[] {
       key: "corrective",
       label: "Corrective actions",
       icon: "alert-circle-outline",
-      action: { kind: "route", path: count === 1 && onlyId ? `/corrective-actions/${onlyId}` : "/corrective-actions" },
+      action: {
+        kind: "route",
+        path:
+          count === 1 && onlyId
+            ? `/corrective-actions/${onlyId}`
+            : "/corrective-actions",
+      },
       hint: `${count} open`,
       badge: count,
     });
   }
   if (input.stock) {
-    tiles.push({ key: "stock", label: "Stock", icon: "cube-outline", action: { kind: "route", path: "/stock" }, hint: "Issue, waste, restock" });
+    tiles.push({
+      key: "stock",
+      label: "Stock",
+      icon: "cube-outline",
+      action: { kind: "route", path: "/stock" },
+      hint: "Issue, waste, restock",
+    });
   }
   if (input.incidents) {
     tiles.push({
@@ -72,13 +99,45 @@ export function homeTiles(input: HomeTileInput): HomeTile[] {
     });
   }
   if (input.schedule) {
-    tiles.push({ key: "schedule", label: "My schedule", icon: "calendar-outline", action: { kind: "route", path: "/schedule" } });
+    tiles.push({
+      key: "schedule",
+      label: "My schedule",
+      icon: "calendar-outline",
+      action: { kind: "route", path: "/schedule" },
+    });
   }
   if (input.leave) {
-    tiles.push({ key: "leave", label: "Leave", icon: "airplane-outline", action: { kind: "route", path: "/leave" }, hint: "Ask for time off" });
+    tiles.push({
+      key: "leave",
+      label: "Leave",
+      icon: "airplane-outline",
+      action: { kind: "route", path: "/leave" },
+      hint: "Ask for time off",
+    });
+  }
+  if (input.maintenance) {
+    tiles.push({
+      key: "maintenance",
+      label: "Maintenance",
+      icon: "construct-outline",
+      action: { kind: "route", path: "/maintenance" },
+      hint:
+        (input.maintenancePayments ?? 0) > 0
+          ? `${input.maintenancePayments} to pay`
+          : "Report a fault",
+      badge:
+        (input.maintenancePayments ?? 0) > 0
+          ? input.maintenancePayments
+          : undefined,
+    });
   }
   if (input.progress) {
-    tiles.push({ key: "progress", label: "My progress", icon: "trophy-outline", action: { kind: "route", path: "/progress" } });
+    tiles.push({
+      key: "progress",
+      label: "My progress",
+      icon: "trophy-outline",
+      action: { kind: "route", path: "/progress" },
+    });
   }
   return tiles;
 }
@@ -87,7 +146,10 @@ export type TodayRowKey = "booking" | "points" | "tasks";
 
 /** Which rows the Today card shows: the booking and points rows only when there is something to
  * say, and the task count always. */
-export function todayRows(input: { hasBooking: boolean; hasPoints: boolean }): TodayRowKey[] {
+export function todayRows(input: {
+  hasBooking: boolean;
+  hasPoints: boolean;
+}): TodayRowKey[] {
   const rows: TodayRowKey[] = [];
   if (input.hasBooking) rows.push("booking");
   if (input.hasPoints) rows.push("points");

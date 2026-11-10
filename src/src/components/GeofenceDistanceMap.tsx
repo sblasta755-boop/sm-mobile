@@ -44,6 +44,13 @@ export function GeofenceDistanceMap({
         source={{ html }}
         style={styles.webview}
         originWhitelist={["*"]}
+        javaScriptEnabled
+        domStorageEnabled
+        mixedContentMode="always"
+        // Android draws a WebView blank inside a sliding Modal unless it has its own layer.
+        androidLayerType="hardware"
+        collapsable={false}
+        scrollEnabled={false}
         // The map is a static illustration of the rejection, not an
         // interactive browsing surface - block navigation away from
         // the inline HTML (e.g. a tapped OSM attribution link trying
@@ -83,13 +90,17 @@ function buildMapHtml({
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
-    html, body, #map { height: 100%; margin: 0; padding: 0; }
+    html, body, #map { height: 100%; margin: 0; padding: 0; background: #eef3f5; }
   </style>
 </head>
 <body>
   <div id="map"></div>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
+    if (typeof L === 'undefined') {
+      document.getElementById('map').innerHTML = '<p style="font:13px sans-serif;padding:16px;color:#555">The map could not load. Check your connection and open it again.</p>';
+      throw new Error('leaflet missing');
+    }
     var map = L.map('map', { attributionControl: true, zoomControl: true });
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
@@ -105,7 +116,16 @@ function buildMapHtml({
     L.polyline([site, device], { color: '#d3382c', dashArray: '6 4' }).addTo(map);
 
     var bounds = L.latLngBounds([site, device]);
-    map.fitBounds(bounds.pad(0.35), { maxZoom: 18 });
+    function fit() {
+      map.invalidateSize();
+      map.fitBounds(bounds.pad(0.35), { maxZoom: 18 });
+    }
+    fit();
+    // The sheet slides in, so the page can start with no size at all (a blank map on Android):
+    // measure again once it has one and whenever it changes.
+    setTimeout(fit, 300);
+    setTimeout(fit, 900);
+    window.addEventListener('resize', fit);
   </script>
 </body>
 </html>`;

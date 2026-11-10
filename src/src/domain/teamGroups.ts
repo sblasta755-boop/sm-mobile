@@ -8,7 +8,14 @@
  */
 
 export type TeamPerson = { id: string; name: string; role: string; siteIds: string[]; status?: string };
-export type TeamSite = { id: string; name: string; ownerId?: string };
+export type TeamSite = { id: string; name: string; ownerId?: string | null; ownerIds?: string[] };
+
+/** Every operations manager who owns a site; the legacy single ownerId is folded in. */
+export function siteOwnerIds(site: { ownerId?: string | null; ownerIds?: string[] }): string[] {
+  const ids = [...(site.ownerIds ?? [])];
+  if (site.ownerId && !ids.includes(site.ownerId)) ids.push(site.ownerId);
+  return ids;
+}
 
 /** Management roles, top down. Any other role is a field-staff role (cleaner, waiter, kitchen...). */
 const MANAGEMENT_ORDER = ["org_admin", "operations_manager", "site_manager", "supervisor", "client_auditor"];
@@ -90,7 +97,7 @@ export function groupByRole<P extends TeamPerson>(people: P[], fieldPlural?: (ro
 export function sitesOf(person: TeamPerson, sites: TeamSite[]): TeamSite[] {
   if (person.role === "org_admin") return [];
   return sites.filter(
-    (site) => person.siteIds.includes(site.id) || (person.role === "operations_manager" && site.ownerId === person.id),
+    (site) => person.siteIds.includes(site.id) || (person.role === "operations_manager" && siteOwnerIds(site).includes(person.id)),
   );
 }
 
