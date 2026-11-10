@@ -5,12 +5,13 @@ import { Ionicons } from "@expo/vector-icons";
 import { Screen } from "@/components/Screen";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
+import { BookingCard } from "@/components/BookingCard";
 import { ScheduleMap } from "@/components/ScheduleMap";
 import { CalendarFrame, CalendarLegend, DotStrip, MonthTiles, type DayTileData } from "@/components/MonthCalendar";
 import { heatColor, monthDays, monthTitle } from "@/domain/calendarGrid";
 import { appAlert } from "@/components/Dialog";
 import { cancelBooking, listMyBookings, listSiteBookings, type StaffBooking } from "@/api/client";
-import { addDays, bookingShifts, bookingTime, isPastDay, mondayOf, dateKey, dayHeading, groupByDay, mapsUrl, parseDateKey } from "@/domain/schedule";
+import { addDays, bookingTime, isPastDay, mondayOf, dateKey, dayHeading, groupByDay, mapsUrl, parseDateKey } from "@/domain/schedule";
 import { useCanBook, useScheduleOn } from "@/features/schedule";
 import { useHomePath } from "@/features/roles";
 import { useSmartClean } from "@/features/store";
@@ -26,7 +27,7 @@ export default function ScheduleScreen() {
   const canBook = useCanBook();
   const homePath = useHomePath();
   const [scope, setScope] = useState<"mine" | "all">("mine");
-  const [view, setView] = useState<"list" | "map" | "calendar">("calendar");
+  const [view, setView] = useState<"list" | "map" | "calendar">("list");
   const [monthStart, setMonthStart] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
   const [pickedDay, setPickedDay] = useState(() => dateKey(new Date()));
   const [bookings, setBookings] = useState<StaffBooking[] | null>(null);
@@ -85,34 +86,12 @@ export default function ScheduleScreen() {
     ]);
 
   const renderCard = (b: StaffBooking) => (
-              <Card key={b.id} style={styles.card}>
-                <View style={styles.row}>
-                  <Text style={styles.site}>{b.site.name}</Text>
-                  <Text style={styles.time}>{bookingTime(b)}</Text>
-                </View>
-                {bookingShifts(b) !== "" && <Text style={styles.muted}>{bookingShifts(b)}</Text>}
-                {scope === "all" && <Text style={styles.person}>{b.userName}</Text>}
-                {!!b.site.address && <Text style={styles.muted}>{b.site.address}</Text>}
-                {!!b.instructions && (
-                  <View style={styles.note}>
-                    <Text style={styles.noteLabel}>Instructions</Text>
-                    <Text style={styles.noteText}>{b.instructions}</Text>
-                  </View>
-                )}
-                <Text style={styles.muted}>
-                  {b.tasks.length > 0 ? `${b.tasks.length} task${b.tasks.length === 1 ? "" : "s"}: ${b.tasks.map((t) => t.title).join(", ")}` : "No tasks set yet"}
-                </Text>
-                <View style={styles.row}>
-                  <Pressable accessibilityRole="button" onPress={() => void Linking.openURL(mapsUrl(b.site))}>
-                    <Text style={styles.link}>Directions</Text>
-                  </Pressable>
-                  {canBook && scope === "all" && !isPastDay(b.date) && (
-                    <Pressable accessibilityRole="button" onPress={() => cancel(b)}>
-                      <Text style={styles.danger}>Cancel</Text>
-                    </Pressable>
-                  )}
-                </View>
-              </Card>
+    <BookingCard
+      key={b.id}
+      booking={b}
+      showPerson={scope === "all"}
+      onCancel={canBook && scope === "all" && !isPastDay(b.date) ? () => cancel(b) : undefined}
+    />
   );
 
   const bookedOn = (day: string) => (bookings ?? []).filter((b) => b.date === day && b.status !== "cancelled").length;

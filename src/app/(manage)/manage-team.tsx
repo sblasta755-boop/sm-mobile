@@ -1,3 +1,4 @@
+import { fuzzyFilter } from "@/domain/fuzzySearch";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { StyleSheet, Switch, Text, TextInput, View } from "react-native";
 import { router } from "expo-router";
@@ -64,17 +65,8 @@ export default function ManageTeam() {
 
   // Everyone but me, narrowed by the search.
   const team = useMemo(() => {
-    const needle = query.trim().toLowerCase();
     const rows = state.users.filter((user) => user.id !== currentUser?.id);
-    return needle
-      ? rows.filter(
-          (user) =>
-            user.name.toLowerCase().includes(needle) ||
-            (user.email ?? "").toLowerCase().includes(needle) ||
-            user.role.toLowerCase().includes(needle) ||
-            roleLabel(user.role).toLowerCase().includes(needle),
-        )
-      : rows;
+    return fuzzyFilter(rows, query, (user) => [user.name, user.email, user.role, roleLabel(user.role)]);
     // roleLabel is rebuilt each render from state.staffRoles, which is already a dependency through state.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.users, state.staffRoles, currentUser, query]);

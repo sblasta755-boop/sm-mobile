@@ -190,3 +190,13 @@ describe("clockBodyFromMutation", () => {
     expect(body.occurredAt).toBe("2026-10-15T10:00:00.000Z");
   });
 });
+
+describe("a refused submit", () => {
+  it("keeps the task reading as submitted so it does not block the next task", () => {
+    const task = { id: "t1", status: "in_progress", checklist: [], evidence: [] } as never;
+    const out = applyMutations([task], [
+      { id: "m1", kind: "task.submit", taskId: "t1", createdAt: "2026-01-01T10:00:00Z", payload: {}, status: "rejected", attempts: 1, userId: "u" } as never,
+    ]);
+    expect((out[0] as { status: string }).status).toBe("submitted");
+  });
+});

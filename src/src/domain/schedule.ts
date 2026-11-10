@@ -76,3 +76,45 @@ export function mapsUrl(site: Pick<StaffBooking["site"], "name" | "address" | "l
 export function isPastDay(iso: string, today: Date = new Date()): boolean {
   return iso < dateKey(today);
 }
+
+const ROUND_TITLE = /^hourly compliance\s+(\d{1,2}:\d{2})(?:\s*[·\-–]\s*(.+))?$/i;
+const DONE = ["approved", "closed", "completed"];
+
+export interface TaskSummary {
+  /** The hourly-compliance rounds folded into one line: how many, from when to when, and where. */
+  rounds: { count: number; first: string; last: string; places: string[] } | null;
+  others: { id: string; title: string; done: boolean }[];
+}
+
+/**
+ * A booking can carry a dozen tasks, most of them the same hourly round at a different time and place, which read as
+ * a wall of text. Rounds are folded into one summary and the rest stay as individual rows.
+ * Kept in step with the web app's lib/smartclean/bookingTasks.ts.
+ */
+export function summarizeTasks(tasks: { id: string; title: string; status: string }[]): TaskSummary {
+  const times: string[] = [];
+  const places: string[] = [];
+  const others: TaskSummary["others"] = [];
+  for (const task of tasks) {
+    const match = ROUND_TITLE.exec(task.title.trim());
+    if (match) {
+      times.push(match[1].padStart(5, "0"));
+      const place = match[2]?.trim();
+      if (place && !places.includes(place)) places.push(place);
+    } else {
+      others.push({ id: task.id, title: task.title, done: DONE.includes(task.status) });
+    }
+  }
+  times.sort();
+  return {
+    rounds: times.length > 0 ? { count: times.length, first: times[0], last: times[times.length - 1], places } : null,
+    others,
+  };
+}
+
+/** The headline time of a booking and the small line under it: "12:15" / "to 12:20", or "All day". */
+export function bookingTimeParts(b: Pick<StaffBooking, "startTime" | "endTime">): { main: string; sub: string } {
+  if (b.startTime && b.endTime) return { main: b.startTime, sub: `to ${b.endTime}${b.endTime <= b.startTime ? " (+1 day)" : ""}` };
+  if (b.startTime) return { main: b.startTime, sub: "start" };
+  return { main: "All day", sub: "" };
+}

@@ -5,6 +5,7 @@ import {
   Image,
   Keyboard,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -21,7 +22,14 @@ import { Ionicons } from "@expo/vector-icons";
 import { useSmartClean } from "@/features/store";
 import { getPublicTenantBranding } from "@/api/client";
 import { resolveBranding, type ResolvedBranding } from "@/services/branding";
-import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
+import {
+  colors,
+  radius,
+  spacing,
+  typography,
+  themedStyles,
+  useTheme,
+} from "@/theme";
 
 /**
  * Sign in, and the way in for people who can't sign in yet.
@@ -46,12 +54,14 @@ function withAlpha(hex: string, alpha: number) {
 }
 
 export default function Login() {
-  useThemeVersion(); // re-render with the new colours when the theme changes
+  const { theme } = useTheme(); // also re-renders with the new colours when the theme changes
   const { signIn } = useSmartClean();
   const insets = useSafeAreaInsets();
   // Fetched unauthenticated - nobody's signed in yet, so state.tenant
   // (only populated by bootstrap after sign-in) isn't available here.
-  const [branding, setBranding] = useState<ResolvedBranding>(() => resolveBranding(undefined));
+  const [branding, setBranding] = useState<ResolvedBranding>(() =>
+    resolveBranding(undefined),
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -79,11 +89,13 @@ export default function Login() {
   // The header shrinks while the keyboard is up, so the form is never hidden behind it.
   const [keyboardUp, setKeyboardUp] = useState(false);
   useEffect(() => {
-    const show = Keyboard.addListener(Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow", () =>
-      setKeyboardUp(true),
+    const show = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
+      () => setKeyboardUp(true),
     );
-    const hide = Keyboard.addListener(Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide", () =>
-      setKeyboardUp(false),
+    const hide = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
+      () => setKeyboardUp(false),
     );
     return () => {
       show.remove();
@@ -108,21 +120,40 @@ export default function Login() {
   }
 
   const logo = branding.logoUrl ? (
-    <Image source={{ uri: branding.logoUrl }} style={styles.logoImage} resizeMode="contain" />
+    <Image
+      source={{ uri: branding.logoUrl }}
+      style={styles.logoImage}
+      resizeMode="contain"
+    />
   ) : (
     // A bundled asset has no URL to fetch, so require() rather than a uri.
-    <Image source={require("../assets/logo-mark.png")} style={styles.logoImage} resizeMode="contain" />
+    <Image
+      source={require("../assets/logo-mark.png")}
+      style={styles.logoImage}
+      resizeMode="contain"
+    />
   );
 
   return (
-    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+    <KeyboardAvoidingView
+      style={styles.flex}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+    >
       <StatusBar style="light" />
       <LinearGradient
-        colors={[colors.shiftBackground, colors.shiftBackground, withAlpha(colors.primary, 0.85)]}
+        colors={[
+          colors.shiftBackground,
+          colors.shiftBackground,
+          withAlpha(colors.primary, 0.85),
+        ]}
         locations={[0, 0.45, 1]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
-        style={[styles.hero, { paddingTop: insets.top + spacing.sm }, keyboardUp && styles.heroSlim]}
+        style={[
+          styles.hero,
+          { paddingTop: insets.top + spacing.sm },
+          keyboardUp && styles.heroSlim,
+        ]}
       >
         {/* Two faint rings in the corner; decoration only. */}
         <View pointerEvents="none" style={[styles.ring, styles.ringBig]} />
@@ -141,7 +172,9 @@ export default function Login() {
               {branding.name.toUpperCase()}
             </Text>
             <Text style={styles.heroTitle}>
-              {tab === "in" ? "Sign in to manage\nyour shift" : "Welcome to\nthe team"}
+              {tab === "in"
+                ? "Sign in to manage\nyour shift"
+                : "Welcome to\nthe team"}
             </Text>
           </>
         )}
@@ -149,7 +182,10 @@ export default function Login() {
 
       <View style={styles.sheet}>
         <ScrollView
-          contentContainerStyle={[styles.sheetContent, { paddingBottom: insets.bottom + spacing.sm }]}
+          contentContainerStyle={[
+            styles.sheetContent,
+            { paddingBottom: insets.bottom + spacing.sm },
+          ]}
           keyboardShouldPersistTaps="handled"
           bounces={false}
         >
@@ -160,9 +196,15 @@ export default function Login() {
             <View style={styles.form}>
               {error && (
                 <View style={styles.notice} accessibilityRole="alert">
-                  <Ionicons name="alert-circle-outline" size={18} color={colors.destructive} />
+                  <Ionicons
+                    name="alert-circle-outline"
+                    size={18}
+                    color={colors.destructive}
+                  />
                   <View style={styles.flexText}>
-                    <Text style={styles.noticeTitle}>Couldn&apos;t sign you in</Text>
+                    <Text style={styles.noticeTitle}>
+                      Couldn&apos;t sign you in
+                    </Text>
                     <Text style={styles.noticeText}>{error}</Text>
                   </View>
                 </View>
@@ -210,7 +252,9 @@ export default function Login() {
                 trailing={
                   <Pressable
                     accessibilityRole="button"
-                    accessibilityLabel={showPassword ? "Hide password" : "Show password"}
+                    accessibilityLabel={
+                      showPassword ? "Hide password" : "Show password"
+                    }
                     hitSlop={10}
                     onPress={() => setShowPassword((v) => !v)}
                     style={styles.eye}
@@ -233,15 +277,36 @@ export default function Login() {
                 <Text style={styles.link}>Forgot password?</Text>
               </Pressable>
 
-              <PillButton onPress={submit} disabled={!canSubmit} busy={busy} label={busy ? "Signing in…" : "Sign in"} arrow />
+              <PillButton
+                onPress={submit}
+                disabled={!canSubmit}
+                busy={busy}
+                label={busy ? "Signing in…" : "Sign in"}
+                arrow
+              />
 
-              <Text style={styles.help}>Ask your site supervisor if you need access.</Text>
+              <Text style={styles.help}>
+                Ask your site supervisor if you need access.
+              </Text>
             </View>
           ) : (
             <View style={styles.form}>
-              <Step n={1} title="Your manager opens your name" text="In their Team tab, they show you a code" />
-              <Step n={2} title="You scan it here" text="Then show them the word on your screen" />
-              <Step n={3} title="Choose your password" text="And you're in" last />
+              <Step
+                n={1}
+                title="Your manager opens your name"
+                text="In their Team tab, they show you a code"
+              />
+              <Step
+                n={2}
+                title="You scan it here"
+                text="Then show them the word on your screen"
+              />
+              <Step
+                n={3}
+                title="Choose your password"
+                text="And you're in"
+                last
+              />
 
               <PillButton
                 onPress={() => router.push("/staff-onboard-scan")}
@@ -253,26 +318,53 @@ export default function Login() {
                 accessibilityRole="button"
                 accessibilityLabel="Setting up an organisation? Scan your onboarding code"
                 onPress={() => router.push("/onboard-scan")}
-                style={({ pressed }) => [styles.altRow, pressed && styles.altRowPressed]}
+                style={({ pressed }) => [
+                  styles.altRow,
+                  pressed && styles.altRowPressed,
+                ]}
               >
                 <View style={styles.altIcon}>
-                  <Ionicons name="business-outline" size={18} color={colors.primary} />
+                  <Ionicons
+                    name="business-outline"
+                    size={18}
+                    color={colors.primary}
+                  />
                 </View>
                 <View style={styles.flexText}>
-                  <Text style={styles.altTitle}>Setting up an organisation?</Text>
+                  <Text style={styles.altTitle}>
+                    Setting up an organisation?
+                  </Text>
                   <Text style={styles.altText}>Scan your onboarding code</Text>
                 </View>
-                <Ionicons name="chevron-forward" size={16} color={colors.mutedForeground} />
+                <Ionicons
+                  name="chevron-forward"
+                  size={16}
+                  color={colors.mutedForeground}
+                />
               </Pressable>
             </View>
           )}
 
           <View style={styles.grow} />
           {!keyboardUp && (
-            <View style={styles.poweredBy}>
+            <Pressable
+              accessibilityRole="link"
+              accessibilityLabel="Powered by Industrial Computing Engineering"
+              onPress={() => void Linking.openURL("https://www.ice4ir.com/")}
+              style={styles.poweredBy}
+            >
               <Text style={styles.poweredByText}>Powered by</Text>
-              <Image source={require("../assets/afrique360.png")} style={styles.poweredByLogo} resizeMode="contain" />
-            </View>
+              <Image
+                // The colour logo has dark lettering, so a dark background gets the white and red one.
+                source={
+                  theme === "dark"
+                    ? require("../assets/ice2_dark.png")
+                    : require("../assets/ice2.png")
+                }
+                style={styles.poweredByLogo}
+                resizeMode="contain"
+              />
+            </Pressable>
           )}
         </ScrollView>
       </View>
@@ -281,24 +373,53 @@ export default function Login() {
 }
 
 /** Sign in | I'm new, with a raised thumb that slides to the chosen half. */
-function Switch({ value, onChange }: { value: Tab; onChange: (t: Tab) => void }) {
+function Switch({
+  value,
+  onChange,
+}: {
+  value: Tab;
+  onChange: (t: Tab) => void;
+}) {
   const [width, setWidth] = useState(0);
   const x = useRef(new Animated.Value(value === "in" ? 0 : 1)).current;
   useEffect(() => {
-    Animated.spring(x, { toValue: value === "in" ? 0 : 1, useNativeDriver: true, speed: 18, bounciness: 4 }).start();
+    Animated.spring(x, {
+      toValue: value === "in" ? 0 : 1,
+      useNativeDriver: true,
+      speed: 18,
+      bounciness: 4,
+    }).start();
   }, [value, x]);
   const half = (width - 8) / 2;
-  const options: { key: Tab; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
+  const options: {
+    key: Tab;
+    label: string;
+    icon: keyof typeof Ionicons.glyphMap;
+  }[] = [
     { key: "in", label: "Sign in", icon: "lock-closed-outline" },
     { key: "new", label: "I'm new", icon: "qr-code-outline" },
   ];
   return (
-    <View style={styles.switch} onLayout={(e) => setWidth(e.nativeEvent.layout.width)} accessibilityRole="tablist">
+    <View
+      style={styles.switch}
+      onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
+      accessibilityRole="tablist"
+    >
       {width > 0 && (
         <Animated.View
           style={[
             styles.thumb,
-            { width: half, transform: [{ translateX: x.interpolate({ inputRange: [0, 1], outputRange: [0, half] }) }] },
+            {
+              width: half,
+              transform: [
+                {
+                  translateX: x.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0, half],
+                  }),
+                },
+              ],
+            },
           ]}
         />
       )}
@@ -312,8 +433,14 @@ function Switch({ value, onChange }: { value: Tab; onChange: (t: Tab) => void })
             onPress={() => onChange(o.key)}
             style={styles.segment}
           >
-            <Ionicons name={o.icon} size={16} color={on ? colors.primary : colors.mutedForeground} />
-            <Text style={[styles.segmentText, on && styles.segmentTextOn]}>{o.label}</Text>
+            <Ionicons
+              name={o.icon}
+              size={16}
+              color={on ? colors.primary : colors.mutedForeground}
+            />
+            <Text style={[styles.segmentText, on && styles.segmentTextOn]}>
+              {o.label}
+            </Text>
           </Pressable>
         );
       })}
@@ -342,11 +469,33 @@ function Field({
 }) {
   const raised = focused || value.length > 0;
   return (
-    <View style={[styles.field, focused && styles.fieldFocused, invalid && styles.fieldInvalid]}>
-      <Ionicons name={icon} size={19} color={invalid ? colors.destructive : focused ? colors.primary : colors.mutedForeground} />
+    <View
+      style={[
+        styles.field,
+        focused && styles.fieldFocused,
+        invalid && styles.fieldInvalid,
+      ]}
+    >
+      <Ionicons
+        name={icon}
+        size={19}
+        color={
+          invalid
+            ? colors.destructive
+            : focused
+              ? colors.primary
+              : colors.mutedForeground
+        }
+      />
       <View style={styles.fieldBody}>
         {raised && (
-          <Text style={[styles.fieldLabel, focused && { color: colors.primary }, invalid && { color: colors.destructive }]}>
+          <Text
+            style={[
+              styles.fieldLabel,
+              focused && { color: colors.primary },
+              invalid && { color: colors.destructive },
+            ]}
+          >
             {label}
           </Text>
         )}
@@ -387,13 +536,25 @@ function PillButton({
       accessibilityState={{ disabled: !!disabled, busy: !!busy }}
       onPress={onPress}
       disabled={disabled}
-      style={({ pressed }) => [styles.pill, off && styles.pillOff, pressed && !disabled && styles.pillPressed]}
+      style={({ pressed }) => [
+        styles.pill,
+        off && styles.pillOff,
+        pressed && !disabled && styles.pillPressed,
+      ]}
     >
-      {busy ? <Spinner /> : icon ? <Ionicons name={icon} size={18} color={colors.primaryForeground} /> : null}
+      {busy ? (
+        <Spinner />
+      ) : icon ? (
+        <Ionicons name={icon} size={18} color={colors.primaryForeground} />
+      ) : null}
       <Text style={[styles.pillText, off && styles.pillTextOff]}>{label}</Text>
       {arrow && !busy && (
         <View style={[styles.pillArrow, off && styles.pillArrowOff]}>
-          <Ionicons name="arrow-forward" size={16} color={off ? colors.mutedForeground : colors.primaryForeground} />
+          <Ionicons
+            name="arrow-forward"
+            size={16}
+            color={off ? colors.mutedForeground : colors.primaryForeground}
+          />
         </View>
       )}
     </Pressable>
@@ -404,15 +565,36 @@ function PillButton({
 function Spinner() {
   const turn = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    const loop = Animated.loop(Animated.timing(turn, { toValue: 1, duration: 800, useNativeDriver: true }));
+    const loop = Animated.loop(
+      Animated.timing(turn, {
+        toValue: 1,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+    );
     loop.start();
     return () => loop.stop();
   }, [turn]);
-  const rotate = turn.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] });
-  return <Animated.View style={[styles.spinner, { transform: [{ rotate }] }]} />;
+  const rotate = turn.interpolate({
+    inputRange: [0, 1],
+    outputRange: ["0deg", "360deg"],
+  });
+  return (
+    <Animated.View style={[styles.spinner, { transform: [{ rotate }] }]} />
+  );
 }
 
-function Step({ n, title, text, last }: { n: number; title: string; text: string; last?: boolean }) {
+function Step({
+  n,
+  title,
+  text,
+  last,
+}: {
+  n: number;
+  title: string;
+  text: string;
+  last?: boolean;
+}) {
   return (
     <View style={styles.step}>
       <View style={styles.stepRail}>
@@ -441,7 +623,12 @@ const styles = themedStyles(() =>
       overflow: "hidden",
     },
     heroSlim: { paddingBottom: 46 },
-    ring: { position: "absolute", borderRadius: 999, borderWidth: 1, borderColor: "rgba(255,255,255,0.09)" },
+    ring: {
+      position: "absolute",
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: "rgba(255,255,255,0.09)",
+    },
     ringBig: { width: 300, height: 300, right: -120, top: -110 },
     ringSmall: { width: 190, height: 190, right: -60, top: -50 },
     logoTile: {
@@ -459,9 +646,23 @@ const styles = themedStyles(() =>
       shadowOffset: { width: 0, height: 6 },
       elevation: 6,
     },
-    logoTileSmall: { width: 34, height: 34, borderRadius: 10, marginTop: 0, marginBottom: 0, elevation: 0, shadowOpacity: 0 },
+    logoTileSmall: {
+      width: 34,
+      height: 34,
+      borderRadius: 10,
+      marginTop: 0,
+      marginBottom: 0,
+      elevation: 0,
+      shadowOpacity: 0,
+    },
     logoImage: { width: "78%", height: "78%" },
-    kicker: { color: colors.shiftForeground, opacity: 0.7, fontSize: typography.tiny + 1.5, fontWeight: "700", letterSpacing: 1.8 },
+    kicker: {
+      color: colors.shiftForeground,
+      opacity: 0.7,
+      fontSize: typography.tiny + 1.5,
+      fontWeight: "700",
+      letterSpacing: 1.8,
+    },
     heroTitle: {
       marginTop: spacing.xs,
       color: colors.shiftForeground,
@@ -470,8 +671,17 @@ const styles = themedStyles(() =>
       fontWeight: "800",
       letterSpacing: -0.4,
     },
-    slimRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginTop: spacing.xs },
-    slimName: { color: colors.shiftForeground, fontSize: typography.h2, fontWeight: "700" },
+    slimRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.sm,
+      marginTop: spacing.xs,
+    },
+    slimName: {
+      color: colors.shiftForeground,
+      fontSize: typography.h2,
+      fontWeight: "700",
+    },
 
     sheet: {
       flex: 1,
@@ -481,8 +691,19 @@ const styles = themedStyles(() =>
       borderTopRightRadius: 30,
       overflow: "hidden",
     },
-    sheetContent: { flexGrow: 1, paddingHorizontal: spacing.xl - 4, paddingTop: spacing.sm + 2 },
-    handle: { alignSelf: "center", width: 38, height: 4, borderRadius: 2, backgroundColor: colors.border, marginBottom: spacing.md },
+    sheetContent: {
+      flexGrow: 1,
+      paddingHorizontal: spacing.xl - 4,
+      paddingTop: spacing.sm + 2,
+    },
+    handle: {
+      alignSelf: "center",
+      width: 38,
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: colors.border,
+      marginBottom: spacing.md,
+    },
 
     switch: {
       flexDirection: "row",
@@ -505,7 +726,13 @@ const styles = themedStyles(() =>
       shadowOffset: { width: 0, height: 2 },
       elevation: 2,
     },
-    segment: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7 },
+    segment: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 7,
+    },
     segmentText: { fontSize: typography.body, color: colors.mutedForeground },
     segmentTextOn: { color: colors.primary, fontWeight: "700" },
 
@@ -519,8 +746,17 @@ const styles = themedStyles(() =>
       paddingHorizontal: spacing.md + 2,
       paddingVertical: spacing.md,
     },
-    noticeTitle: { color: colors.destructive, fontSize: typography.small + 1.5, fontWeight: "700" },
-    noticeText: { color: colors.destructive, fontSize: typography.small + 1, lineHeight: 18, marginTop: 1 },
+    noticeTitle: {
+      color: colors.destructive,
+      fontSize: typography.small + 1.5,
+      fontWeight: "700",
+    },
+    noticeText: {
+      color: colors.destructive,
+      fontSize: typography.small + 1,
+      lineHeight: 18,
+      marginTop: 1,
+    },
 
     field: {
       flexDirection: "row",
@@ -536,14 +772,38 @@ const styles = themedStyles(() =>
     fieldFocused: { borderColor: colors.primary },
     fieldInvalid: { borderColor: colors.destructive },
     fieldBody: { flex: 1, justifyContent: "center" },
-    fieldLabel: { fontSize: typography.tiny + 1, fontWeight: "600", color: colors.mutedForeground, marginTop: 6 },
-    fieldInput: { fontSize: typography.body + 1.5, color: colors.foreground, paddingVertical: 14 },
+    fieldLabel: {
+      fontSize: typography.tiny + 1,
+      fontWeight: "600",
+      color: colors.mutedForeground,
+      marginTop: 6,
+    },
+    fieldInput: {
+      fontSize: typography.body + 1.5,
+      color: colors.foreground,
+      paddingVertical: 14,
+    },
     fieldInputRaised: { paddingTop: 1, paddingBottom: 8 },
-    eye: { width: 36, height: 36, alignItems: "center", justifyContent: "center", marginRight: -6 },
+    eye: {
+      width: 36,
+      height: 36,
+      alignItems: "center",
+      justifyContent: "center",
+      marginRight: -6,
+    },
 
     forgot: { alignSelf: "flex-end", paddingVertical: 2 },
-    link: { fontSize: typography.small + 1, fontWeight: "600", color: colors.primary },
-    help: { textAlign: "center", fontSize: typography.small, color: colors.mutedForeground, marginTop: spacing.xs },
+    link: {
+      fontSize: typography.small + 1,
+      fontWeight: "600",
+      color: colors.primary,
+    },
+    help: {
+      textAlign: "center",
+      fontSize: typography.small,
+      color: colors.mutedForeground,
+      marginTop: spacing.xs,
+    },
 
     pill: {
       height: 56,
@@ -557,7 +817,11 @@ const styles = themedStyles(() =>
     },
     pillOff: { backgroundColor: colors.secondary },
     pillPressed: { opacity: 0.88 },
-    pillText: { fontSize: typography.body + 2, fontWeight: "700", color: colors.primaryForeground },
+    pillText: {
+      fontSize: typography.body + 2,
+      fontWeight: "700",
+      color: colors.primaryForeground,
+    },
     pillTextOff: { color: colors.mutedForeground },
     pillArrow: {
       width: 30,
@@ -587,11 +851,29 @@ const styles = themedStyles(() =>
       alignItems: "center",
       justifyContent: "center",
     },
-    stepNum: { fontSize: typography.small + 1, fontWeight: "700", color: colors.primary },
-    stepLine: { flex: 1, width: 2, backgroundColor: colors.border, marginVertical: 4 },
+    stepNum: {
+      fontSize: typography.small + 1,
+      fontWeight: "700",
+      color: colors.primary,
+    },
+    stepLine: {
+      flex: 1,
+      width: 2,
+      backgroundColor: colors.border,
+      marginVertical: 4,
+    },
     stepGap: { paddingBottom: spacing.sm },
-    stepTitle: { fontSize: typography.body + 0.5, fontWeight: "700", color: colors.foreground },
-    stepText: { fontSize: typography.small + 0.5, color: colors.mutedForeground, lineHeight: 17, marginTop: 2 },
+    stepTitle: {
+      fontSize: typography.body + 0.5,
+      fontWeight: "700",
+      color: colors.foreground,
+    },
+    stepText: {
+      fontSize: typography.small + 0.5,
+      color: colors.mutedForeground,
+      lineHeight: 17,
+      marginTop: 2,
+    },
 
     altRow: {
       flexDirection: "row",
@@ -612,8 +894,16 @@ const styles = themedStyles(() =>
       alignItems: "center",
       justifyContent: "center",
     },
-    altTitle: { fontSize: typography.body, fontWeight: "700", color: colors.foreground },
-    altText: { fontSize: typography.small, color: colors.mutedForeground, marginTop: 1 },
+    altTitle: {
+      fontSize: typography.body,
+      fontWeight: "700",
+      color: colors.foreground,
+    },
+    altText: {
+      fontSize: typography.small,
+      color: colors.mutedForeground,
+      marginTop: 1,
+    },
 
     poweredBy: {
       flexDirection: "row",
@@ -621,9 +911,12 @@ const styles = themedStyles(() =>
       justifyContent: "center",
       gap: spacing.xs + 2,
       paddingTop: spacing.md,
-      opacity: 0.6,
+      opacity: 0.8,
     },
-    poweredByText: { fontSize: typography.tiny + 1, color: colors.mutedForeground },
-    poweredByLogo: { width: 24, height: 21 },
+    poweredByText: {
+      fontSize: typography.tiny + 1,
+      color: colors.mutedForeground,
+    },
+    poweredByLogo: { width: 38, height: 30 },
   }),
 );

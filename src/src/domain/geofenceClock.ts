@@ -208,6 +208,7 @@ export function buildConfig(input: {
     radiusMeters?: number | null;
     autoClock?: boolean | null;
     workingHours?: { start?: string; end: string } | null;
+    effectiveWorkingHours?: { start?: string; end: string } | null;
   } | null | undefined;
   autoClock: { enabled: boolean; graceMinutes: number; overtimeCheck: boolean } | null | undefined;
 }): GeofenceConfig | null {
@@ -224,7 +225,8 @@ export function buildConfig(input: {
     radiusMeters: site.radiusMeters,
     graceMinutes: autoClock.graceMinutes,
     overtimeCheck: autoClock.overtimeCheck,
-    shiftEnd: site.workingHours?.end ?? null,
-    shiftStart: site.workingHours?.start ?? null,
+    // The hours counting any shift that runs on from them, so a Day shift into a Night shift is not cut at its own end.
+    shiftEnd: (site.effectiveWorkingHours ?? site.workingHours)?.end ?? null,
+    shiftStart: (site.effectiveWorkingHours ?? site.workingHours)?.start ?? null,
   };
 }

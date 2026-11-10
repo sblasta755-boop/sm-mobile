@@ -405,6 +405,10 @@ export interface Site {
   // banner and the backend's late clock-in watchdog
   // (app/services/attendance_watchdog.py).
   workingHours?: { start: string; end: string };
+  /** workingHours with the shifts that run on from them counted (Day into Night ends when Night does). */
+  effectiveWorkingHours?: { start: string; end: string };
+  /** The site's named shifts (Day, Night...), for the home card. */
+  shifts?: { id: string; name: string; startTime: string; endTime: string }[];
   // Floors + rooms layout (Enterprise-only "site_layout" module) - set
   // and mostly edited on the web app's Organisation setup screen.
   // Undefined for a site with no floors defined yet.

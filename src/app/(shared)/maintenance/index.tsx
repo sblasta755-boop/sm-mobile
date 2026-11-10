@@ -7,6 +7,7 @@ import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { MaintenancePill } from "@/components/MaintenancePill";
 import { appAlert } from "@/components/Dialog";
+import { formatMoney } from "@/domain/payroll";
 import { useSmartClean } from "@/features/store";
 import {
   MAINTENANCE_QUEUES,
@@ -26,7 +27,14 @@ import {
   type MaintenanceQueue,
   type MaintenanceSummary,
 } from "@/api/client";
-import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
+import {
+  colors,
+  radius,
+  spacing,
+  typography,
+  themedStyles,
+  useThemeVersion,
+} from "@/theme";
 
 const NEXT_ICON: Record<NextTone, keyof typeof Ionicons.glyphMap> = {
   yours: "arrow-forward-circle",
@@ -49,7 +57,9 @@ export default function MaintenanceListScreen() {
   const [queue, setQueue] = useState<MaintenanceQueue>("open");
   const [jobs, setJobs] = useState<MaintenanceJob[] | null>(null);
   const [counts, setCounts] = useState<MaintenanceSummary | null>(null);
-  const [caps, setCaps] = useState<MaintenanceCapabilities | undefined>(undefined);
+  const [caps, setCaps] = useState<MaintenanceCapabilities | undefined>(
+    undefined,
+  );
 
   const load = useCallback(
     async (which: MaintenanceQueue) => {
@@ -65,7 +75,10 @@ export default function MaintenanceListScreen() {
         setCaps(me.capabilities);
       } catch (error) {
         setJobs([]);
-        appAlert("Could not load jobs", error instanceof Error ? error.message : "Try again in a moment.");
+        appAlert(
+          "Could not load jobs",
+          error instanceof Error ? error.message : "Try again in a moment.",
+        );
       }
     },
     [token],
@@ -78,18 +91,90 @@ export default function MaintenanceListScreen() {
     }, [load, queue]),
   );
 
-  const siteName = (id: string) => state.sites.find((s) => s.id === id)?.name ?? "Site";
+  const siteName = (id: string) =>
+    state.sites.find((s) => s.id === id)?.name ?? "Site";
 
   return (
     <Screen title="Maintenance">
       <View style={styles.body}>
-        <Button icon={<Ionicons name="add" size={18} color={colors.primaryForeground} />} onPress={() => router.push("/maintenance/new" as never)}>
+        <Button
+          icon={
+            <Ionicons name="add" size={18} color={colors.primaryForeground} />
+          }
+          onPress={() => router.push("/maintenance/new" as never)}
+        >
           Report a fault
         </Button>
+        {caps && (caps.handle || caps.approve || caps.pay) ? (
+          <Button
+            variant="outline"
+            icon={
+              <Ionicons
+                name="people-outline"
+                size={18}
+                color={colors.foreground}
+              />
+            }
+            onPress={() => router.push("/maintenance/contractors" as never)}
+          >
+            Contractors
+          </Button>
+        ) : null}
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+        {/* Money owed to contractors, first and unmissable. Only people who pay ever see it. */}
+        {caps?.pay && counts && counts.payments > 0 ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`${formatMoney(counts.payments_owing ?? 0)} to pay to contractors`}
+            onPress={() => {
+              setJobs(null);
+              setQueue("payments");
+            }}
+            style={[
+              styles.payBanner,
+              (counts.payments_overdue ?? 0) > 0 && styles.payBannerLate,
+            ]}
+          >
+            <Ionicons
+              name="cash-outline"
+              size={24}
+              color={
+                (counts.payments_overdue ?? 0) > 0
+                  ? colors.destructive
+                  : colors.warning
+              }
+            />
+            <View style={styles.payText}>
+              <Text style={styles.payTitle}>
+                {formatMoney(counts.payments_owing ?? 0)} to pay to contractors
+              </Text>
+              <Text style={styles.muted}>
+                {counts.payments}{" "}
+                {counts.payments === 1 ? "payment" : "payments"} waiting
+                {(counts.payments_overdue ?? 0) > 0
+                  ? `, ${counts.payments_overdue} past the due date`
+                  : ""}
+              </Text>
+            </View>
+            <Ionicons
+              name="chevron-forward"
+              size={16}
+              color={colors.mutedForeground}
+            />
+          </Pressable>
+        ) : null}
+
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.chips}
+        >
           {MAINTENANCE_QUEUES.filter(
-            (q) => ["open", "mine", "closed"].includes(q.value) || q.value === queue || !counts || counts[q.value] > 0,
+            (q) =>
+              ["open", "mine", "closed"].includes(q.value) ||
+              q.value === queue ||
+              !counts ||
+              counts[q.value] > 0,
           ).map((q) => (
             <Pressable
               key={q.value}
@@ -99,8 +184,15 @@ export default function MaintenanceListScreen() {
               }}
               style={[styles.chip, queue === q.value && styles.chipOn]}
             >
-              <Text style={[styles.chipText, queue === q.value && styles.chipTextOn]}>
-                {counts && counts[q.value] > 0 ? `${q.label}  ${counts[q.value]}` : q.label}
+              <Text
+                style={[
+                  styles.chipText,
+                  queue === q.value && styles.chipTextOn,
+                ]}
+              >
+                {counts && counts[q.value] > 0
+                  ? `${q.label}  ${counts[q.value]}`
+                  : q.label}
               </Text>
             </Pressable>
           ))}
@@ -116,31 +208,51 @@ export default function MaintenanceListScreen() {
           sortJobs(jobs, caps).map((job) => {
             const step = nextStep(job, caps);
             return (
-            <Pressable
-              key={job.id}
-              accessibilityRole="button"
-              accessibilityLabel={`${job.title}. ${MAINTENANCE_STATE_LABEL[job.state]}. ${step.text}`}
-              onPress={() => router.push(`/maintenance/${job.id}` as never)}
-            >
-              <Card style={styles.job}>
-                <Text style={styles.title}>{job.title}</Text>
-                <Text style={styles.sub}>
-                  {siteName(job.siteId)}
-                  {job.assetLabel ? ` · ${job.assetLabel}` : ""}
-                </Text>
-                {step.text ? (
-                  <View style={styles.next}>
-                    <Ionicons name={NEXT_ICON[step.tone]} size={15} color={NEXT_COLOR()[step.tone]} />
-                    <Text style={[styles.nextText, { color: NEXT_COLOR()[step.tone] }, step.tone === "yours" && styles.bold]}>{step.text}</Text>
+              <Pressable
+                key={job.id}
+                accessibilityRole="button"
+                accessibilityLabel={`${job.title}. ${MAINTENANCE_STATE_LABEL[job.state]}. ${step.text}`}
+                onPress={() => router.push(`/maintenance/${job.id}` as never)}
+              >
+                <Card style={styles.job}>
+                  <Text style={styles.title}>{job.title}</Text>
+                  <Text style={styles.sub}>
+                    {siteName(job.siteId)}
+                    {job.assetLabel ? ` · ${job.assetLabel}` : ""}
+                  </Text>
+                  {step.text ? (
+                    <View style={styles.next}>
+                      <Ionicons
+                        name={NEXT_ICON[step.tone]}
+                        size={15}
+                        color={NEXT_COLOR()[step.tone]}
+                      />
+                      <Text
+                        style={[
+                          styles.nextText,
+                          { color: NEXT_COLOR()[step.tone] },
+                          step.tone === "yours" && styles.bold,
+                        ]}
+                      >
+                        {step.text}
+                      </Text>
+                    </View>
+                  ) : null}
+                  <View style={styles.pills}>
+                    <MaintenancePill
+                      label={job.severity}
+                      tone={maintenanceSeverityTone(job.severity)}
+                    />
+                    <MaintenancePill
+                      label={MAINTENANCE_STATE_LABEL[job.state]}
+                      tone={maintenanceStateTone(job.state)}
+                    />
+                    {job.activeHolds > 0 && (
+                      <MaintenancePill label="On hold" tone="danger" />
+                    )}
                   </View>
-                ) : null}
-                <View style={styles.pills}>
-                  <MaintenancePill label={job.severity} tone={maintenanceSeverityTone(job.severity)} />
-                  <MaintenancePill label={MAINTENANCE_STATE_LABEL[job.state]} tone={maintenanceStateTone(job.state)} />
-                  {job.activeHolds > 0 && <MaintenancePill label="On hold" tone="danger" />}
-                </View>
-              </Card>
-            </Pressable>
+                </Card>
+              </Pressable>
             );
           })
         )}
@@ -153,6 +265,26 @@ const styles = themedStyles(() =>
   StyleSheet.create({
     body: { gap: spacing.md },
     chips: { gap: spacing.xs, paddingVertical: 2 },
+    payBanner: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.sm,
+      borderWidth: 1,
+      borderColor: colors.warning,
+      backgroundColor: colors.warningSoft,
+      borderRadius: radius.xl,
+      padding: spacing.sm,
+    },
+    payBannerLate: {
+      borderColor: colors.destructive,
+      backgroundColor: colors.destructiveSoft,
+    },
+    payText: { flex: 1, minWidth: 0 },
+    payTitle: {
+      fontSize: typography.body,
+      fontWeight: "800",
+      color: colors.foreground,
+    },
     chip: {
       borderWidth: 1,
       borderColor: colors.border,
@@ -162,15 +294,28 @@ const styles = themedStyles(() =>
       backgroundColor: colors.card,
     },
     chipOn: { backgroundColor: colors.primary, borderColor: colors.primary },
-    chipText: { fontSize: typography.small, fontWeight: "600", color: colors.foreground },
+    chipText: {
+      fontSize: typography.small,
+      fontWeight: "600",
+      color: colors.foreground,
+    },
     chipTextOn: { color: colors.primaryForeground },
     job: { gap: spacing.xs },
-    title: { fontSize: typography.body, fontWeight: "700", color: colors.foreground },
+    title: {
+      fontSize: typography.body,
+      fontWeight: "700",
+      color: colors.foreground,
+    },
     sub: { fontSize: typography.small, color: colors.mutedForeground },
     next: { flexDirection: "row", alignItems: "flex-start", gap: spacing.xs },
     nextText: { flex: 1, fontSize: typography.small },
     bold: { fontWeight: "700" },
-    pills: { flexDirection: "row", flexWrap: "wrap", gap: spacing.xs, marginTop: spacing.xs },
+    pills: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: spacing.xs,
+      marginTop: spacing.xs,
+    },
     muted: { fontSize: typography.small, color: colors.mutedForeground },
   }),
 );

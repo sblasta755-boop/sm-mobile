@@ -1,5 +1,6 @@
 // Search, filtering and Kanban columns for task lists. Mirrored in the web
 // app at smart-property-operations/src/src/lib/smartclean/taskBoard.ts - keep both in sync.
+import { fuzzyScore } from "./fuzzySearch";
 
 export interface BoardTask {
   id: string;
@@ -101,22 +102,19 @@ export function isOverdue(task: BoardTask, now: Date = new Date()): boolean {
   return new Date(task.dueAt).getTime() < now.getTime();
 }
 
-/** Every word typed must appear somewhere in the task's searchable text, in any order. */
+/** Every word typed must be close to a word in the task's searchable text, in any order; small typos are forgiven. */
 export function matchesQuery(task: BoardTask, query: string, extra = ""): boolean {
-  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
-  if (words.length === 0) return true;
-  const haystack = [
-    task.title,
-    task.locationName ?? (task.isSiteWide ? "whole site" : ""),
-    task.priority ?? "",
-    task.status.replace(/_/g, " "),
-    task.isSupervisorTask ? "supervisor task" : "",
-    (task.tags ?? []).join(" "),
-    extra,
-  ]
-    .join(" ")
-    .toLowerCase();
-  return words.every((word) => haystack.includes(word));
+  return (
+    fuzzyScore(query, [
+      task.title,
+      task.locationName ?? (task.isSiteWide ? "whole site" : ""),
+      task.priority,
+      task.status.replace(/_/g, " "),
+      task.isSupervisorTask ? "supervisor task" : "",
+      (task.tags ?? []).join(" "),
+      extra,
+    ]) !== null
+  );
 }
 
 function hasAnyTag(task: BoardTask, wanted: string[]): boolean {

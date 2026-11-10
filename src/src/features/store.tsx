@@ -398,6 +398,7 @@ export function SmartCleanProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     setSessionHandlers({
       getRefreshToken: () => stateRef.current.refreshToken,
+      getExpiresAt: () => stateRef.current.authExpiresAt ?? null,
       onRefreshed: (session) => {
         void SecureSessionService.set(session);
         dispatch({

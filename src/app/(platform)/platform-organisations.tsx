@@ -1,3 +1,4 @@
+import { fuzzyFilter } from "@/domain/fuzzySearch";
 import { useCallback, useMemo, useState } from "react";
 import { router, useFocusEffect } from "expo-router";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
@@ -86,13 +87,12 @@ export default function PlatformOrganisations() {
   const flagged = useMemo(() => new Set(attention.map((a) => a.org.id)), [attention]);
 
   const list = useMemo(() => {
-    const needle = query.trim().toLowerCase();
     let rows = organisations;
     if (filter === "trials") rows = rows.filter((o) => o.subscription?.status === "trialing");
     if (filter === "paid") rows = rows.filter((o) => o.subscription && o.subscription.tier !== "trial");
     if (filter === "all") rows = rows.filter((o) => !flagged.has(o.id)); // the flagged ones are listed above
-    if (needle) rows = rows.filter((o) => o.name.toLowerCase().includes(needle) || o.slug.toLowerCase().includes(needle));
-    return [...rows].sort((a, b) => a.name.localeCompare(b.name));
+    rows = fuzzyFilter(rows, query, (o) => [o.name, o.slug]);
+    return query.trim() ? rows : [...rows].sort((a, b) => a.name.localeCompare(b.name));
   }, [organisations, filter, query, flagged]);
 
   async function reactivate(org: PlatformOrganisation) {

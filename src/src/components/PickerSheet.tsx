@@ -1,3 +1,4 @@
+import { fuzzyFilter } from "@/domain/fuzzySearch";
 import { useMemo, useState, type ReactNode } from "react";
 import { Modal, Pressable, SectionList, StyleSheet, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -164,12 +165,12 @@ export function PickerSheet({
 
   const matches = useMemo(
     () =>
-      items.filter(
-        (item) =>
-          (!active || active.test(item)) &&
-          (!needle || fold(`${item.label} ${item.sub ?? ""}`).includes(needle)),
+      fuzzyFilter(
+        items.filter((item) => !active || active.test(item)),
+        query,
+        (item) => [item.label, item.sub],
       ),
-    [items, active, needle],
+    [items, active, query],
   );
 
   const sections = useMemo(() => {

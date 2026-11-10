@@ -60,7 +60,11 @@ export default function ManageHome() {
     .sort((a, b) => new Date(a.scheduledAt!).getTime() - new Date(b.scheduledAt!).getTime());
   const openIncidents = state.incidents.filter((i) => i.status !== "closed");
   const openActions = state.correctiveActions.filter((c) => c.status !== "closed");
-  const onShift = Object.values(state.attendance).filter((entry) => entry?.clockedInAt);
+  // Only people clocked in at this manager's own sites - state.attendance can hold every site's.
+  const mySiteIds = new Set(mySites.map((s) => s.id));
+  const onShift = Object.values(state.attendance).filter(
+    (entry) => entry?.clockedInAt && !!entry.siteId && mySiteIds.has(entry.siteId),
+  );
   const onShiftBySite = (siteId: string) => onShift.filter((e) => e.siteId === siteId).length;
   const staffedSites = mySites.filter((s) => onShiftBySite(s.id) > 0).length;
 

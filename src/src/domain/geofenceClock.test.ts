@@ -185,6 +185,14 @@ describe("buildConfig", () => {
     expect(buildConfig({ userId: "u", site: { ...site, autoClock: false }, autoClock: org })).toBeNull();
     expect(buildConfig({ userId: "u", site: { ...site, autoClock: true }, autoClock: { ...org, enabled: false } })).not.toBeNull();
   });
+  it("uses the hours counting shifts that run on, so Day into Night is not cut at Day's end", () => {
+    const chained = { ...site, workingHours: { start: "09:00", end: "18:30" }, effectiveWorkingHours: { start: "09:00", end: "04:00" } };
+    expect(buildConfig({ userId: "u", site: chained, autoClock: org })).toMatchObject({ shiftStart: "09:00", shiftEnd: "04:00" });
+    // At 19:00 the shift ends tomorrow at 04:00, not already over at 18:30.
+    const end = shiftEndAt(new Date(2026, 9, 15, 19, 0), "04:00", "09:00");
+    expect(end?.getDate()).toBe(16);
+    expect(end?.getHours()).toBe(4);
+  });
   it("is off without a location on the site or without a policy", () => {
     expect(buildConfig({ userId: "u", site: { id: "s1" }, autoClock: org })).toBeNull();
     expect(buildConfig({ userId: "u", site, autoClock: undefined })).toBeNull();

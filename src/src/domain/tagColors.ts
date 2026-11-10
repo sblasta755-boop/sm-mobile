@@ -27,6 +27,8 @@ export type TagColorOverrides = Record<string, string>;
 /** Stable colour name for a tag: the organisation's choice, else a hash of its name. */
 export function tagColorName(tag: string, overrides: TagColorOverrides = {}): TagColorName {
   const key = tag.trim().toLowerCase();
+  // The built-in Maintenance tag has one fixed colour everywhere; an organisation cannot recolour it.
+  if (key === "maintenance") return "orange";
   const chosen = overrides[key];
   if (chosen && chosen in TAG_PALETTE) return chosen as TagColorName;
   let hash = 5381;

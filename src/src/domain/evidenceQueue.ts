@@ -20,6 +20,32 @@ export interface QueuedPhoto {
   error?: string;
 }
 
+/** A refusal that was about the session or the connection, never the photo. */
+export const isRetryableRejection = (error?: string) =>
+  !!error && /invalid authentication token|backend 401|network request failed|not active/i.test(error);
+
+/**
+ * What a saved queue becomes on start: photos stuck mid-upload, or refused only
+ * because the session had lapsed, go back in line; and a refused twin is dropped
+ * when a photo for the same slot is already waiting.
+ */
+export function healSavedQueue(saved: QueuedPhoto[]): QueuedPhoto[] {
+  const healed = saved.map((p) =>
+    p.status === "uploading" || (p.status === "rejected" && isRetryableRejection(p.error))
+      ? { ...p, status: "queued" as const, error: undefined }
+      : p,
+  );
+  const slot = (p: QueuedPhoto) => `${p.taskId}|${p.kind}|${p.checklistItemId ?? ""}|${p.label ?? ""}`;
+  const waiting = new Set(healed.filter((p) => p.status !== "rejected").map(slot));
+  // Keep one entry per id too, in case a retry duplicated it.
+  const seen = new Set<string>();
+  return healed.filter((p) => {
+    if (seen.has(p.id)) return false;
+    seen.add(p.id);
+    return !(p.status === "rejected" && waiting.has(slot(p)));
+  });
+}
+
 interface TaskLike {
   id: string;
   evidence: unknown[];

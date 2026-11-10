@@ -1,14 +1,24 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Animated, Easing, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
+import { Animated, Easing, FlatList, LayoutAnimation, Platform, Pressable, RefreshControl, StyleSheet, Text, UIManager, View } from "react-native";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Screen } from "@/components/Screen";
 import { toneColors, type DialogTone } from "@/components/Dialog";
 import { useSmartClean } from "@/features/store";
+import { routeForNotification } from "@/features/pushNotifications";
+import { formatNotificationTime } from "@/domain/notificationTime";
 import { usePullToRefresh } from "@/features/pullRefresh";
 import { markNotificationRead, markNotificationsRead } from "@/api/client";
 import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 import type { Notification } from "@/types/smartclean";
+
+if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+// Past this many characters a notification is likely to be cut off in its collapsed three lines.
+const LONG_TEXT = 110;
+const COLLAPSED_LINES = 3;
 
 // bootstrap already scopes state.notifications to what this user can see
 // (tenant-wide broadcasts, or ones targeted at them), so this reads it
@@ -26,7 +36,7 @@ const toneOf = (n: Notification): DialogTone =>
 
 export default function NotificationsScreen() {
   useThemeVersion(); // re-render with the new colours when the theme changes
-  const { state, dispatch } = useSmartClean();
+  const { state, dispatch, currentUser } = useSmartClean();
   const { refreshing, onRefresh } = usePullToRefresh();
   const [filter, setFilter] = useState<Filter>("all");
   const all = state.notifications;
@@ -49,11 +59,10 @@ export default function NotificationsScreen() {
     markNotificationRead(state.accessToken, n.id).catch(() => {});
   };
 
-  const open = (n: Notification) => {
-    markRead(n);
-    if (n.relatedId && n.kind.toLowerCase().includes("task")) {
-      router.push(`/tasks/${n.relatedId}` as never);
-    }
+  // Opening a card reads it; where it leads is the Open button inside it.
+  const openScreen = (n: Notification) => {
+    const target = routeForNotification({ category: n.kind, relatedId: n.relatedId }, currentUser?.role);
+    if (target !== "/notifications") router.push(target as never);
   };
 
   const markAll = () => {
@@ -125,7 +134,13 @@ export default function NotificationsScreen() {
           row.kind === "label" ? (
             <Text style={styles.groupLabel}>{row.label}</Text>
           ) : (
-            <NotificationCard n={row.n} order={index} onPress={() => open(row.n)} />
+            <NotificationCard
+              n={row.n}
+              order={index}
+              onPress={() => markRead(row.n)}
+              canOpen={routeForNotification({ category: row.n.kind, relatedId: row.n.relatedId }, currentUser?.role) !== "/notifications"}
+              onOpen={() => openScreen(row.n)}
+            />
           )
         }
         ListEmptyComponent={
@@ -148,7 +163,27 @@ export default function NotificationsScreen() {
 
 type Row = { kind: "label"; key: string; label: string } | { kind: "item"; key: string; n: Notification };
 
-function NotificationCard({ n, order, onPress }: { n: Notification; order: number; onPress: () => void }) {
+function NotificationCard({
+  n,
+  order,
+  onPress,
+  canOpen,
+  onOpen,
+}: {
+  n: Notification;
+  order: number;
+  onPress: () => void;
+  canOpen: boolean;
+  onOpen: () => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const [cutOff, setCutOff] = useState(false);
+  const expandable = cutOff || n.text.length > LONG_TEXT || canOpen;
+  const toggle = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.create(220, "easeInEaseOut", "opacity"));
+    setExpanded((v) => !v);
+    onPress();
+  };
   const tone = toneColors(toneOf(n));
   const enter = useRef(new Animated.Value(0)).current;
   const press = useRef(new Animated.Value(1)).current;
@@ -179,7 +214,10 @@ function NotificationCard({ n, order, onPress }: { n: Notification; order: numbe
     >
       <Pressable
         accessibilityRole="button"
-        onPress={onPress}
+        accessibilityLabel={n.text}
+        accessibilityState={{ expanded }}
+        accessibilityHint={expanded ? "Collapse" : "Show the full notification"}
+        onPress={toggle}
         onPressIn={() => squeeze(0.98)}
         onPressOut={() => squeeze(1)}
         style={[
@@ -187,6 +225,7 @@ function NotificationCard({ n, order, onPress }: { n: Notification; order: numbe
           { borderColor: n.read ? colors.border : tone.fg + "55" },
           // Unread cards carry a wash of their tone; read ones settle back to a plain card.
           { backgroundColor: n.read ? colors.card : tone.bg },
+          expanded && styles.cardOpen,
         ]}
       >
         <View style={[styles.accent, { backgroundColor: n.read ? colors.border : tone.fg }]} />
@@ -196,7 +235,13 @@ function NotificationCard({ n, order, onPress }: { n: Notification; order: numbe
           </View>
         </View>
         <View style={styles.textCol}>
-          <Text style={[styles.text, !n.read && styles.textUnread]} numberOfLines={4}>
+          <Text
+            style={[styles.text, !n.read && styles.textUnread]}
+            numberOfLines={expanded ? undefined : COLLAPSED_LINES}
+            onTextLayout={(e) => {
+              if (!expanded) setCutOff(e.nativeEvent.lines.length > COLLAPSED_LINES);
+            }}
+          >
             {n.text}
           </Text>
           <View style={styles.metaRow}>
@@ -209,7 +254,36 @@ function NotificationCard({ n, order, onPress }: { n: Notification; order: numbe
                 </Text>
               </View>
             )}
+            {expandable && (
+              <View style={styles.more}>
+                <Text style={[styles.moreText, { color: tone.fg }]}>{expanded ? "Show less" : "Show more"}</Text>
+                <Ionicons name={expanded ? "chevron-up" : "chevron-down"} size={14} color={tone.fg} />
+              </View>
+            )}
           </View>
+          {expanded && (
+            <View style={[styles.detail, { borderTopColor: tone.fg + "33" }]}>
+              <View style={styles.detailRow}>
+                <Ionicons name="calendar-outline" size={13} color={colors.mutedForeground} />
+                <Text style={styles.detailText}>{formatNotificationTime(n.createdAt)}</Text>
+                {!!n.kind && (
+                  <View style={[styles.kind, { borderColor: tone.fg + "55" }]}>
+                    <Text style={[styles.kindText, { color: tone.fg }]}>{n.kind}</Text>
+                  </View>
+                )}
+              </View>
+              {canOpen && (
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={onOpen}
+                  style={({ pressed }) => [styles.openBtn, { backgroundColor: tone.fg }, pressed && { opacity: 0.85 }]}
+                >
+                  <Text style={styles.openText}>Open</Text>
+                  <Ionicons name="arrow-forward" size={14} color="#fff" />
+                </Pressable>
+              )}
+            </View>
+          )}
         </View>
         {!n.read && <View style={[styles.dot, { backgroundColor: tone.fg }]} />}
       </Pressable>
@@ -304,6 +378,16 @@ const styles = themedStyles(() =>
       marginBottom: spacing.sm,
       overflow: "hidden",
     },
+    cardOpen: { alignItems: "flex-start" },
+    more: { marginLeft: "auto", flexDirection: "row", alignItems: "center", gap: 2 },
+    moreText: { fontSize: typography.small, fontWeight: "700" },
+    detail: { gap: spacing.sm, paddingTop: spacing.sm, marginTop: 2, borderTopWidth: StyleSheet.hairlineWidth },
+    detailRow: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 6 },
+    detailText: { fontSize: typography.small, color: colors.mutedForeground },
+    kind: { paddingHorizontal: 8, paddingVertical: 1, borderRadius: radius.round, borderWidth: 1 },
+    kindText: { fontSize: typography.tiny, fontWeight: "700", textTransform: "capitalize" },
+    openBtn: { alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, borderRadius: radius.round },
+    openText: { color: "#fff", fontSize: typography.small, fontWeight: "700" },
     accent: { position: "absolute", left: 0, top: 0, bottom: 0, width: 4 },
     // The bubble sits on a faint halo of its own colour, like the reference.
     glow: {

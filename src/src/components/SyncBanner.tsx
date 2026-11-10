@@ -1,9 +1,10 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSmartClean } from "@/features/store";
-import { removeMutation, useOutbox } from "@/features/outbox";
-import { removePhoto, useEvidenceQueue } from "@/features/evidenceQueue";
-import { drainQueue } from "@/features/evidenceUploader";
+import { removeMutation, updateMutation, useOutbox } from "@/features/outbox";
+import { isRetryableRejection, removePhoto, retryPhoto, useEvidenceQueue } from "@/features/evidenceQueue";
+import { drainQueue, useAuthBlocked } from "@/features/evidenceUploader";
+import { appAlert } from "@/components/Dialog";
 import { KIND_LABEL } from "@/domain/syncStatus";
 import { colors, spacing, themedStyles, typography, useThemeVersion } from "@/theme";
 
@@ -14,7 +15,8 @@ import { colors, spacing, themedStyles, typography, useThemeVersion } from "@/th
  */
 export function SyncBanner() {
   useThemeVersion();
-  const { state, currentUser } = useSmartClean();
+  const { state, currentUser, signOut } = useSmartClean();
+  const authBlocked = useAuthBlocked();
   const outbox = useOutbox();
   const photos = useEvidenceQueue();
   const mine = (userId: string) => userId === currentUser?.id;
@@ -39,7 +41,19 @@ export function SyncBanner() {
           </Text>
         </View>
       )}
-      {waiting > 0 && (
+      {waiting > 0 && authBlocked && !offline && (
+        <View style={[styles.bar, styles.barRefused]}>
+          <Ionicons name="lock-closed-outline" size={16} color={colors.destructive} />
+          <Text style={styles.text}>
+            Your session expired. {waiting} saved change{waiting === 1 ? " is" : "s are"} safe on this phone. Sign in
+            again to send {waiting === 1 ? "it" : "them"}.
+          </Text>
+          <Pressable accessibilityRole="button" onPress={() => void signOut()}>
+            <Text style={styles.action}>Sign in</Text>
+          </Pressable>
+        </View>
+      )}
+      {waiting > 0 && !(authBlocked && !offline) && (
         <Pressable
           accessibilityRole="button"
           onPress={() => void drainQueue()}
@@ -59,7 +73,27 @@ export function SyncBanner() {
           <Text style={styles.text}>
             Not accepted ({KIND_LABEL[m.kind] ?? m.kind}): {m.error ?? "the server refused it"}
           </Text>
-          <Pressable accessibilityRole="button" onPress={() => void removeMutation(m.id)}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => {
+              void updateMutation(m.id, { status: "pending", error: undefined }).then(() => drainQueue());
+            }}
+          >
+            <Text style={styles.action}>Retry</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() =>
+              appAlert(
+                "Discard this change?",
+                "It was saved on this phone but the server did not accept it. Discarding it means the work is lost.",
+                [
+                  { text: "Keep" },
+                  { text: "Discard", style: "destructive", onPress: () => void removeMutation(m.id) },
+                ],
+              )
+            }
+          >
             <Text style={styles.action}>Dismiss</Text>
           </Pressable>
         </View>
@@ -68,7 +102,25 @@ export function SyncBanner() {
         <View key={p.id} style={[styles.bar, styles.barRefused]}>
           <Ionicons name="alert-circle" size={16} color={colors.destructive} />
           <Text style={styles.text}>Photo not accepted: {p.error ?? "the server refused it"}</Text>
-          <Pressable accessibilityRole="button" onPress={() => void removePhoto(p.id)}>
+          {isRetryableRejection(p.error) && (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => {
+                void retryPhoto(p.id).then(() => drainQueue());
+              }}
+            >
+              <Text style={styles.action}>Retry</Text>
+            </Pressable>
+          )}
+          <Pressable
+            accessibilityRole="button"
+            onPress={() =>
+              appAlert("Delete this photo?", "It will be removed from this phone and you will need to retake it.", [
+                { text: "Keep" },
+                { text: "Delete", style: "destructive", onPress: () => void removePhoto(p.id) },
+              ])
+            }
+          >
             <Text style={styles.action}>Dismiss</Text>
           </Pressable>
         </View>

@@ -1,3 +1,4 @@
+import { otherActiveTask } from "@/domain/taskGate";
 import { useRef, useState } from "react";
 import { router, useLocalSearchParams } from "expo-router";
 import { ActivityIndicator, Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
@@ -21,7 +22,7 @@ import { enqueueMutation } from "@/features/outbox";
 import { ItemNoteModal } from "@/components/ItemNoteModal";
 import { ALL, filterBySection, initialSection, sectionOptions } from "@/domain/evidenceSections";
 import { taskSectionChoice, useEvidenceViewMode } from "@/features/evidenceView";
-import { enqueuePhoto, keepPhoto, useEvidenceQueue } from "@/features/evidenceQueue";
+import { enqueuePhoto, isRetryableRejection, keepPhoto, useEvidenceQueue } from "@/features/evidenceQueue";
 import { mergeQueuedEvidence, type QueuedPhoto } from "@/domain/evidenceQueue";
 
 /** The word on a tile: a checklist item's photos are just Before / After / Photo. */
@@ -104,9 +105,7 @@ export default function EvidenceScreen() {
   // (see tasks/[taskId]/index.tsx) - the backend hard-blocks add_evidence
   // regardless (TaskController._assert_no_other_task_in_progress); this
   // just stops a doomed camera session before it starts.
-  const otherTaskInProgress =
-    task.status !== "in_progress" &&
-    state.tasks.find((t) => t.id !== task.id && t.assigneeId === currentUser?.id && t.status === "in_progress");
+  const otherTaskInProgress = otherActiveTask(state.tasks, task, currentUser?.id);
   if (taskIsWorkable && otherTaskInProgress) {
     return (
       <Screen title="Capture evidence" backTo={`/tasks/${task.id}`}>
@@ -367,7 +366,9 @@ export default function EvidenceScreen() {
                     )}
                     {rejected && (
                       <Text style={[styles.tileHint, styles.onPhoto]} numberOfLines={2}>
-                        Not accepted: {rejected.error ?? "retake it"}
+                        {isRetryableRejection(rejected.error)
+                          ? "Not sent yet. Tap Retry in the banner"
+                          : `Not accepted: ${rejected.error ?? "retake it"}`}
                       </Text>
                     )}
                     {!locked && uri && !waiting && !rejected && (

@@ -44,7 +44,8 @@ import type {
 } from "@/types/smartclean";
 import { formatTime } from "@/services/formatDateTime";
 
-const extraUrl = (Constants.expoConfig?.extra?.apiBaseUrl as string | undefined) ?? "";
+const extraUrl =
+  (Constants.expoConfig?.extra?.apiBaseUrl as string | undefined) ?? "";
 export const API_BASE_URL = (
   process.env.EXPO_PUBLIC_API_BASE_URL ||
   extraUrl ||
@@ -65,18 +66,24 @@ export function fileUrl(filePath: string | undefined): string | undefined {
   if (!filePath) return undefined;
   // Files in object storage (R2) are saved as their full public address; files on
   // the server's own disk as "images/<name>". Both have to work, at any time.
-  if (/^https?:\/\//i.test(filePath) || filePath.startsWith("data:")) return filePath;
+  if (/^https?:\/\//i.test(filePath) || filePath.startsWith("data:"))
+    return filePath;
   return `${API_BASE_URL}/${filePath.replace(/^\/+/, "")}`;
 }
 
 /** A resized copy of an uploaded photo, for places that show it small (see the
  * backend's /thumbs). Anything that is not an upload falls back to the original. */
-export function thumbUrl(filePath: string | undefined, width = 640): string | undefined {
+export function thumbUrl(
+  filePath: string | undefined,
+  width = 640,
+): string | undefined {
   if (!filePath) return undefined;
   // Either the server-disk form ("images/<name>") or the bucket's full address;
   // the backend's /thumbs finds the file wherever it is stored.
   const match = /^(?:https?:\/\/[^?#]+)?\/?images\/([^/?#]+)$/.exec(filePath);
-  return match ? `${API_BASE_URL}/thumbs/${match[1]}?w=${width}` : fileUrl(filePath);
+  return match
+    ? `${API_BASE_URL}/thumbs/${match[1]}?w=${width}`
+    : fileUrl(filePath);
 }
 
 export interface BackendSession {
@@ -140,20 +147,39 @@ export async function loginToBackend(username: string, password: string) {
   };
 }
 
-export async function logoutFromBackend(accessToken: string, refreshToken: string) {
-  await request("/auth/logout", { method: "POST", body: JSON.stringify({ refreshToken }) }, accessToken);
+export async function logoutFromBackend(
+  accessToken: string,
+  refreshToken: string,
+) {
+  await request(
+    "/auth/logout",
+    { method: "POST", body: JSON.stringify({ refreshToken }) },
+    accessToken,
+  );
 }
 
-export async function loadBackendBootstrap(accessToken: string): Promise<BackendBootstrap> {
-  const payload = await request<Record<string, unknown>>("/bootstrap", {}, accessToken);
+export async function loadBackendBootstrap(
+  accessToken: string,
+): Promise<BackendBootstrap> {
+  const payload = await request<Record<string, unknown>>(
+    "/bootstrap",
+    {},
+    accessToken,
+  );
   return normalizeBootstrap(payload);
 }
 
-export async function refreshSession(refreshToken: string): Promise<BackendSession> {
-  const auth = await request<{ accessToken: string; refreshToken: string; expiresIn: number }>(
-    "/auth/refresh",
-    { method: "POST", body: JSON.stringify({ refreshToken }) },
-  );
+export async function refreshSession(
+  refreshToken: string,
+): Promise<BackendSession> {
+  const auth = await request<{
+    accessToken: string;
+    refreshToken: string;
+    expiresIn: number;
+  }>("/auth/refresh", {
+    method: "POST",
+    body: JSON.stringify({ refreshToken }),
+  });
   // The backend rotates the refresh token on every use (one-time-use
   // family, see AuthController.refresh) - the old one is now invalid, so
   // the caller must persist auth.refreshToken, not keep reusing the one
@@ -178,13 +204,18 @@ export async function refreshSession(refreshToken: string): Promise<BackendSessi
 // subsequent API call with no recovery and no clear signal to re-login.
 let sessionHandlers: {
   getRefreshToken: () => string | null;
+  /** When the held access token expires (ISO), so it can be renewed before a request fails. */
+  getExpiresAt?: () => string | null;
   onRefreshed: (session: BackendSession) => void;
   onRefreshFailed: () => void;
   /** Called on any 402 from the subscription gate. The provider refetches
    * bootstrap: a 402 means this app's idea of the plan is stale (a tier
    * changed, or the subscription lapsed, under us). Optional so existing
    * callers keep type-checking. */
-  onSubscriptionBlocked?: (code: string | undefined, detail?: Record<string, unknown>) => void;
+  onSubscriptionBlocked?: (
+    code: string | undefined,
+    detail?: Record<string, unknown>,
+  ) => void;
 } | null = null;
 
 export function setSessionHandlers(handlers: typeof sessionHandlers) {
@@ -197,11 +228,13 @@ let refreshInFlight: Promise<string | null> | null = null;
 // with it. The refresh token rotates on every use, so a second refresh (or a
 // queued upload) started before that re-render must not reuse the old pair:
 // the backend reads a reused refresh token as theft and revokes the family.
-let rotation: { oldRefreshToken: string; session: BackendSession } | null = null;
+let rotation: { oldRefreshToken: string; session: BackendSession } | null =
+  null;
 
 function currentRefreshToken(): string | null {
   const stored = sessionHandlers?.getRefreshToken() ?? null;
-  if (rotation && stored === rotation.oldRefreshToken) return rotation.session.refreshToken;
+  if (rotation && stored === rotation.oldRefreshToken)
+    return rotation.session.refreshToken;
   return stored;
 }
 
@@ -209,8 +242,24 @@ function currentRefreshToken(): string | null {
  * photo uploader), which may have been rotated since. */
 export function freshestAccessToken(held: string): string {
   const stored = sessionHandlers?.getRefreshToken() ?? null;
-  if (rotation && stored === rotation.oldRefreshToken) return rotation.session.accessToken;
+  if (rotation && stored === rotation.oldRefreshToken)
+    return rotation.session.accessToken;
   return held;
+}
+
+/** Renews the access token ahead of time when it is expired or about to be, so
+ * queued uploads do not start with a token the server will refuse. Returns the
+ * token to use (the held one when it is still good or nothing could be done). */
+export async function ensureFreshAccessToken(
+  held: string,
+  marginMs = 60_000,
+): Promise<string> {
+  const current = freshestAccessToken(held);
+  const expiresAt = sessionHandlers?.getExpiresAt?.();
+  const at = expiresAt ? Date.parse(expiresAt) : NaN;
+  if (Number.isNaN(at) || at - Date.now() > marginMs) return current;
+  if (impersonationTokens.has(current)) return current;
+  return (await refreshAccessToken()) ?? current;
 }
 
 /** Attempts one refresh, de-duplicating concurrent callers so a burst of
@@ -229,8 +278,15 @@ async function refreshAccessToken(): Promise<string | null> {
       rotation = { oldRefreshToken: stored, session };
       sessionHandlers?.onRefreshed(session);
       return session.accessToken;
-    } catch {
-      sessionHandlers?.onRefreshFailed();
+    } catch (error) {
+      // Only a server that says the refresh token is dead ends the session. A
+      // dropped connection or a server hiccup must not sign the person out.
+      if (
+        error instanceof ApiError &&
+        (error.status === 401 || error.status === 403)
+      ) {
+        sessionHandlers?.onRefreshFailed();
+      }
       return null;
     }
   })();
@@ -297,7 +353,11 @@ export async function request<T>(
 export class ApiError extends Error {
   detail?: Record<string, unknown>;
   status?: number;
-  constructor(message: string, detail?: Record<string, unknown>, status?: number) {
+  constructor(
+    message: string,
+    detail?: Record<string, unknown>,
+    status?: number,
+  ) {
     super(message);
     this.name = "ApiError";
     this.detail = detail;
@@ -305,14 +365,22 @@ export class ApiError extends Error {
   }
 }
 
-async function extractError(
-  response: Response,
-): Promise<{ message: string; code?: string; detail?: Record<string, unknown> }> {
+async function extractError(response: Response): Promise<{
+  message: string;
+  code?: string;
+  detail?: Record<string, unknown>;
+}> {
   const body = await response.text();
   try {
     const parsed = JSON.parse(body) as {
       error?: {
-        message?: { code?: string; message?: string; detail?: Record<string, unknown> } | string;
+        message?:
+          | {
+              code?: string;
+              message?: string;
+              detail?: Record<string, unknown>;
+            }
+          | string;
       };
     };
     const inner = parsed?.error?.message;
@@ -336,7 +404,11 @@ export class SubscriptionError extends ApiError {
   /** "module_locked" | "subscription_inactive" */
   code?: string;
 
-  constructor(message: string, code?: string, detail?: Record<string, unknown>) {
+  constructor(
+    message: string,
+    code?: string,
+    detail?: Record<string, unknown>,
+  ) {
     super(message, detail);
     this.name = "SubscriptionError";
     this.code = code;
@@ -365,7 +437,14 @@ export function updateChecklistItem(
   accessToken: string,
   taskId: string,
   itemId: string,
-  patch: { done?: boolean; value?: string; note?: string },
+  patch: {
+    done?: boolean;
+    value?: string;
+    note?: string;
+    /** When the person really did it (ISO), for a change made offline and sent later. */
+    actionAt?: string;
+    offlineRecorded?: boolean;
+  },
 ) {
   return request<Task>(
     `/tasks/${taskId}/checklist`,
@@ -406,14 +485,31 @@ export function startTask(
   scan?: { qrValue: string; latitude?: number; longitude?: number },
   /** When the person really started (ISO), for a start made offline and sent later. */
   startedAt?: string,
+  /** A start replayed from the offline queue: judged at `startedAt`, not at sync time. */
+  offlineRecorded?: boolean,
 ) {
   return request<Task>(
     `/tasks/${taskId}/start`,
     // With a scan: the site QR for a site-wide task, verified server-side
     // (code match + geofence). Without one: the manual, no-scan start.
     scan
-      ? { method: "POST", body: JSON.stringify({ method: "qr", ...scan, startedAt }) }
-      : { method: "POST", body: JSON.stringify({ method: "manual", startedAt }) },
+      ? {
+          method: "POST",
+          body: JSON.stringify({
+            method: "qr",
+            ...scan,
+            startedAt,
+            offlineRecorded,
+          }),
+        }
+      : {
+          method: "POST",
+          body: JSON.stringify({
+            method: "manual",
+            startedAt,
+            offlineRecorded,
+          }),
+        },
     accessToken,
   );
 }
@@ -431,7 +527,14 @@ export function submitTask(
 ) {
   return request<Task>(
     `/tasks/${taskId}/submit`,
-    { method: "POST", body: JSON.stringify({ declarationAccepted: true, submittedAt, ...signoff }) },
+    {
+      method: "POST",
+      body: JSON.stringify({
+        declarationAccepted: true,
+        submittedAt,
+        ...signoff,
+      }),
+    },
     accessToken,
   );
 }
@@ -441,7 +544,10 @@ export function submitTask(
 export function updateCorrectiveAction(
   accessToken: string,
   actionId: string,
-  payload: { status: "in_progress" | "awaiting_reinspection" | "closed"; note?: string },
+  payload: {
+    status: "in_progress" | "awaiting_reinspection" | "closed";
+    note?: string;
+  },
 ) {
   return request<CorrectiveAction>(
     `/corrective-actions/${actionId}`,
@@ -452,8 +558,15 @@ export function updateCorrectiveAction(
 
 // ---- Incidents ----
 
-export function createIncident(accessToken: string, payload: Record<string, unknown>) {
-  return request<Incident>("/incidents", { method: "POST", body: JSON.stringify(payload) }, accessToken);
+export function createIncident(
+  accessToken: string,
+  payload: Record<string, unknown>,
+) {
+  return request<Incident>(
+    "/incidents",
+    { method: "POST", body: JSON.stringify(payload) },
+    accessToken,
+  );
 }
 
 // ---- Attendance ----
@@ -476,11 +589,19 @@ export interface ClockPayload {
 }
 
 export function clockIn(accessToken: string, payload: ClockPayload) {
-  return request<Record<string, unknown>>("/attendance/clock-in", { method: "POST", body: JSON.stringify(payload) }, accessToken);
+  return request<Record<string, unknown>>(
+    "/attendance/clock-in",
+    { method: "POST", body: JSON.stringify(payload) },
+    accessToken,
+  );
 }
 
 export function clockOut(accessToken: string, payload: ClockPayload) {
-  return request<Record<string, unknown>>("/attendance/clock-out", { method: "POST", body: JSON.stringify(payload) }, accessToken);
+  return request<Record<string, unknown>>(
+    "/attendance/clock-out",
+    { method: "POST", body: JSON.stringify(payload) },
+    accessToken,
+  );
 }
 
 export interface AttendanceDay {
@@ -502,7 +623,11 @@ export interface AttendanceDay {
  * inclusive, max 62 days) - worked minutes and exceptions per day, for
  * the performance-profile PDF's attendance section. Self-service: the
  * backend always scopes this to whoever the access token belongs to. */
-export function getMyAttendanceDays(accessToken: string, start: string, end: string) {
+export function getMyAttendanceDays(
+  accessToken: string,
+  start: string,
+  end: string,
+) {
   return request<AttendanceDay[]>(
     `/attendance/my-history?start=${start}&end=${end}`,
     {},
@@ -518,7 +643,12 @@ export function getMyAttendanceDays(accessToken: string, start: string, end: str
  * token belongs to, so there's nothing else to pass. */
 export function reportDeviceHealth(
   accessToken: string,
-  payload: { batteryLevel: number; isCharging: boolean; deviceModel?: string; osVersion?: string },
+  payload: {
+    batteryLevel: number;
+    isCharging: boolean;
+    deviceModel?: string;
+    osVersion?: string;
+  },
 ) {
   return request<Record<string, unknown>>(
     "/device-health/report",
@@ -541,7 +671,11 @@ export interface DeviceHealthTeamEntry {
  * roster - org_admin/operations_manager/site_manager/supervisor only,
  * same audience as attendance/timesheet. */
 export function getDeviceHealthTeam(accessToken: string) {
-  return request<DeviceHealthTeamEntry[]>("/device-health/team", {}, accessToken);
+  return request<DeviceHealthTeamEntry[]>(
+    "/device-health/team",
+    {},
+    accessToken,
+  );
 }
 
 // ---- Hourly compliance ----
@@ -569,7 +703,11 @@ export interface HourlyComplianceCheck {
   verificationNote: string | null;
 }
 
-export function listHourlyComplianceChecks(accessToken: string, siteId: string, checkDate: string) {
+export function listHourlyComplianceChecks(
+  accessToken: string,
+  siteId: string,
+  checkDate: string,
+) {
   return request<HourlyComplianceCheck[]>(
     `/hourly-compliance?siteId=${encodeURIComponent(siteId)}&checkDate=${encodeURIComponent(checkDate)}`,
     {},
@@ -605,7 +743,11 @@ export interface HourlyComplianceAssignment {
   assignedAt: string;
 }
 
-export function listHourlyComplianceAssignments(accessToken: string, siteId: string, assignmentDate: string) {
+export function listHourlyComplianceAssignments(
+  accessToken: string,
+  siteId: string,
+  assignmentDate: string,
+) {
   return request<HourlyComplianceAssignment[]>(
     `/hourly-compliance/assignment?siteId=${encodeURIComponent(siteId)}&assignmentDate=${encodeURIComponent(assignmentDate)}`,
     {},
@@ -621,10 +763,21 @@ export function resolveQr(
   latitude?: number,
   longitude?: number,
   confirmClaim?: boolean,
+  /** A scan replayed from the offline queue: when the person really scanned (ISO). */
+  replay?: { actionAt: string; offlineRecorded: boolean },
 ) {
   return request<Record<string, unknown>>(
     "/codes/resolve",
-    { method: "POST", body: JSON.stringify({ value, latitude, longitude, confirmClaim }) },
+    {
+      method: "POST",
+      body: JSON.stringify({
+        value,
+        latitude,
+        longitude,
+        confirmClaim,
+        ...replay,
+      }),
+    },
     accessToken,
   );
 }
@@ -664,10 +817,18 @@ export function getTableSession(accessToken: string, sessionId: string) {
  * Never returns anything finer than the aggregate - see the backend's
  * TableRatingSummaryResponse for why. */
 export function getMyRatingSummary(accessToken: string) {
-  return request<TableRatingSummary>("/table-sessions/my-rating-summary", {}, accessToken);
+  return request<TableRatingSummary>(
+    "/table-sessions/my-rating-summary",
+    {},
+    accessToken,
+  );
 }
 
-export function confirmTableSessionClean(accessToken: string, sessionId: string, clean: boolean) {
+export function confirmTableSessionClean(
+  accessToken: string,
+  sessionId: string,
+  clean: boolean,
+) {
   return request<TableSession>(
     `/table-sessions/${sessionId}/clean-confirm`,
     { method: "POST", body: JSON.stringify({ clean }) },
@@ -675,7 +836,10 @@ export function confirmTableSessionClean(accessToken: string, sessionId: string,
   );
 }
 
-export function refreshTableSessionToken(accessToken: string, sessionId: string) {
+export function refreshTableSessionToken(
+  accessToken: string,
+  sessionId: string,
+) {
   return request<TableSession>(
     `/table-sessions/${sessionId}/refresh-token`,
     { method: "POST" },
@@ -697,13 +861,24 @@ export function endTableSession(
 
 /** "I have been to this table" - clears the not-attended marker. */
 export function attendTableSession(accessToken: string, sessionId: string) {
-  return request<TableSession>(`/table-sessions/${sessionId}/attend`, { method: "POST" }, accessToken);
+  return request<TableSession>(
+    `/table-sessions/${sessionId}/attend`,
+    { method: "POST" },
+    accessToken,
+  );
 }
 
 /** The waiter brings the bill without the customer asking - starts the
  * same bill-reminder cycle a customer's bill request does. */
-export function presentTableSessionBill(accessToken: string, sessionId: string) {
-  return request<TableSession>(`/table-sessions/${sessionId}/present-bill`, { method: "POST" }, accessToken);
+export function presentTableSessionBill(
+  accessToken: string,
+  sessionId: string,
+) {
+  return request<TableSession>(
+    `/table-sessions/${sessionId}/present-bill`,
+    { method: "POST" },
+    accessToken,
+  );
 }
 
 export function confirmTableSessionBillPaid(
@@ -719,7 +894,11 @@ export function confirmTableSessionBillPaid(
   );
 }
 
-export function snoozeTableSessionBill(accessToken: string, sessionId: string, note: string) {
+export function snoozeTableSessionBill(
+  accessToken: string,
+  sessionId: string,
+  note: string,
+) {
   return request<TableSession>(
     `/table-sessions/${sessionId}/snooze-bill`,
     { method: "POST", body: JSON.stringify({ note }) },
@@ -728,17 +907,29 @@ export function snoozeTableSessionBill(accessToken: string, sessionId: string, n
 }
 
 export function getPendingTableOrders(accessToken: string) {
-  return request<PendingTableOrder[]>("/table-service/orders/pending", {}, accessToken);
+  return request<PendingTableOrder[]>(
+    "/table-service/orders/pending",
+    {},
+    accessToken,
+  );
 }
 
 export function getSessionOrders(accessToken: string, sessionId: string) {
-  return request<TableSessionOrders>(`/table-service/sessions/${sessionId}/orders`, {}, accessToken);
+  return request<TableSessionOrders>(
+    `/table-service/sessions/${sessionId}/orders`,
+    {},
+    accessToken,
+  );
 }
 
 export function decideTableOrder(
   accessToken: string,
   orderId: string,
-  body: { action: "accept_all" | "decline_all" | "review"; reason?: string; lines?: TableOrderLineDecision[] },
+  body: {
+    action: "accept_all" | "decline_all" | "review";
+    reason?: string;
+    lines?: TableOrderLineDecision[];
+  },
 ) {
   return request<TableOrder>(
     `/table-service/orders/${orderId}/decision`,
@@ -747,7 +938,11 @@ export function decideTableOrder(
   );
 }
 
-export function voidTableOrderLine(accessToken: string, lineId: string, reason?: string) {
+export function voidTableOrderLine(
+  accessToken: string,
+  lineId: string,
+  reason?: string,
+) {
   return request<TableOrder>(
     `/table-service/orders/lines/${lineId}/void`,
     { method: "POST", body: JSON.stringify({ reason }) },
@@ -785,10 +980,13 @@ export function getPublicTenantBranding() {
  * request_password_reset_otp, which never reveals whether the email
  * matched an account. */
 export function requestPasswordResetOtp(email: string) {
-  return request<{ success: boolean; message: string }>("/auth/password-reset/otp/request", {
-    method: "POST",
-    body: JSON.stringify({ email }),
-  });
+  return request<{ success: boolean; message: string }>(
+    "/auth/password-reset/otp/request",
+    {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    },
+  );
 }
 
 /** "Forgot password", step 2 - verifies the emailed code and sets the
@@ -797,7 +995,11 @@ export function requestPasswordResetOtp(email: string) {
  * confirm_password_reset_otp. A wrong email and a wrong/expired code
  * come back as the same error, so the UI shouldn't try to tell them
  * apart either. */
-export function confirmPasswordResetOtp(email: string, code: string, password: string) {
+export function confirmPasswordResetOtp(
+  email: string,
+  code: string,
+  password: string,
+) {
   return request<{ success: boolean }>("/auth/password-reset/otp/verify", {
     method: "POST",
     body: JSON.stringify({ email, code, password }),
@@ -810,20 +1012,29 @@ export function getTenant(accessToken: string) {
 
 // ---- Users ----
 
-export function updateUser(accessToken: string, userId: string, payload: Record<string, unknown>) {
-  return request<Record<string, unknown>>(`/users/${userId}`, { method: "PUT", body: JSON.stringify(payload) }, accessToken);
+export function updateUser(
+  accessToken: string,
+  userId: string,
+  payload: Record<string, unknown>,
+) {
+  return request<Record<string, unknown>>(
+    `/users/${userId}`,
+    { method: "PUT", body: JSON.stringify(payload) },
+    accessToken,
+  );
 }
 
 /** Every user record of the organisation the token belongs to, as the backend stores it (raw, so a save can send
  * back every field it does not touch: the backend replaces the whole record on PUT). */
-export async function listUserRecords(accessToken: string): Promise<Record<string, unknown>[]> {
+export async function listUserRecords(
+  accessToken: string,
+): Promise<Record<string, unknown>[]> {
   const all: Record<string, unknown>[] = [];
   for (let page = 1; page <= 50; page++) {
-    const result = await request<{ items: Record<string, unknown>[]; total: number }>(
-      `/users?page=${page}&pageSize=100`,
-      {},
-      accessToken,
-    );
+    const result = await request<{
+      items: Record<string, unknown>[];
+      total: number;
+    }>(`/users?page=${page}&pageSize=100`, {}, accessToken);
     all.push(...result.items);
     if (all.length >= result.total || result.items.length === 0) break;
   }
@@ -831,14 +1042,26 @@ export async function listUserRecords(accessToken: string): Promise<Record<strin
 }
 
 export function deleteUser(accessToken: string, userId: string) {
-  return request<{ success: boolean }>(`/users/${userId}`, { method: "DELETE" }, accessToken);
+  return request<{ success: boolean }>(
+    `/users/${userId}`,
+    { method: "DELETE" },
+    accessToken,
+  );
 }
 
 export function unlockUser(accessToken: string, userId: string) {
-  return request<Record<string, unknown>>(`/users/${userId}/unlock`, { method: "POST" }, accessToken);
+  return request<Record<string, unknown>>(
+    `/users/${userId}/unlock`,
+    { method: "POST" },
+    accessToken,
+  );
 }
 
-export function inviteStaff(accessToken: string, userId: string, siteId?: string) {
+export function inviteStaff(
+  accessToken: string,
+  userId: string,
+  siteId?: string,
+) {
   return request<{ success: boolean; email: string }>(
     `/users/${userId}/invite`,
     { method: "POST", body: JSON.stringify({ siteId: siteId ?? null }) },
@@ -858,12 +1081,19 @@ export interface OrganisationUser {
 }
 
 export function listOrganisationUsers(accessToken: string, tenantId: string) {
-  return request<OrganisationUser[]>(`/platform/organisations/${tenantId}/users`, {}, accessToken);
+  return request<OrganisationUser[]>(
+    `/platform/organisations/${tenantId}/users`,
+    {},
+    accessToken,
+  );
 }
 
 /** Builds a backend UserRecord payload from a DemoUser plus any overrides, filling required
  * fields the mobile app doesn't track (username, status) with sensible defaults. */
-export function toUserRecord(user: DemoUser, overrides: Record<string, unknown> = {}): Record<string, unknown> {
+export function toUserRecord(
+  user: DemoUser,
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> {
   return {
     id: user.id,
     username: user.email ?? user.id,
@@ -891,12 +1121,21 @@ export function toUserRecord(user: DemoUser, overrides: Record<string, unknown> 
 
 // ---- Uploads ----
 
-export async function uploadImage(accessToken: string, uri: string, filename: string, mimeType = "image/jpeg"): Promise<string> {
+export async function uploadImage(
+  accessToken: string,
+  uri: string,
+  filename: string,
+  mimeType = "image/jpeg",
+): Promise<string> {
   const send = (token: string) => {
     // A FormData body is consumed by the send, so each attempt builds its own.
     const form = new FormData();
     // React Native's fetch/FormData accepts { uri, name, type } file parts.
-    form.append("file", { uri, name: filename, type: mimeType } as unknown as Blob);
+    form.append("file", {
+      uri,
+      name: filename,
+      type: mimeType,
+    } as unknown as Blob);
     return fetch(`${API_BASE_URL}/upload/images`, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}` },
@@ -929,8 +1168,16 @@ export async function uploadImage(accessToken: string, uri: string, filename: st
  * send back the complete `floors` array (every floor, not just the
  * changed one) - see updateFloorPlanImage below, which does exactly
  * that. */
-export function updateSite(accessToken: string, siteId: string, payload: Record<string, unknown>) {
-  return request<Site>(`/sites/${siteId}`, { method: "PATCH", body: JSON.stringify(payload) }, accessToken);
+export function updateSite(
+  accessToken: string,
+  siteId: string,
+  payload: Record<string, unknown>,
+) {
+  return request<Site>(
+    `/sites/${siteId}`,
+    { method: "PATCH", body: JSON.stringify(payload) },
+    accessToken,
+  );
 }
 
 /** Sets (or replaces) one floor's backdrop image, preserving every other
@@ -971,7 +1218,9 @@ export function updateLocationPosition(
   );
 }
 
-function normalizeBootstrap(payload: Record<string, unknown>): BackendBootstrap {
+function normalizeBootstrap(
+  payload: Record<string, unknown>,
+): BackendBootstrap {
   return {
     user: normalizeUser(payload.user as Record<string, unknown>),
     tenants: list(payload.tenants) as unknown as Tenant[],
@@ -983,7 +1232,10 @@ function normalizeBootstrap(payload: Record<string, unknown>): BackendBootstrap 
     users: list(payload.users).map(normalizeUser),
     sites: list(payload.sites).map((site) => ({
       clientId: "",
-      geofenceRadius: Number((site.geofence as { radiusMeters?: unknown } | undefined)?.radiusMeters ?? 0),
+      geofenceRadius: Number(
+        (site.geofence as { radiusMeters?: unknown } | undefined)
+          ?.radiusMeters ?? 0,
+      ),
       ...site,
     })) as unknown as Site[],
     locations: list(payload.locations) as unknown as Location[],
@@ -996,13 +1248,21 @@ function normalizeBootstrap(payload: Record<string, unknown>): BackendBootstrap 
       // A task with a work window reads "08:00 - 10:00"; otherwise its deadline.
       dueTime: task.hasTimeRange
         ? `${formatTime(task.scheduledAt as string | undefined)} - ${formatTime(task.dueAt as string | undefined)}`
-        : formatTime((task.dueTime ?? task.dueAt ?? task.scheduledAt) as string | undefined),
+        : formatTime(
+            (task.dueTime ?? task.dueAt ?? task.scheduledAt) as
+              string | undefined,
+          ),
       estimatedMinutes: Number(task.estimatedMinutes ?? 30),
       ...task,
-      evidence: list(task.evidence).map((evidence) => ({ imgSeed: 0, ...evidence })),
+      evidence: list(task.evidence).map((evidence) => ({
+        imgSeed: 0,
+        ...evidence,
+      })),
     })) as unknown as Task[],
     inspections: list(payload.inspections) as unknown as Inspection[],
-    correctiveActions: list(payload.correctiveActions) as unknown as CorrectiveAction[],
+    correctiveActions: list(
+      payload.correctiveActions,
+    ) as unknown as CorrectiveAction[],
     incidents: list(payload.incidents) as unknown as Incident[],
     notifications: list(payload.notifications).map((notification) => ({
       kind: String(notification.kind ?? notification.category ?? "system"),
@@ -1011,7 +1271,10 @@ function normalizeBootstrap(payload: Record<string, unknown>): BackendBootstrap 
       ...notification,
     })) as unknown as Notification[],
     attendance:
-      (payload.attendance as Record<string, { clockedInAt?: string; siteId?: string }>) ?? {},
+      (payload.attendance as Record<
+        string,
+        { clockedInAt?: string; siteId?: string }
+      >) ?? {},
     turnovers: list(payload.turnovers) as unknown as AirbnbTurnover[],
     stock: list(payload.stock) as unknown as StockItem[],
     assets: list(payload.assets).map((asset) => ({
@@ -1028,7 +1291,9 @@ function normalizeBootstrap(payload: Record<string, unknown>): BackendBootstrap 
 }
 
 function normalizeUser(raw: Record<string, unknown>): DemoUser {
-  const name = String(raw.name ?? raw.displayName ?? raw.username ?? "Team member");
+  const name = String(
+    raw.name ?? raw.displayName ?? raw.username ?? "Team member",
+  );
   return {
     // Spread raw first so fields this function doesn't explicitly list
     // (e.g. phone) survive - previously this only picked 6 known fields
@@ -1041,7 +1306,9 @@ function normalizeUser(raw: Record<string, unknown>): DemoUser {
     initials: String(raw.initials ?? initials(name)),
     siteIds: Array.isArray(raw.siteIds) ? raw.siteIds.map(String) : [],
     email: raw.email ? String(raw.email) : undefined,
-    profilePhotoDataUrl: raw.profilePhotoDataUrl ? String(raw.profilePhotoDataUrl) : undefined,
+    profilePhotoDataUrl: raw.profilePhotoDataUrl
+      ? String(raw.profilePhotoDataUrl)
+      : undefined,
   };
 }
 
@@ -1050,12 +1317,22 @@ function list(value: unknown): Record<string, unknown>[] {
 }
 
 function initials(name: string) {
-  return name.split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase() || "S3";
+  return (
+    name
+      .split(/\s+/)
+      .map((part) => part[0])
+      .join("")
+      .slice(0, 2)
+      .toUpperCase() || "S3"
+  );
 }
 
 // ---- Notifications ----
 
-export function markNotificationRead(accessToken: string, notificationId: string) {
+export function markNotificationRead(
+  accessToken: string,
+  notificationId: string,
+) {
   return request<Record<string, unknown>>(
     `/notifications/${notificationId}/read`,
     { method: "PATCH" },
@@ -1066,7 +1343,11 @@ export function markNotificationRead(accessToken: string, notificationId: string
 // ---- Push notifications ----
 // Mirrors app.api.v1.push / app.controllers.push on the backend.
 
-export function registerPushToken(accessToken: string, token: string, platform: string) {
+export function registerPushToken(
+  accessToken: string,
+  token: string,
+  platform: string,
+) {
   return request<{ registered: boolean }>(
     "/push-tokens",
     { method: "POST", body: JSON.stringify({ token, platform }) },
@@ -1157,10 +1438,18 @@ export interface OnboardingGrant {
 }
 
 export function getPlatformSummary(accessToken: string) {
-  return request<PlatformSummary>("/platform/organisations/summary", {}, accessToken);
+  return request<PlatformSummary>(
+    "/platform/organisations/summary",
+    {},
+    accessToken,
+  );
 }
 
-export function listPlatformOrganisations(accessToken: string, page = 1, pageSize = 25) {
+export function listPlatformOrganisations(
+  accessToken: string,
+  page = 1,
+  pageSize = 25,
+) {
   return request<{ items: PlatformOrganisation[]; total: number }>(
     `/platform/organisations?page=${page}&pageSize=${pageSize}`,
     {},
@@ -1174,8 +1463,16 @@ export function listPlatformOrganisations(accessToken: string, page = 1, pageSiz
  * under the operator's own name (see _resolve_impersonated_user on the backend). It has no refresh token; trade a
  * still-valid one for a fresh one with refreshImpersonation.
  */
-export async function impersonateOrganisation(accessToken: string, tenantId: string) {
-  const result = await request<{ accessToken: string; expiresIn: number; tenantId: string; tenantName: string }>(
+export async function impersonateOrganisation(
+  accessToken: string,
+  tenantId: string,
+) {
+  const result = await request<{
+    accessToken: string;
+    expiresIn: number;
+    tenantId: string;
+    tenantName: string;
+  }>(
     `/platform/organisations/${tenantId}/impersonate`,
     { method: "POST" },
     accessToken,
@@ -1195,7 +1492,11 @@ export async function refreshImpersonation(impersonationToken: string) {
 }
 
 export function getPlatformOrganisation(accessToken: string, tenantId: string) {
-  return request<PlatformOrganisation>(`/platform/organisations/${tenantId}`, {}, accessToken);
+  return request<PlatformOrganisation>(
+    `/platform/organisations/${tenantId}`,
+    {},
+    accessToken,
+  );
 }
 
 export interface PlatformSite {
@@ -1217,7 +1518,11 @@ export interface PlatformSite {
  * section filters this down to one tenantId client-side, same pattern
  * as web's PlatformSitesTab. */
 export function listPlatformSites(accessToken: string) {
-  return request<PlatformSite[]>("/platform/organisations/sites", {}, accessToken);
+  return request<PlatformSite[]>(
+    "/platform/organisations/sites",
+    {},
+    accessToken,
+  );
 }
 
 export function setPlatformOrganisationState(
@@ -1259,7 +1564,13 @@ export function provisionOrganisation(
     deliveryMethod?: "email" | "qr";
   },
 ) {
-  return request<PlatformOrganisation & { adminUserId: string; adminEmail: string; deliveryMethod: string }>(
+  return request<
+    PlatformOrganisation & {
+      adminUserId: string;
+      adminEmail: string;
+      deliveryMethod: string;
+    }
+  >(
     "/platform/organisations",
     { method: "POST", body: JSON.stringify(payload) },
     accessToken,
@@ -1304,7 +1615,11 @@ export function revokeOnboardingCode(accessToken: string, tenantId: string) {
 }
 
 export function listPendingOnboarding(accessToken: string) {
-  return request<OnboardingGrant[]>("/platform/onboarding/pending", {}, accessToken);
+  return request<OnboardingGrant[]>(
+    "/platform/onboarding/pending",
+    {},
+    accessToken,
+  );
 }
 
 export function approveOnboarding(accessToken: string, grantId: string) {
@@ -1315,7 +1630,11 @@ export function approveOnboarding(accessToken: string, grantId: string) {
   );
 }
 
-export function rejectOnboarding(accessToken: string, grantId: string, reason?: string) {
+export function rejectOnboarding(
+  accessToken: string,
+  grantId: string,
+  reason?: string,
+) {
   return request<OnboardingGrant>(
     `/platform/onboarding/${grantId}/reject`,
     { method: "POST", body: JSON.stringify({ reason: reason ?? null }) },
@@ -1457,7 +1776,12 @@ export interface StaffGrant {
 
 export function createStaffOnboarding(
   accessToken: string,
-  payload: { displayName: string; email: string; role: string; siteId?: string | null },
+  payload: {
+    displayName: string;
+    email: string;
+    role: string;
+    siteId?: string | null;
+  },
 ) {
   return request<StaffGrant>(
     "/users/staff-onboarding",
@@ -1467,7 +1791,11 @@ export function createStaffOnboarding(
 }
 
 export function listPendingStaffOnboarding(accessToken: string) {
-  return request<StaffGrant[]>("/users/staff-onboarding/pending", {}, accessToken);
+  return request<StaffGrant[]>(
+    "/users/staff-onboarding/pending",
+    {},
+    accessToken,
+  );
 }
 
 export function approveStaffOnboarding(accessToken: string, grantId: string) {
@@ -1478,7 +1806,11 @@ export function approveStaffOnboarding(accessToken: string, grantId: string) {
   );
 }
 
-export function rejectStaffOnboarding(accessToken: string, grantId: string, reason?: string) {
+export function rejectStaffOnboarding(
+  accessToken: string,
+  grantId: string,
+  reason?: string,
+) {
   return request<StaffGrant>(
     `/users/staff-onboarding/${grantId}/reject`,
     { method: "POST", body: JSON.stringify({ reason: reason ?? null }) },
@@ -1486,7 +1818,10 @@ export function rejectStaffOnboarding(accessToken: string, grantId: string, reas
   );
 }
 
-export function getStaffOnboardingStatus(accessToken: string, staffUserId: string) {
+export function getStaffOnboardingStatus(
+  accessToken: string,
+  staffUserId: string,
+) {
   return request<{ grant: StaffGrant | null }>(
     `/users/${staffUserId}/staff-onboarding`,
     {},
@@ -1498,7 +1833,10 @@ export function getStaffOnboardingStatus(accessToken: string, staffUserId: strin
  * fetching the image: the QR endpoint is a GET that may be refetched at
  * any time, and revealing on each fetch would mean the window never
  * actually expired. */
-export function revealStaffOnboardingCode(accessToken: string, staffUserId: string) {
+export function revealStaffOnboardingCode(
+  accessToken: string,
+  staffUserId: string,
+) {
   return request<StaffGrant>(
     `/users/${staffUserId}/staff-onboarding/reveal`,
     { method: "POST" },
@@ -1506,7 +1844,10 @@ export function revealStaffOnboardingCode(accessToken: string, staffUserId: stri
   );
 }
 
-export function reopenStaffOnboardingCode(accessToken: string, staffUserId: string) {
+export function reopenStaffOnboardingCode(
+  accessToken: string,
+  staffUserId: string,
+) {
   return request<StaffGrant>(
     `/users/${staffUserId}/staff-onboarding/reopen`,
     { method: "POST" },
@@ -1566,7 +1907,10 @@ export function pollStaffOnboarding(claimId: string, claimSecret: string) {
   });
 }
 
-export async function collectStaffOnboarding(claimId: string, claimSecret: string) {
+export async function collectStaffOnboarding(
+  claimId: string,
+  claimSecret: string,
+) {
   const auth = await request<{
     accessToken: string;
     refreshToken: string;
@@ -1671,7 +2015,11 @@ export function recordWayfindingPatrol(
     trail?: number[][];
   },
 ) {
-  return request<{ tasksCompleted: number; walkSeconds: number; shapeSource?: string | null }>(
+  return request<{
+    tasksCompleted: number;
+    walkSeconds: number;
+    shapeSource?: string | null;
+  }>(
     "/wayfinding/patrol",
     { method: "POST", body: JSON.stringify(payload) },
     accessToken,
@@ -1688,8 +2036,17 @@ export function markNotificationsRead(accessToken: string, ids: string[]) {
 }
 
 /** The optional note the person doing a task leaves for the reviewer. An empty note clears it. */
-export function saveTaskNote(accessToken: string, taskId: string, note: string) {
-  return request<Task>(`/tasks/${taskId}/note`, { method: "PUT", body: JSON.stringify({ note }) }, accessToken);
+export function saveTaskNote(
+  accessToken: string,
+  taskId: string,
+  note: string,
+  replay?: { actionAt: string; offlineRecorded: boolean },
+) {
+  return request<Task>(
+    `/tasks/${taskId}/note`,
+    { method: "PUT", body: JSON.stringify({ note, ...replay }) },
+    accessToken,
+  );
 }
 
 export interface WayfindingEdgeRecord {
@@ -1727,46 +2084,92 @@ export interface FeedbackPayload {
 
 /** Sends it to the Šoma360 team: kept in their inbox, and emailed too when the server has mail set up. */
 export function sendFeedback(accessToken: string, payload: FeedbackPayload) {
-  return request<{ sent: boolean; photosAttached: number; photosSkipped: number }>(
+  return request<{
+    sent: boolean;
+    photosAttached: number;
+    photosSkipped: number;
+  }>(
     "/feedback",
     { method: "POST", body: JSON.stringify(payload) },
     accessToken,
   );
 }
 
-
 // ---- Stock ----
 // The server decides who may do what (role, and the organisation's stock
 // policy); these only carry the request.
 
-const stockRequest = <T,>(accessToken: string, path: string, body?: unknown, method = body === undefined ? "GET" : "POST") =>
-  request<T>(`/stock${path}`, { method, ...(body === undefined ? {} : { body: JSON.stringify(body) }) }, accessToken);
+const stockRequest = <T>(
+  accessToken: string,
+  path: string,
+  body?: unknown,
+  method = body === undefined ? "GET" : "POST",
+) =>
+  request<T>(
+    `/stock${path}`,
+    { method, ...(body === undefined ? {} : { body: JSON.stringify(body) }) },
+    accessToken,
+  );
 
-export const getStockAccess = (accessToken: string) => stockRequest<StockAccess>(accessToken, "/access");
+export const getStockAccess = (accessToken: string) =>
+  stockRequest<StockAccess>(accessToken, "/access");
 
 export const listStockLocations = (accessToken: string, siteId: string) =>
-  stockRequest<StockLocation[]>(accessToken, `/locations?siteId=${encodeURIComponent(siteId)}`);
+  stockRequest<StockLocation[]>(
+    accessToken,
+    `/locations?siteId=${encodeURIComponent(siteId)}`,
+  );
 
 export const listStockLevels = (accessToken: string, siteId: string) =>
-  stockRequest<StockLevel[]>(accessToken, `/levels?siteId=${encodeURIComponent(siteId)}`);
+  stockRequest<StockLevel[]>(
+    accessToken,
+    `/levels?siteId=${encodeURIComponent(siteId)}`,
+  );
 
 export const listStockRestockTasks = (accessToken: string, siteId: string) =>
-  stockRequest<StockRestockTask[]>(accessToken, `/restock-tasks?siteId=${encodeURIComponent(siteId)}`);
+  stockRequest<StockRestockTask[]>(
+    accessToken,
+    `/restock-tasks?siteId=${encodeURIComponent(siteId)}`,
+  );
 
-export const listStockTransfersInTransit = (accessToken: string, siteId: string) =>
-  stockRequest<StockTransfer[]>(accessToken, `/transfers?status=in_transit&siteId=${encodeURIComponent(siteId)}`);
+export const listStockTransfersInTransit = (
+  accessToken: string,
+  siteId: string,
+) =>
+  stockRequest<StockTransfer[]>(
+    accessToken,
+    `/transfers?status=in_transit&siteId=${encodeURIComponent(siteId)}`,
+  );
 
 /** A site's stock at a glance. siteId "all" is every site together: organisation admins and operations managers only. */
-export const getStockOverview = (accessToken: string, siteId: string, days = 30) =>
-  stockRequest<StockOverview>(accessToken, `/overview?siteId=${encodeURIComponent(siteId)}&days=${days}`);
+export const getStockOverview = (
+  accessToken: string,
+  siteId: string,
+  days = 30,
+) =>
+  stockRequest<StockOverview>(
+    accessToken,
+    `/overview?siteId=${encodeURIComponent(siteId)}&days=${days}`,
+  );
 
 /** Stock lent to other sites and not yet back, and stock this site has borrowed. */
 export const listStockLoans = (accessToken: string, siteId: string) =>
-  stockRequest<{ toBeReturned: StockLoan[]; weOwe: StockLoan[] }>(accessToken, `/loans?siteId=${encodeURIComponent(siteId)}`);
+  stockRequest<{ toBeReturned: StockLoan[]; weOwe: StockLoan[] }>(
+    accessToken,
+    `/loans?siteId=${encodeURIComponent(siteId)}`,
+  );
 
 /** The borrower sends (part of) a loan back; the lender confirms it on arrival like any transfer. */
-export const returnStockLoan = (accessToken: string, loanId: string, qty: number) =>
-  stockRequest<StockTransfer>(accessToken, `/loans/${encodeURIComponent(loanId)}/return`, { qty });
+export const returnStockLoan = (
+  accessToken: string,
+  loanId: string,
+  qty: number,
+) =>
+  stockRequest<StockTransfer>(
+    accessToken,
+    `/loans/${encodeURIComponent(loanId)}/return`,
+    { qty },
+  );
 
 export const issueStock = (
   accessToken: string,
@@ -1785,7 +2188,14 @@ export const issueStock = (
 
 export const logStockWaste = (
   accessToken: string,
-  payload: { itemId: string; locationId: string; qty: number; reasonCode: string; clientRef?: string; occurredAt?: string },
+  payload: {
+    itemId: string;
+    locationId: string;
+    qty: number;
+    reasonCode: string;
+    clientRef?: string;
+    occurredAt?: string;
+  },
 ) => stockRequest<StockMovement>(accessToken, "/waste", payload);
 
 export const receiveStockDelivery = (
@@ -1815,12 +2225,26 @@ export const receiveStockDelivery = (
 ) => stockRequest<StockMovement[]>(accessToken, "/receive", payload);
 
 /** Reads an invoice photo into a draft delivery (done on the server, in a few seconds). Nothing is booked. */
-export async function scanStockInvoice(accessToken: string, siteId: string, uri: string, filename: string, mimeType = "image/jpeg"): Promise<InvoiceDraft> {
+export async function scanStockInvoice(
+  accessToken: string,
+  siteId: string,
+  uri: string,
+  filename: string,
+  mimeType = "image/jpeg",
+): Promise<InvoiceDraft> {
   const send = (token: string) => {
     const form = new FormData();
     form.append("siteId", siteId);
-    form.append("file", { uri, name: filename, type: mimeType } as unknown as Blob);
-    return fetch(`${API_BASE_URL}/stock/invoices/scan`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: form });
+    form.append("file", {
+      uri,
+      name: filename,
+      type: mimeType,
+    } as unknown as Blob);
+    return fetch(`${API_BASE_URL}/stock/invoices/scan`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: form,
+    });
   };
   let response = await send(freshestAccessToken(accessToken));
   if (response.status === 401) {
@@ -1846,54 +2270,117 @@ export const receiveStockFromShop = (
   },
 ) => stockRequest<StockMovement[]>(accessToken, "/receive-from-shop", payload);
 
-export const listStockSuppliers = (accessToken: string) => stockRequest<StockSupplier[]>(accessToken, "/suppliers");
+export const listStockSuppliers = (accessToken: string) =>
+  stockRequest<StockSupplier[]>(accessToken, "/suppliers");
 
 export const receiveStockTransfer = (accessToken: string, id: string) =>
   stockRequest<StockTransfer>(accessToken, `/transfers/${id}/receive`, {});
 
 export const completeStockRestockTask = (accessToken: string, id: string) =>
-  stockRequest<StockRestockTask>(accessToken, `/restock-tasks/${id}/complete`, {});
+  stockRequest<StockRestockTask>(
+    accessToken,
+    `/restock-tasks/${id}/complete`,
+    {},
+  );
 
 // Cycle counts: blind until submitted (the server withholds the expected figure).
 export const startStockCount = (
   accessToken: string,
   siteId: string,
   options: { kind?: "handover" | "cycle"; shiftId?: string } = {},
-) => stockRequest<StockCountSession>(accessToken, "/counts", { siteId, ...options });
+) =>
+  stockRequest<StockCountSession>(accessToken, "/counts", {
+    siteId,
+    ...options,
+  });
 
-export const assignStockCountLines = (accessToken: string, countId: string, assigneeId: string | null, lineIds: string[]) =>
-  stockRequest<StockCountSession>(accessToken, `/counts/${countId}/assign`, { assigneeId, lineIds });
+export const assignStockCountLines = (
+  accessToken: string,
+  countId: string,
+  assigneeId: string | null,
+  lineIds: string[],
+) =>
+  stockRequest<StockCountSession>(accessToken, `/counts/${countId}/assign`, {
+    assigneeId,
+    lineIds,
+  });
 
-export const listStockCountHelpers = (accessToken: string, siteId: string, countId?: string) =>
+export const listStockCountHelpers = (
+  accessToken: string,
+  siteId: string,
+  countId?: string,
+) =>
   stockRequest<StockCountHelper[]>(
     accessToken,
     `/sites/${encodeURIComponent(siteId)}/counters${countId ? `?countId=${encodeURIComponent(countId)}` : ""}`,
   );
 
 export const listStockShifts = (accessToken: string, siteId: string) =>
-  stockRequest<StockShift[]>(accessToken, `/sites/${encodeURIComponent(siteId)}/shifts`);
+  stockRequest<StockShift[]>(
+    accessToken,
+    `/sites/${encodeURIComponent(siteId)}/shifts`,
+  );
 
-export const getStockHandoverReport = (accessToken: string, siteId: string, start?: string, end?: string) => {
+export const getStockHandoverReport = (
+  accessToken: string,
+  siteId: string,
+  start?: string,
+  end?: string,
+) => {
   const params = new URLSearchParams({ siteId });
   if (start) params.set("start", start);
   if (end) params.set("end", end);
-  return stockRequest<StockHandoverReport>(accessToken, `/report/handovers?${params}`);
+  return stockRequest<StockHandoverReport>(
+    accessToken,
+    `/report/handovers?${params}`,
+  );
 };
 
-export const enterStockCount = (accessToken: string, countId: string, lineId: string, counted: number) =>
-  stockRequest<StockCountSession>(accessToken, `/counts/${countId}/lines/${lineId}`, { counted }, "PUT");
+export const enterStockCount = (
+  accessToken: string,
+  countId: string,
+  lineId: string,
+  counted: number,
+) =>
+  stockRequest<StockCountSession>(
+    accessToken,
+    `/counts/${countId}/lines/${lineId}`,
+    { counted },
+    "PUT",
+  );
 
 export const submitStockCount = (accessToken: string, countId: string) =>
   stockRequest<StockCountSession>(accessToken, `/counts/${countId}/submit`, {});
 
-export const giveStockCountReason = (accessToken: string, countId: string, lineId: string, reasonCode: string) =>
-  stockRequest<StockCountSession>(accessToken, `/counts/${countId}/lines/${lineId}/reason`, { reasonCode });
+export const giveStockCountReason = (
+  accessToken: string,
+  countId: string,
+  lineId: string,
+  reasonCode: string,
+) =>
+  stockRequest<StockCountSession>(
+    accessToken,
+    `/counts/${countId}/lines/${lineId}/reason`,
+    { reasonCode },
+  );
 
-export const decideStockCountLine = (accessToken: string, countId: string, lineId: string, approve: boolean) =>
-  stockRequest<StockCountSession>(accessToken, `/counts/${countId}/lines/${lineId}/decision`, { approve });
+export const decideStockCountLine = (
+  accessToken: string,
+  countId: string,
+  lineId: string,
+  approve: boolean,
+) =>
+  stockRequest<StockCountSession>(
+    accessToken,
+    `/counts/${countId}/lines/${lineId}/decision`,
+    { approve },
+  );
 
 export const listStockConversions = (accessToken: string, siteId: string) =>
-  stockRequest<StockConversion[]>(accessToken, `/conversions?siteId=${encodeURIComponent(siteId)}`);
+  stockRequest<StockConversion[]>(
+    accessToken,
+    `/conversions?siteId=${encodeURIComponent(siteId)}`,
+  );
 
 // ---- Gamification ----
 
@@ -1934,9 +2421,12 @@ export type MyProgress =
 /** The caller's own points, position, streak and badges. Self-service: the server only ever
  * returns the signed-in person's own numbers - never another person's name or points. */
 export function getMyProgress(accessToken: string, period: GamificationPeriod) {
-  return request<MyProgress>(`/gamification/me?period=${period}`, {}, accessToken);
+  return request<MyProgress>(
+    `/gamification/me?period=${period}`,
+    {},
+    accessToken,
+  );
 }
-
 
 // ---- Pay runs (organisation administrators and operations managers only) ----
 
@@ -2058,30 +2548,63 @@ export interface PayRun {
   people?: PayPerson[];
 }
 
-export const listPayRules = (t: string) => request<PayRuleRecord[]>("/payroll/rules", {}, t);
+export const listPayRules = (t: string) =>
+  request<PayRuleRecord[]>("/payroll/rules", {}, t);
 export const previewPayRun = (t: string, input: PayRunInput) =>
-  request<PayPreview>("/payroll/runs/preview", { method: "POST", body: JSON.stringify(input) }, t);
-export const listPayRuns = (t: string) => request<PayRun[]>("/payroll/runs", {}, t);
-export const getPayRun = (t: string, id: string) => request<PayRun>(`/payroll/runs/${id}`, {}, t);
+  request<PayPreview>(
+    "/payroll/runs/preview",
+    { method: "POST", body: JSON.stringify(input) },
+    t,
+  );
+export const listPayRuns = (t: string) =>
+  request<PayRun[]>("/payroll/runs", {}, t);
+export const getPayRun = (t: string, id: string) =>
+  request<PayRun>(`/payroll/runs/${id}`, {}, t);
 export const createPayRun = (t: string, input: PayRunInput) =>
-  request<PayRun>("/payroll/runs", { method: "POST", body: JSON.stringify(input) }, t);
+  request<PayRun>(
+    "/payroll/runs",
+    { method: "POST", body: JSON.stringify(input) },
+    t,
+  );
 export const updatePayRun = (t: string, id: string, input: PayRunInput) =>
-  request<PayRun>(`/payroll/runs/${id}`, { method: "PUT", body: JSON.stringify(input) }, t);
+  request<PayRun>(
+    `/payroll/runs/${id}`,
+    { method: "PUT", body: JSON.stringify(input) },
+    t,
+  );
 export const finalisePayRun = (t: string, id: string) =>
   request<PayRun>(`/payroll/runs/${id}/finalise`, { method: "POST" }, t);
 export const voidPayRun = (t: string, id: string, reason: string) =>
-  request<PayRun>(`/payroll/runs/${id}/void`, { method: "POST", body: JSON.stringify({ reason }) }, t);
+  request<PayRun>(
+    `/payroll/runs/${id}/void`,
+    { method: "POST", body: JSON.stringify({ reason }) },
+    t,
+  );
 export const deletePayRunDraft = (t: string, id: string) =>
   request<void>(`/payroll/runs/${id}`, { method: "DELETE" }, t);
-export const logPayRunExport = (t: string, id: string, document: string, person?: string) =>
+export const logPayRunExport = (
+  t: string,
+  id: string,
+  document: string,
+  person?: string,
+) =>
   request<void>(
     `/payroll/runs/${id}/exports`,
-    { method: "POST", body: JSON.stringify({ document, person: person ?? null }) },
+    {
+      method: "POST",
+      body: JSON.stringify({ document, person: person ?? null }),
+    },
     t,
   );
 
 // ---- Staff scheduling ----
-export type BookingSite = { id: string; name: string; address: string; latitude: number | null; longitude: number | null };
+export type BookingSite = {
+  id: string;
+  name: string;
+  address: string;
+  latitude: number | null;
+  longitude: number | null;
+};
 export type StaffBooking = {
   id: string;
   siteId: string;
@@ -2113,19 +2636,30 @@ export type BookStaffInput = {
 export const listMyBookings = (t: string, start: string, end: string) =>
   request<StaffBooking[]>(`/schedule/mine?start=${start}&end=${end}`, {}, t);
 export const listSiteBookings = (t: string, start: string, end: string) =>
-  request<StaffBooking[]>(`/schedule/bookings?start=${start}&end=${end}`, {}, t);
-export const listBookablePeople = (t: string, siteId: string) =>
-  request<{ id: string; name: string; role: string }[]>(`/schedule/people?siteId=${encodeURIComponent(siteId)}`, {}, t);
-export const bookStaff = (t: string, input: BookStaffInput) =>
-  request<{ created: StaffBooking[]; skipped: { userId: string; userName: string; date: string }[] }>(
-    "/schedule/bookings",
-    { method: "POST", body: JSON.stringify(input) },
+  request<StaffBooking[]>(
+    `/schedule/bookings?start=${start}&end=${end}`,
+    {},
     t,
   );
+export const listBookablePeople = (t: string, siteId: string) =>
+  request<{ id: string; name: string; role: string }[]>(
+    `/schedule/people?siteId=${encodeURIComponent(siteId)}`,
+    {},
+    t,
+  );
+export const bookStaff = (t: string, input: BookStaffInput) =>
+  request<{
+    created: StaffBooking[];
+    skipped: { userId: string; userName: string; date: string }[];
+  }>("/schedule/bookings", { method: "POST", body: JSON.stringify(input) }, t);
 /** The shifts set up for a site. They belong to Schedule: bookings name them, clock-in takes its
  * expected hours from them, and stock handover counts follow them. */
 export const listSiteShifts = (t: string, siteId: string) =>
-  request<StockShift[]>(`/schedule/shifts?siteId=${encodeURIComponent(siteId)}`, {}, t);
+  request<StockShift[]>(
+    `/schedule/shifts?siteId=${encodeURIComponent(siteId)}`,
+    {},
+    t,
+  );
 export const saveSiteShifts = (
   t: string,
   siteId: string,
@@ -2136,8 +2670,39 @@ export const saveSiteShifts = (
     { method: "PUT", body: JSON.stringify({ shifts }) },
     t,
   );
+/** Change or cancel several people's bookings on several days in one go. Send only what to change. */
+export const changeBookings = (
+  t: string,
+  input: {
+    siteId: string;
+    userIds: string[];
+    dates: string[];
+    action: "update" | "cancel";
+    shiftIds?: string[];
+    startTime?: string | null;
+    endTime?: string | null;
+    instructions?: string;
+  },
+) =>
+  request<{
+    changed: StaffBooking[];
+    skipped: {
+      userId: string;
+      userName: string;
+      date: string;
+      reason: string;
+    }[];
+  }>(
+    "/schedule/bookings/bulk",
+    { method: "POST", body: JSON.stringify(input) },
+    t,
+  );
 export const cancelBooking = (t: string, id: string) =>
-  request<StaffBooking>(`/schedule/bookings/${id}/cancel`, { method: "POST" }, t);
+  request<StaffBooking>(
+    `/schedule/bookings/${id}/cancel`,
+    { method: "POST" },
+    t,
+  );
 
 // ---- Leave ----
 export type LeaveStatus = "pending" | "approved" | "declined" | "cancelled";
@@ -2184,7 +2749,12 @@ export type LeaveBalance = {
   pending: number;
   remaining: number | null;
 };
-export type LeaveBalances = { userId: string; userName: string; year: number; balances: LeaveBalance[] };
+export type LeaveBalances = {
+  userId: string;
+  userName: string;
+  year: number;
+  balances: LeaveBalance[];
+};
 export type LeaveRequestInput = {
   typeId: string;
   startDate: string;
@@ -2194,21 +2764,47 @@ export type LeaveRequestInput = {
   noteUrl?: string | null;
 };
 
-export const listLeaveTypes = (t: string) => request<LeaveType[]>("/leave/types", {}, t);
-export const getLeaveBalances = (t: string) => request<LeaveBalances>("/leave/balance", {}, t);
-export const listLeaveRequests = (t: string, q: { status?: LeaveStatus; mine?: boolean } = {}) => {
+export const listLeaveTypes = (t: string) =>
+  request<LeaveType[]>("/leave/types", {}, t);
+export const getLeaveBalances = (t: string) =>
+  request<LeaveBalances>("/leave/balance", {}, t);
+export const listLeaveRequests = (
+  t: string,
+  q: { status?: LeaveStatus; mine?: boolean } = {},
+) => {
   const params = new URLSearchParams();
   if (q.status) params.set("status", q.status);
   if (q.mine) params.set("mine", "true");
   return request<LeaveRequest[]>(`/leave/requests?${params}`, {}, t);
 };
 export const requestLeave = (t: string, input: LeaveRequestInput) =>
-  request<LeaveRequest>("/leave/requests", { method: "POST", body: JSON.stringify(input) }, t);
-export const recordLeave = (t: string, input: LeaveRequestInput & { userId: string }) =>
-  request<LeaveRequest>("/leave/requests/record", { method: "POST", body: JSON.stringify(input) }, t);
-export const decideLeave = (t: string, id: string, approve: boolean, note?: string) =>
-  request<LeaveRequest>(`/leave/requests/${id}/decision`, { method: "POST", body: JSON.stringify({ approve, note: note ?? null }) }, t);
-export type OvertimeStatus = "awaiting_approval" | "approved" | "declined" | "expired" | "cancelled";
+  request<LeaveRequest>(
+    "/leave/requests",
+    { method: "POST", body: JSON.stringify(input) },
+    t,
+  );
+export const recordLeave = (
+  t: string,
+  input: LeaveRequestInput & { userId: string },
+) =>
+  request<LeaveRequest>(
+    "/leave/requests/record",
+    { method: "POST", body: JSON.stringify(input) },
+    t,
+  );
+export const decideLeave = (
+  t: string,
+  id: string,
+  approve: boolean,
+  note?: string,
+) =>
+  request<LeaveRequest>(
+    `/leave/requests/${id}/decision`,
+    { method: "POST", body: JSON.stringify({ approve, note: note ?? null }) },
+    t,
+  );
+export type OvertimeStatus =
+  "awaiting_approval" | "approved" | "declined" | "expired" | "cancelled";
 export interface OvertimeRequest {
   id: string;
   siteId: string;
@@ -2225,14 +2821,39 @@ export interface OvertimeRequest {
   decisionNote: string | null;
 }
 /** pending: waiting for me to decide; history: decided at my sites; mine: my own requests. */
-export const listOvertime = (t: string, scope: "pending" | "history" | "mine" = "pending") =>
-  request<{ requests: OvertimeRequest[] }>(`/attendance/overtime?scope=${scope}`, {}, t).then((r) => r.requests);
-export const decideOvertime = (t: string, id: string, approve: boolean, note?: string) =>
-  request<OvertimeRequest>(`/attendance/overtime/${id}/decide`, { method: "POST", body: JSON.stringify({ approve, note: note ?? null }) }, t);
-export const requestOvertime = (t: string, reason: string, requestedAt?: string) =>
-  request<OvertimeRequest>("/attendance/overtime", { method: "POST", body: JSON.stringify({ reason, requestedAt }) }, t);
+export const listOvertime = (
+  t: string,
+  scope: "pending" | "history" | "mine" = "pending",
+) =>
+  request<{ requests: OvertimeRequest[] }>(
+    `/attendance/overtime?scope=${scope}`,
+    {},
+    t,
+  ).then((r) => r.requests);
+export const decideOvertime = (
+  t: string,
+  id: string,
+  approve: boolean,
+  note?: string,
+) =>
+  request<OvertimeRequest>(
+    `/attendance/overtime/${id}/decide`,
+    { method: "POST", body: JSON.stringify({ approve, note: note ?? null }) },
+    t,
+  );
+export const requestOvertime = (
+  t: string,
+  reason: string,
+  requestedAt?: string,
+) =>
+  request<OvertimeRequest>(
+    "/attendance/overtime",
+    { method: "POST", body: JSON.stringify({ reason, requestedAt }) },
+    t,
+  );
 
-export const cancelLeave = (t: string, id: string) => request<LeaveRequest>(`/leave/requests/${id}/cancel`, { method: "POST" }, t);
+export const cancelLeave = (t: string, id: string) =>
+  request<LeaveRequest>(`/leave/requests/${id}/cancel`, { method: "POST" }, t);
 
 // ---- Maintenance ----
 // Mirrors backend/src/app/api/v1/maintenance.py. The server decides who may do what from the
@@ -2253,23 +2874,43 @@ export type MaintenanceState =
   | "cancelled"
   | "rework";
 export type MaintenanceSeverity = "low" | "medium" | "high" | "critical";
-export type MaintenanceQueue = "open" | "mine" | "need_quote" | "awaiting_approval" | "on_hold" | "scheduled" | "verify" | "closed";
-export type MaintenanceCapabilities = { report: boolean; handle: boolean; approve: boolean; pay: boolean };
-export type MaintenanceFile = { filePath: string; fileName?: string; label?: string; kind?: string };
+export type MaintenanceQueue =
+  | "open"
+  | "mine"
+  | "need_quote"
+  | "awaiting_approval"
+  | "on_hold"
+  | "scheduled"
+  | "verify"
+  | "payments"
+  | "closed";
+export type MaintenanceCapabilities = {
+  report: boolean;
+  handle: boolean;
+  approve: boolean;
+  pay: boolean;
+};
+export type MaintenanceFile = {
+  filePath: string;
+  fileName?: string;
+  label?: string;
+  kind?: string;
+};
 export type MaintenanceQuote = {
   id: string;
-  supplierName: string;
+  contractorName: string;
   amount: number;
   depositAmount: number;
   revision: number;
-  status: "submitted" | "approved" | "rejected" | "changes_requested" | "superseded";
+  status:
+    "submitted" | "approved" | "rejected" | "changes_requested" | "superseded";
   files: { filePath: string; fileName: string }[];
   decisionComment: string | null;
   selfApproved: boolean;
 };
 export type MaintenanceInvoice = {
   id: string;
-  supplierName: string;
+  contractorName: string;
   kind: "deposit" | "invoice";
   number: string | null;
   amount: number;
@@ -2278,10 +2919,23 @@ export type MaintenanceInvoice = {
   state: "unpaid" | "pop_recorded" | "part_paid" | "paid" | "disputed";
   popFiles: { filePath: string; fileName: string; amount?: number }[];
   popForwardedAt: string | null;
-  supplierAckAt: string | null;
+  contractorAckAt: string | null;
 };
-export type MaintenanceHold = { id: string; reason: string; note: string; active: boolean; override: boolean; releasedAt: string | null };
-export type MaintenanceEvent = { id: string; kind: string; actorName: string | null; message: string; createdAt: string };
+export type MaintenanceHold = {
+  id: string;
+  reason: string;
+  note: string;
+  active: boolean;
+  override: boolean;
+  releasedAt: string | null;
+};
+export type MaintenanceEvent = {
+  id: string;
+  kind: string;
+  actorName: string | null;
+  message: string;
+  createdAt: string;
+};
 export type MaintenanceJob = {
   id: string;
   siteId: string;
@@ -2290,10 +2944,18 @@ export type MaintenanceJob = {
   title: string;
   description: string;
   severity: MaintenanceSeverity;
+  /** What the fault came from: a task (and one of its checklist items), an incident, or nothing. */
+  origin?: {
+    type?: "task" | "incident" | "adhoc";
+    id?: string;
+    checklistItemId?: string;
+  };
   handlerId: string | null;
   path: "internal" | "contractor";
   state: MaintenanceState;
   approvedAmount: number | null;
+  /** What the job really cost, typed in when it was closed. May differ from the approved amount. */
+  finalCost?: number | null;
   visitAt: string | null;
   evidence: { id: string; filePath: string; label: string }[];
   createdAt: string;
@@ -2307,16 +2969,54 @@ export type MaintenanceJob = {
   invoices?: MaintenanceInvoice[];
   capabilities?: MaintenanceCapabilities;
 };
-export type MaintenanceSupplier = { id: string; name: string; preferred: boolean };
+export type MaintenanceContractor = {
+  id: string;
+  name: string;
+  contactPerson: string | null;
+  phone: string | null;
+  email: string | null;
+  categories: string[];
+  preferred: boolean;
+  notes: string | null;
+  active: boolean;
+  jobs: number;
+  openJobs: number;
+  /** Only returned to people who pay for maintenance. */
+  bankName?: string | null;
+  bankBranchCode?: string | null;
+  bankAccountNumber?: string | null;
+};
+export type MaintenanceContractorInput = {
+  name: string;
+  contactPerson?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  categories?: string[];
+  preferred?: boolean;
+  notes?: string | null;
+  bankName?: string | null;
+  bankBranchCode?: string | null;
+  bankAccountNumber?: string | null;
+};
 
 const maintenanceBody = (method: string, body?: unknown): RequestInit => ({
   method,
   body: body === undefined ? undefined : JSON.stringify(body),
 });
 
-export const listMaintenanceJobs = (token: string, queue: MaintenanceQueue = "open") =>
-  request<MaintenanceJob[]>(`/maintenance/jobs?queue=${queue}`, {}, token);
-export const getMaintenanceJob = (token: string, id: string) => request<MaintenanceJob>(`/maintenance/jobs/${id}`, {}, token);
+export const listMaintenanceJobs = (
+  token: string,
+  queue: MaintenanceQueue = "open",
+) => request<MaintenanceJob[]>(`/maintenance/jobs?queue=${queue}`, {}, token);
+/** Every job raised from one task, open or closed. */
+export const listMaintenanceJobsForTask = (token: string, taskId: string) =>
+  request<MaintenanceJob[]>(
+    `/maintenance/jobs?taskId=${encodeURIComponent(taskId)}`,
+    {},
+    token,
+  );
+export const getMaintenanceJob = (token: string, id: string) =>
+  request<MaintenanceJob>(`/maintenance/jobs/${id}`, {}, token);
 export const createMaintenanceJob = (
   token: string,
   body: {
@@ -2326,41 +3026,131 @@ export const createMaintenanceJob = (
     description?: string;
     severity?: MaintenanceSeverity;
     path?: "internal" | "contractor";
-    origin?: { type: "task" | "incident" | "adhoc"; id?: string; checklistItemId?: string };
+    origin?: {
+      type: "task" | "incident" | "adhoc";
+      id?: string;
+      checklistItemId?: string;
+    };
     photos?: MaintenanceFile[];
   },
-) => request<MaintenanceJob>("/maintenance/jobs", maintenanceBody("POST", body), token);
+) =>
+  request<MaintenanceJob>(
+    "/maintenance/jobs",
+    maintenanceBody("POST", body),
+    token,
+  );
 export const commentOnMaintenanceJob = (
   token: string,
   id: string,
   message: string,
   kind: "comment" | "supplier_response" | "supplier_refused" = "comment",
-) => request<MaintenanceJob>(`/maintenance/jobs/${id}/comments`, maintenanceBody("POST", { message, kind }), token);
+) =>
+  request<MaintenanceJob>(
+    `/maintenance/jobs/${id}/comments`,
+    maintenanceBody("POST", { message, kind }),
+    token,
+  );
 export const moveMaintenanceJob = (
   token: string,
   id: string,
   to: MaintenanceState,
   extra: { note?: string; finalCost?: number; visitAt?: string } = {},
-) => request<MaintenanceJob>(`/maintenance/jobs/${id}/transition`, maintenanceBody("POST", { to, ...extra }), token);
+) =>
+  request<MaintenanceJob>(
+    `/maintenance/jobs/${id}/transition`,
+    maintenanceBody("POST", { to, ...extra }),
+    token,
+  );
 export const addMaintenanceQuote = (
   token: string,
   id: string,
-  body: { supplierId: string; reference?: string; amount: number; depositAmount?: number; files: MaintenanceFile[]; supersedesId?: string },
-) => request<MaintenanceJob>(`/maintenance/jobs/${id}/quotes`, maintenanceBody("POST", body), token);
+  body: {
+    contractorId: string;
+    reference?: string;
+    amount: number;
+    depositAmount?: number;
+    files: MaintenanceFile[];
+    supersedesId?: string;
+  },
+) =>
+  request<MaintenanceJob>(
+    `/maintenance/jobs/${id}/quotes`,
+    maintenanceBody("POST", body),
+    token,
+  );
 export const decideMaintenanceQuote = (
   token: string,
   id: string,
   quoteId: string,
   decision: "approve" | "reject" | "request_changes",
   comment = "",
-) => request<MaintenanceJob>(`/maintenance/jobs/${id}/quotes/${quoteId}/decision`, maintenanceBody("POST", { decision, comment }), token);
-export const recordMaintenancePop = (token: string, invoiceId: string, files: MaintenanceFile[], amount: number) =>
-  request<MaintenanceInvoice>(`/maintenance/invoices/${invoiceId}/pop`, maintenanceBody("POST", { files, amount }), token);
+) =>
+  request<MaintenanceJob>(
+    `/maintenance/jobs/${id}/quotes/${quoteId}/decision`,
+    maintenanceBody("POST", { decision, comment }),
+    token,
+  );
+export const recordMaintenancePop = (
+  token: string,
+  invoiceId: string,
+  files: MaintenanceFile[],
+  amount: number,
+) =>
+  request<MaintenanceInvoice>(
+    `/maintenance/invoices/${invoiceId}/pop`,
+    maintenanceBody("POST", { files, amount }),
+    token,
+  );
 export const verifyMaintenancePayment = (token: string, invoiceId: string) =>
-  request<MaintenanceInvoice>(`/maintenance/invoices/${invoiceId}/verify`, maintenanceBody("POST"), token);
-export const forwardMaintenancePop = (token: string, invoiceId: string, supplierAcknowledged = false) =>
-  request<MaintenanceInvoice>(`/maintenance/invoices/${invoiceId}/forwarded`, maintenanceBody("POST", { supplierAcknowledged }), token);
-export const listMaintenanceSuppliers = (token: string) => request<MaintenanceSupplier[]>("/maintenance/suppliers", {}, token);
+  request<MaintenanceInvoice>(
+    `/maintenance/invoices/${invoiceId}/verify`,
+    maintenanceBody("POST"),
+    token,
+  );
+export const forwardMaintenancePop = (
+  token: string,
+  invoiceId: string,
+  contractorAcknowledged = false,
+) =>
+  request<MaintenanceInvoice>(
+    `/maintenance/invoices/${invoiceId}/forwarded`,
+    maintenanceBody("POST", { contractorAcknowledged }),
+    token,
+  );
+export const listMaintenanceContractors = (
+  token: string,
+  includeArchived = false,
+) =>
+  request<MaintenanceContractor[]>(
+    `/maintenance/contractors${includeArchived ? "?includeArchived=true" : ""}`,
+    {},
+    token,
+  );
+export const createMaintenanceContractor = (
+  token: string,
+  body: MaintenanceContractorInput,
+) =>
+  request<MaintenanceContractor>(
+    "/maintenance/contractors",
+    maintenanceBody("POST", body),
+    token,
+  );
+export const updateMaintenanceContractor = (
+  token: string,
+  id: string,
+  changes: Partial<MaintenanceContractorInput> & { active?: boolean },
+) =>
+  request<MaintenanceContractor>(
+    `/maintenance/contractors/${id}`,
+    maintenanceBody("PATCH", changes),
+    token,
+  );
+export const deleteMaintenanceContractor = (token: string, id: string) =>
+  request<{ deleted: boolean; archived: boolean; name: string }>(
+    `/maintenance/contractors/${id}`,
+    maintenanceBody("DELETE"),
+    token,
+  );
 
 // ---- Platform feedback inbox (Šoma360's own staff only) ----
 
@@ -2392,11 +3182,24 @@ export type PlatformFeedbackCounts = {
   thisWeek: number;
   openByCategory: Record<"bug" | "idea" | "question" | "other", number>;
 };
-export type PlatformFeedbackPage = { items: PlatformFeedback[]; total: number; page: number; pageSize: number; counts: PlatformFeedbackCounts };
+export type PlatformFeedbackPage = {
+  items: PlatformFeedback[];
+  total: number;
+  page: number;
+  pageSize: number;
+  counts: PlatformFeedbackCounts;
+};
 
 export function listPlatformFeedback(
   accessToken: string,
-  query: { status?: FeedbackStatus | "open"; category?: string; starred?: boolean; q?: string; page?: number; pageSize?: number } = {},
+  query: {
+    status?: FeedbackStatus | "open";
+    category?: string;
+    starred?: boolean;
+    q?: string;
+    page?: number;
+    pageSize?: number;
+  } = {},
 ) {
   const params = new URLSearchParams();
   if (query.status) params.set("status", query.status);
@@ -2405,17 +3208,38 @@ export function listPlatformFeedback(
   if (query.q?.trim()) params.set("q", query.q.trim());
   params.set("page", String(query.page ?? 1));
   params.set("pageSize", String(query.pageSize ?? 30));
-  return request<PlatformFeedbackPage>(`/platform/feedback?${params.toString()}`, {}, accessToken);
+  return request<PlatformFeedbackPage>(
+    `/platform/feedback?${params.toString()}`,
+    {},
+    accessToken,
+  );
 }
 export function updatePlatformFeedback(
   accessToken: string,
   id: string,
   changes: { status?: FeedbackStatus; starred?: boolean; note?: string },
 ) {
-  return request<PlatformFeedback>(`/platform/feedback/${id}`, { method: "PATCH", body: JSON.stringify(changes) }, accessToken);
+  return request<PlatformFeedback>(
+    `/platform/feedback/${id}`,
+    { method: "PATCH", body: JSON.stringify(changes) },
+    accessToken,
+  );
 }
 
-export type MaintenanceSummary = Record<MaintenanceQueue | "critical", number>;
-export const getMaintenanceSummary = (token: string) => request<MaintenanceSummary>("/maintenance/summary", {}, token);
+export type MaintenanceSummary = Record<
+  MaintenanceQueue | "critical",
+  number
+> & {
+  /** Deposits and invoices not yet settled: how many are past their due date and the total still owing.
+   * Zero for anyone who does not pay: money is only shown to the people who pay. */
+  payments_overdue?: number;
+  payments_owing?: number;
+};
+export const getMaintenanceSummary = (token: string) =>
+  request<MaintenanceSummary>("/maintenance/summary", {}, token);
 export const getMaintenanceMe = (token: string) =>
-  request<{ capabilities: MaintenanceCapabilities }>("/maintenance/me", {}, token);
+  request<{ capabilities: MaintenanceCapabilities }>(
+    "/maintenance/me",
+    {},
+    token,
+  );
