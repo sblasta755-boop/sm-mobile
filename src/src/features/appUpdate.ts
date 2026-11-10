@@ -16,7 +16,7 @@ import {
 
 // Which build of the app is current, and whether this install should update.
 // Offline-safe: the last answer is cached, a failed check changes nothing.
-const RELEASE_KEY = "soma.appUpdate.release.v1";
+const RELEASE_KEY = "soma.appUpdate.release.v2";
 const SNOOZE_KEY = "soma.appUpdate.snooze.v1";
 const CHECK_EVERY_MS = 3 * 60 * 60 * 1000;
 const TIMEOUT_MS = 8000;
@@ -46,8 +46,12 @@ async function restore() {
   try {
     const raw = await AsyncStorage.getItem(RELEASE_KEY);
     if (raw && !release) {
-      release = parseRelease(JSON.parse(raw));
-      emit();
+      // Saved with the build it was answered for: "update available" is about that install only.
+      const saved = JSON.parse(raw) as { installed?: number | null; release?: unknown };
+      if (saved.installed === installedBuild) {
+        release = parseRelease(saved.release);
+        emit();
+      }
     }
   } catch {
     /* nothing cached */
@@ -62,7 +66,7 @@ export async function checkForUpdate(force = false): Promise<void> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
-    const res = await fetch(`${API_BASE_URL}/app/release?platform=android`, { signal: controller.signal });
+    const res = await fetch(`${API_BASE_URL}/app/release?platform=android${installedBuild ? `&installed=${installedBuild}` : ""}`, { signal: controller.signal });
     checkedAt = Date.now();
     if (res.status === 204) {
       release = null;
@@ -70,7 +74,7 @@ export async function checkForUpdate(force = false): Promise<void> {
       const next = parseRelease(await res.json());
       if (!next) return;
       release = next;
-      AsyncStorage.setItem(RELEASE_KEY, JSON.stringify(next)).catch(() => {});
+      AsyncStorage.setItem(RELEASE_KEY, JSON.stringify({ installed: installedBuild, release: next })).catch(() => {});
     } else {
       return;
     }
