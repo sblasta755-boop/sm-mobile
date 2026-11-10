@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { router } from "expo-router";
 import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -111,6 +111,11 @@ export default function ScanScreen() {
   const [recent, setRecent] = useState<string[]>([]);
   const [approval, setApproval] = useState<{ siteName: string; at: string } | null>(null);
   const [distanceMapOpen, setDistanceMapOpen] = useState(false);
+  // A "too far" refusal opens the distance map straight away; the button stays for reopening it.
+  const geofenceDetail = result?.geofenceDetail;
+  useEffect(() => {
+    if (geofenceDetail) setDistanceMapOpen(true);
+  }, [geofenceDetail]);
   // A claimable hourly-compliance round the last scan found but hasn't
   // claimed yet - see QrCodesController.resolve's confirmClaim
   // handling. Cleared once the cleaner confirms (or backs out).

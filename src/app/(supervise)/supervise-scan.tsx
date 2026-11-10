@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { router } from "expo-router";
 import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -92,6 +92,11 @@ export default function SuperviseScan() {
   const [result, setResult] = useState<ScanResult | null>(null);
   const [approval, setApproval] = useState<{ siteName: string; at: string } | null>(null);
   const [distanceMapOpen, setDistanceMapOpen] = useState(false);
+  // A "too far" refusal opens the distance map straight away; the button stays for reopening it.
+  const geofenceDetail = result?.geofenceDetail;
+  useEffect(() => {
+    if (geofenceDetail) setDistanceMapOpen(true);
+  }, [geofenceDetail]);
   const [scanning, setScanning] = useState(false);
   const scanLockRef = useRef(false);
   // Site-wide tasks the site QR can start (resolve's siteTasks) - offered

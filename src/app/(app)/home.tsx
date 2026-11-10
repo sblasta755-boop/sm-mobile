@@ -37,9 +37,15 @@ import { DateStrip, isSameDay } from "@/components/DateStrip";
 import { useDaySelection } from "@/features/useDaySelection";
 import { useHasCapability, useHasModule } from "@/features/modules";
 import {
+  ApiError,
   clockIn as clockInRequest,
   clockOut as clockOutRequest,
 } from "@/api/client";
+import {
+  GeofenceMapSheet,
+  asGeofenceDetail,
+  type GeofenceDetail,
+} from "@/components/GeofenceMapSheet";
 import { getCurrentCoords } from "@/services/geolocation";
 import { fileUrl } from "@/api/client";
 import { useStaffRole } from "@/features/roles";
@@ -90,6 +96,7 @@ export default function HomeScreen() {
   const canGeofenceClock = useHasCapability("geofence_attendance");
   const hasQr = useHasCapability("qr_codes");
   const [clocking, setClocking] = useState(false);
+  const [tooFar, setTooFar] = useState<GeofenceDetail | null>(null);
   // Today, and the day being looked at; both reset to today whenever the screen is opened or midnight passes.
   const { today, selectedDate, setSelectedDate } = useDaySelection();
   const site = state.sites.find((s) => currentUser?.siteIds.includes(s.id));
@@ -179,6 +186,12 @@ export default function HomeScreen() {
       else await clockOutRequest(state.accessToken, payload);
       await refreshBackendData();
     } catch (error) {
+      // Refused for being outside the site's radius: show where they are against it.
+      const detail = error instanceof ApiError ? asGeofenceDetail(error.detail) : undefined;
+      if (detail) {
+        setTooFar(detail);
+        return;
+      }
       appAlert(
         direction === "in" ? "Could not clock in" : "Could not clock out",
         error instanceof Error ? error.message : "Please try again.",
@@ -451,6 +464,7 @@ export default function HomeScreen() {
           />
         ))}
       </View>
+      <GeofenceMapSheet detail={tooFar} siteName={site?.name} onClose={() => setTooFar(null)} />
     </Screen>
   );
 }
