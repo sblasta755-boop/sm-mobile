@@ -1,4 +1,5 @@
 import Constants from "expo-constants";
+import type { VerificationStep, buildAnswers as buildVerificationAnswers } from "@/domain/verification";
 import type {
   AirbnbTurnover,
   Asset,
@@ -3445,3 +3446,180 @@ export const getMaintenanceMe = (token: string) =>
     {},
     token,
   );
+
+// ---- Noticeboard ----
+
+export type NoticeCategory =
+  | "general"
+  | "meeting"
+  | "safety"
+  | "schedule_change"
+  | "policy"
+  | "celebration";
+export type NoticeStatus = "draft" | "published" | "archived" | "cancelled";
+export type NoticeAudience = { all: boolean; siteIds: string[]; roles: string[]; userIds: string[] };
+export type NoticeAttachment = { url: string; name: string; type: string };
+export type NoticeRecurrence = { weekdays: number[]; until: string };
+export type NoticeReminder = "1d" | "1h" | "morning";
+
+export type Notice = {
+  id: string;
+  title: string;
+  body: string;
+  category: NoticeCategory;
+  audience: NoticeAudience;
+  startDate: string | null;
+  endDate: string | null;
+  startTime: string | null;
+  endTime: string | null;
+  recurrence: NoticeRecurrence | null;
+  /** Today or the next day it applies on. */
+  nextDate: string | null;
+  /** "Tue 8 Dec 08:00", "Every Tue", or empty for a notice with no date. */
+  whenText: string;
+  pinned: boolean;
+  requiresAck: boolean;
+  alsoEmail: boolean;
+  reminders: NoticeReminder[];
+  attachments: NoticeAttachment[];
+  status: NoticeStatus;
+  publishedAt: string | null;
+  createdAt: string;
+  createdBy: string;
+  authorName: string;
+  authorRole: string;
+  read: boolean;
+  acked: boolean;
+  /** This person has been asked to acknowledge and has not. */
+  needsAck: boolean;
+  canManage: boolean;
+  live: boolean;
+  /** Only for the author and managers. */
+  recipientCount?: number;
+  readCount?: number;
+  ackCount?: number;
+};
+
+export type NoticeInput = {
+  title: string;
+  body: string;
+  category: NoticeCategory;
+  audience: NoticeAudience;
+  startDate: string | null;
+  endDate: string | null;
+  startTime: string | null;
+  endTime: string | null;
+  recurrence: NoticeRecurrence | null;
+  pinned: boolean;
+  requiresAck: boolean;
+  alsoEmail: boolean;
+  reminders: NoticeReminder[];
+  attachments: NoticeAttachment[];
+};
+
+export type NoticeCalendarEntry = {
+  id: string;
+  title: string;
+  category: NoticeCategory;
+  date: string;
+  startTime: string | null;
+  endTime: string | null;
+  read: boolean;
+  needsAck: boolean;
+};
+
+export type NoticeReceipts = {
+  requiresAck: boolean;
+  total: number;
+  read: number;
+  acked: number;
+  people: {
+    userId: string;
+    name: string;
+    role: string;
+    state: "unread" | "read" | "acked";
+    readAt: string | null;
+    ackedAt: string | null;
+  }[];
+};
+
+export type NoticeScope = "board" | "drafts" | "archived";
+
+export const listNotices = (t: string, q: { scope?: NoticeScope; siteId?: string; category?: string } = {}) => {
+  const params = new URLSearchParams();
+  if (q.scope) params.set("scope", q.scope);
+  if (q.siteId) params.set("siteId", q.siteId);
+  if (q.category) params.set("category", q.category);
+  return request<Notice[]>(`/notices?${params}`, {}, t);
+};
+export const getNoticeUnreadCount = (t: string) =>
+  request<{ count: number }>("/notices/unread-count", {}, t);
+export const listNoticeCalendar = (t: string, start: string, end: string) =>
+  request<NoticeCalendarEntry[]>(`/notices/calendar?start=${start}&end=${end}`, {}, t);
+export const getNotice = (t: string, id: string) => request<Notice>(`/notices/${id}`, {}, t);
+export const createNotice = (t: string, input: NoticeInput, publish: boolean) =>
+  request<Notice>("/notices", { method: "POST", body: JSON.stringify({ ...input, publish }) }, t);
+export const updateNotice = (t: string, id: string, input: NoticeInput, notifyChange: boolean) =>
+  request<Notice>(
+    `/notices/${id}`,
+    { method: "PATCH", body: JSON.stringify({ ...input, notifyChange }) },
+    t,
+  );
+export const publishNotice = (t: string, id: string) =>
+  request<Notice>(`/notices/${id}/publish`, { method: "POST" }, t);
+export const archiveNotice = (t: string, id: string) =>
+  request<Notice>(`/notices/${id}/archive`, { method: "POST" }, t);
+export const cancelNotice = (t: string, id: string) =>
+  request<Notice>(`/notices/${id}/cancel`, { method: "POST" }, t);
+export const deleteNoticeDraft = (t: string, id: string) =>
+  request<void>(`/notices/${id}`, { method: "DELETE" }, t);
+export const acknowledgeNotice = (t: string, id: string) =>
+  request<Notice>(`/notices/${id}/ack`, { method: "POST" }, t);
+export const getNoticeReceipts = (t: string, id: string) =>
+  request<NoticeReceipts>(`/notices/${id}/receipts`, {}, t);
+export const nudgeNotice = (t: string, id: string) =>
+  request<{ sent: number }>(`/notices/${id}/nudge`, { method: "POST" }, t);
+export const refreshNoticeAudience = (t: string, id: string) =>
+  request<{ added: number }>(`/notices/${id}/refresh-audience`, { method: "POST" }, t);
+
+
+// ---- Order verification ----
+
+export interface VerificationWorkflow {
+  id: string;
+  siteId: string | null;
+  name: string;
+  description: string;
+  steps: VerificationStep[];
+  version: number;
+  isActive: boolean;
+}
+
+export interface VerificationRunReceipt {
+  id: string;
+  reference: string | null;
+  workflowName: string;
+  submittedAt: string;
+}
+
+export const listAvailableVerificationWorkflows = (token: string) =>
+  request<VerificationWorkflow[]>("/verification/workflows/available", {}, token);
+
+/** Name the person behind a staff QR. Rejects when the code is not from this organisation. */
+export const resolveVerificationScan = (token: string, value: string) =>
+  request<{ userId: string; name: string; role: string }>(
+    "/verification/scan/resolve",
+    { method: "POST", body: JSON.stringify({ value }) },
+    token,
+  );
+
+export const submitVerificationRun = (
+  token: string,
+  body: {
+    workflowId: string;
+    idempotencyKey: string;
+    siteId?: string | null;
+    startedAt?: string;
+    answers: ReturnType<typeof buildVerificationAnswers>;
+  },
+) => request<VerificationRunReceipt>("/verification/runs", { method: "POST", body: JSON.stringify(body) }, token);

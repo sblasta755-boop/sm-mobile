@@ -11,7 +11,9 @@ export type HomeTileKey =
   | "incident"
   | "schedule"
   | "leave"
+  | "noticeboard"
   | "maintenance"
+  | "verification"
   | "progress";
 
 export type HomeTileAction = { kind: "route"; path: string };
@@ -40,10 +42,16 @@ export interface HomeTileInput {
   schedule: boolean;
   /** The Leave module is on. */
   leave?: boolean;
+  /** The Noticeboard module is on. */
+  noticeboard?: boolean;
+  /** Notices addressed to this person that they have not opened. */
+  noticesUnread?: number;
   /** The Maintenance module is on: report a fault, follow it through. */
   maintenance?: boolean;
   /** Deposits and invoices waiting to be paid; only people who pay for maintenance ever get a number. */
   maintenancePayments?: number;
+  /** The Order verification module is on: run a photo and scan check on an order. */
+  verification?: boolean;
   /** Gamification is on for this person. */
   progress: boolean;
 }
@@ -106,6 +114,17 @@ export function homeTiles(input: HomeTileInput): HomeTile[] {
       action: { kind: "route", path: "/schedule" },
     });
   }
+  if (input.noticeboard) {
+    const unread = input.noticesUnread ?? 0;
+    tiles.push({
+      key: "noticeboard",
+      label: "Noticeboard",
+      icon: "megaphone-outline",
+      action: { kind: "route", path: "/noticeboard" },
+      hint: unread > 0 ? `${unread} new` : "What to know",
+      badge: unread > 0 ? unread : undefined,
+    });
+  }
   if (input.leave) {
     tiles.push({
       key: "leave",
@@ -129,6 +148,15 @@ export function homeTiles(input: HomeTileInput): HomeTile[] {
         (input.maintenancePayments ?? 0) > 0
           ? input.maintenancePayments
           : undefined,
+    });
+  }
+  if (input.verification) {
+    tiles.push({
+      key: "verification",
+      label: "Verify an order",
+      icon: "scan-outline",
+      action: { kind: "route", path: "/verification" },
+      hint: "Photos and scans",
     });
   }
   if (input.progress) {

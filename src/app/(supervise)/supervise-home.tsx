@@ -14,6 +14,7 @@ import { useMyProgress } from "@/components/ProgressCard";
 import { useUpcomingBooking } from "@/components/UpcomingBookingCard";
 import { TodayCard } from "@/components/TodayCard";
 import { useLeaveOn } from "@/features/leave";
+import { useNoticeboardOn, useNoticesUnread } from "@/features/noticeboard";
 import { useMaintenanceOn } from "@/features/maintenance";
 import { useScheduleOn } from "@/features/schedule";
 import { ActionTiles } from "@/components/ActionTiles";
@@ -98,6 +99,8 @@ export default function SuperviseHome() {
 
   const scheduleOn = useScheduleOn();
   const leaveOn = useLeaveOn();
+  const noticeboardOn = useNoticeboardOn();
+  const noticesUnread = useNoticesUnread(noticeboardOn);
   const maintenanceOn = useMaintenanceOn();
   const nextBooking = useUpcomingBooking();
   const progress = useMyProgress();
@@ -182,6 +185,9 @@ export default function SuperviseHome() {
             : []),
           ...(progress
             ? [{ key: "progress", label: "My progress", icon: <Ionicons name="trophy-outline" size={20} color={colors.primary} />, onPress: () => router.push("/progress" as never) }]
+            : []),
+          ...(noticeboardOn
+            ? [{ key: "noticeboard", label: "Noticeboard", icon: <Ionicons name="megaphone-outline" size={20} color={colors.primary} />, onPress: () => router.push("/noticeboard" as never), badge: noticesUnread || undefined }]
             : []),
           ...(leaveOn
             ? [{ key: "leave", label: "Leave", icon: <Ionicons name="airplane-outline" size={20} color={colors.primary} />, onPress: () => router.push("/leave" as never) }]

@@ -38,6 +38,15 @@ test("a feature that is off never appears, and an open-action count of zero hide
   expect(keys({ ...off, schedule: true })).toEqual(["schedule"]);
 });
 
+test("the noticeboard tile shows only when the module is on and flags unread notices", () => {
+  expect(keys(off)).not.toContain("noticeboard");
+  const tile = homeTiles({ ...off, noticeboard: true, noticesUnread: 2 }).find((t) => t.key === "noticeboard");
+  expect(tile?.action).toEqual({ kind: "route", path: "/noticeboard" });
+  expect(tile?.badge).toBe(2);
+  expect(tile?.hint).toBe("2 new");
+  expect(homeTiles({ ...off, noticeboard: true }).find((t) => t.key === "noticeboard")?.badge).toBeUndefined();
+});
+
 test("a single open corrective action opens it directly; several open the list", () => {
   const one = homeTiles({ ...off, correctiveActions: true, openCorrective: { count: 1, onlyId: "ca_1" } }).find((t) => t.key === "corrective");
   expect(one?.action).toEqual({ kind: "route", path: "/corrective-actions/ca_1" });
@@ -73,6 +82,11 @@ test("a leave tile shows when the module is on, after the schedule tile", () => 
 test("a maintenance tile shows when the module is on, after leave", () => {
   expect(keys({ ...off, leave: true, maintenance: true })).toEqual(["leave", "maintenance"]);
   expect(keys({ ...off, maintenance: false })).toEqual([]);
+});
+
+test("a verify-an-order tile shows when the module is on, after maintenance", () => {
+  expect(keys({ ...off, maintenance: true, verification: true })).toEqual(["maintenance", "verification"]);
+  expect(keys({ ...off, verification: false })).toEqual([]);
 });
 
 describe("maintenance payments", () => {

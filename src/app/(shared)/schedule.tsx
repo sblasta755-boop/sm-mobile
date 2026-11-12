@@ -10,9 +10,11 @@ import { ScheduleMap } from "@/components/ScheduleMap";
 import { CalendarFrame, CalendarLegend, DotStrip, MonthTiles, type DayTileData } from "@/components/MonthCalendar";
 import { heatColor, monthDays, monthTitle } from "@/domain/calendarGrid";
 import { appAlert } from "@/components/Dialog";
+import { NoticeChips } from "@/components/NoticeBits";
 import { cancelBooking, listMyBookings, listSiteBookings, type StaffBooking } from "@/api/client";
 import { addDays, bookingTime, isPastDay, mondayOf, dateKey, dayHeading, groupByDay, mapsUrl, parseDateKey } from "@/domain/schedule";
 import { useCanBook, useScheduleOn } from "@/features/schedule";
+import { useCanPostNotices, useNoticeCalendar, useNoticeboardOn } from "@/features/noticeboard";
 import { useHomePath } from "@/features/roles";
 import { useSmartClean } from "@/features/store";
 import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
@@ -55,6 +57,18 @@ export default function ScheduleScreen() {
       if (on) void load();
     }, [on, load]),
   );
+
+  // Dated notices for the same window the bookings cover, shown on their days.
+  const noticeRange = useMemo(() => {
+    const gridStart = mondayOf(monthStart);
+    return view === "calendar"
+      ? { start: dateKey(gridStart), end: dateKey(addDays(gridStart, 41)) }
+      : { start: dateKey(new Date()), end: dateKey(addDays(new Date(), AHEAD_DAYS)) };
+  }, [view, monthStart]);
+  const notices = useNoticeCalendar(noticeRange.start, noticeRange.end);
+  const noticeboardOn = useNoticeboardOn();
+  const canPostNotice = useCanPostNotices();
+  const openNotice = (id: string) => router.push(`/notice/${id}` as never);
 
   const groups = useMemo(() => groupByDay(bookings ?? []), [bookings]);
   const activeDay = mapDay && groups.some((g) => g.date === mapDay) ? mapDay : (groups[0]?.date ?? null);
@@ -184,7 +198,20 @@ export default function ScheduleScreen() {
             />
           </CalendarFrame>
           <Text style={styles.dayHeading}>{dayHeading(pickedDay)}</Text>
+          <NoticeChips entries={notices.get(pickedDay)} onOpen={openNotice} />
           {canBook && !isPastDay(pickedDay) && <Button onPress={() => router.push(`/schedule-book?date=${pickedDay}` as never)}>Book staff on this day</Button>}
+          {noticeboardOn && canPostNotice && !isPastDay(pickedDay) && (
+            <Button
+              variant="outline"
+              icon={<Ionicons name="megaphone-outline" size={18} color={colors.primary} />}
+              onPress={() => {
+                const booked = [...new Set((bookings ?? []).filter((b) => b.date === pickedDay && b.status !== "cancelled").map((b) => b.userId))];
+                router.push(`/notice-new?date=${pickedDay}${booked.length ? `&people=${booked.join(",")}` : ""}` as never);
+              }}
+            >
+              Add a notice for this day
+            </Button>
+          )}
           {isPastDay(pickedDay) && <Text style={styles.muted}>This day has passed, so it can be viewed but not changed.</Text>}
           {(bookings ?? []).filter((b) => b.date === pickedDay && b.status !== "cancelled").map(renderCard)}
           {bookings && !(bookings ?? []).some((b) => b.date === pickedDay && b.status !== "cancelled") && (
@@ -194,10 +221,11 @@ export default function ScheduleScreen() {
       )}
 
       {bookings && view === "list" &&
-        groups.map((g) => (
-          <View key={g.date} style={styles.day}>
-            <Text style={styles.dayHeading}>{dayHeading(g.date)}</Text>
-            {g.items.map(renderCard)}
+        [...new Set([...groups.map((g) => g.date), ...notices.keys()])].sort().map((date) => (
+          <View key={date} style={styles.day}>
+            <Text style={styles.dayHeading}>{dayHeading(date)}</Text>
+            <NoticeChips entries={notices.get(date)} onOpen={openNotice} />
+            {(groups.find((g) => g.date === date)?.items ?? []).map(renderCard)}
           </View>
         ))}
     </Screen>

@@ -24,6 +24,7 @@ import { focusTasks } from "@/domain/todayFocus";
 import { homeTaskView } from "@/domain/homeTasks";
 import { homeTiles } from "@/domain/homeTiles";
 import { useLeaveOn } from "@/features/leave";
+import { useNoticeboardOn, useNoticesUnread } from "@/features/noticeboard";
 import {
   useMaintenanceOn,
   useMaintenancePayments,
@@ -35,7 +36,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { TaskRow } from "@/components/TaskRow";
 import { DateStrip, isSameDay } from "@/components/DateStrip";
 import { useDaySelection } from "@/features/useDaySelection";
-import { useHasCapability, useHasModule } from "@/features/modules";
+import { useHasCapability, useHasModule, useModules } from "@/features/modules";
 import {
   ApiError,
   clockIn as clockInRequest,
@@ -81,7 +82,11 @@ export default function HomeScreen() {
   const hasIncidents = useHasModule("incidents");
   const scheduleOn = useScheduleOn();
   const leaveOn = useLeaveOn();
+  const noticeboardOn = useNoticeboardOn();
+  const noticesUnread = useNoticesUnread(noticeboardOn);
   const maintenanceOn = useMaintenanceOn();
+  // Opt-in module: only once bootstrap says it is on (useHasModule would fail open).
+  const verificationOn = useModules().has("verification");
   const maintenancePayments = useMaintenancePayments();
   const nextBooking = useUpcomingBooking();
   const progress = useMyProgress();
@@ -392,7 +397,10 @@ export default function HomeScreen() {
           hasQr,
           schedule: scheduleOn,
           leave: leaveOn,
+          noticeboard: noticeboardOn,
+          noticesUnread,
           maintenance: maintenanceOn,
+          verification: verificationOn,
           maintenancePayments,
           progress: !!progress,
         }).map((tile) => ({

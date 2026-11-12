@@ -255,6 +255,11 @@ export function routeForNotification(
     case "tablesessions":
       if (!field) return "/notifications";
       return id ? `/tables/${id}` : "/tables";
+    case "noticeboard": {
+      // The related id is "notice:<id>"; the notice opens.
+      const noticeId = data?.relatedId?.startsWith("notice:") ? encodeURIComponent(data.relatedId.slice(7)) : null;
+      return noticeId ? `/notice/${noticeId}` : "/noticeboard";
+    }
     case "leave":
       return "/leave";
     case "overtime":

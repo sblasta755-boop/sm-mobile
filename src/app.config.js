@@ -32,7 +32,24 @@ const NON_PROD = APP_ENV !== "prod";
 const ID_SUFFIX = NON_PROD ? `.${APP_ENV}` : "";
 const NAME_LABEL = NON_PROD ? ` ${APP_ENV.toUpperCase()}` : "";
 
+// The web address of this environment's web app (EXPO_PUBLIC_CUSTOMER_APP_BASE_URL, the same address the backend
+// has as FRONTEND_BASE_URL). The app claims links to it, so a link in an email or message opens the app when it is
+// installed and the browser or installed web app when it is not. Unset: the app claims nothing.
+function linkHost() {
+  const raw = (process.env.EXPO_PUBLIC_CUSTOMER_APP_BASE_URL || "").trim();
+  if (!raw) return null;
+  try {
+    const url = new URL(raw);
+    return url.protocol === "https:" ? url.host : null;
+  } catch {
+    return null;
+  }
+}
+// The web paths the app takes over (kept in step with LINK_PATHS in the backend's app_links.py).
+const LINK_PATHS = ["/mobile/noticeboard", "/noticeboard"];
+
 module.exports = ({ config }) => {
+  const host = linkHost();
   const hasFirebase = fs.existsSync(path.join(__dirname, "google-services.json"));
   return {
     ...config,
@@ -43,11 +60,24 @@ module.exports = ({ config }) => {
     ios: {
       ...config.ios,
       ...(config.ios?.bundleIdentifier ? { bundleIdentifier: `${config.ios.bundleIdentifier}${ID_SUFFIX}` } : {}),
+      ...(host ? { associatedDomains: [`applinks:${host}`] } : {}),
     },
     android: {
       ...config.android,
       package: `${config.android.package}${ID_SUFFIX}`,
       ...(hasFirebase ? { googleServicesFile: "./google-services.json" } : {}),
+      ...(host
+        ? {
+            intentFilters: [
+              {
+                action: "VIEW",
+                autoVerify: true,
+                data: LINK_PATHS.map((pathPrefix) => ({ scheme: "https", host, pathPrefix })),
+                category: ["BROWSABLE", "DEFAULT"],
+              },
+            ],
+          }
+        : {}),
     },
     extra: { ...config.extra, appEnv: APP_ENV },
   };

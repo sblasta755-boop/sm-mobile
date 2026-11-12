@@ -9,6 +9,7 @@ import { useSmartClean } from "@/features/store";
 import { useCanOpenStock } from "@/features/stock";
 import { useCanUsePayroll } from "@/features/payroll";
 import { useLeaveOn } from "@/features/leave";
+import { useNoticeboardOn } from "@/features/noticeboard";
 import { useScheduleOn } from "@/features/schedule";
 import { useHasModule } from "@/features/modules";
 import { reportTiles, tourTargetRef } from "@/features/tour";
@@ -44,6 +45,7 @@ export default function ManageHome() {
   const canUsePayroll = useCanUsePayroll();
   const scheduleOn = useScheduleOn();
   const leaveOn = useLeaveOn();
+  const noticeboardOn = useNoticeboardOn();
   const wayfindingOn = useHasModule("wayfinding");
   const layoutOn = useHasModule("site_layout");
   const [view, setView] = useState<View3>("tasks");
@@ -78,6 +80,7 @@ export default function ManageHome() {
     { key: "report", label: "Management report", icon: "document-text-outline", to: "/management-report" },
     ...(scheduleOn ? [{ key: "schedule", label: "Schedule", icon: "calendar-outline" as Glyph, to: "/schedule" }] : []),
     ...(canUsePayroll ? [{ key: "payruns", label: "Pay runs", icon: "cash-outline" as Glyph, to: "/pay-runs" }] : []),
+    ...(noticeboardOn ? [{ key: "noticeboard", label: "Noticeboard", icon: "megaphone-outline" as Glyph, to: "/noticeboard" }] : []),
     ...(leaveOn ? [{ key: "leave", label: "Leave", icon: "airplane-outline" as Glyph, to: "/leave" }] : []),
     ...(canOpenStock ? [{ key: "stock", label: "Stock", icon: "cube-outline" as Glyph, to: "/stock" }] : []),
     ...(wayfindingOn
