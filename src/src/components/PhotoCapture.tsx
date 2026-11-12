@@ -42,24 +42,61 @@ export function PhotoCapture({
     setCameraOn(true);
   }
 
-  async function capture() {
-    if (!cameraRef.current || uploading) return;
+  // The prepared photo that could not be sent (no signal, session renewing). Kept on the phone so the person can
+  // retry instead of retaking it.
+  const [unsent, setUnsent] = useState<string | null>(null);
+
+  async function send(uri: string) {
     setUploading(true);
     try {
-      const photo = await cameraRef.current.takePictureAsync({ quality: 0.6, base64: false, skipProcessing: true });
-      if (!photo?.uri) return;
-      const small = await prepareEvidencePhoto(photo.uri, photo.width, photo.height);
-      const filePath = await uploadImage(token, small, `maintenance_${Date.now()}.jpg`);
+      const filePath = await uploadImage(token, uri, `maintenance_${Date.now()}.jpg`);
       onChange([...files, filePath]);
+      setUnsent(null);
     } catch (error) {
-      appAlert("Photo not saved", error instanceof Error ? error.message : "Check your connection and try again.");
+      setUnsent(uri);
+      appAlert(
+        "Photo not sent",
+        `${error instanceof Error ? error.message : "Check your connection."} Your photo is kept: tap Retry.`,
+      );
     } finally {
       setUploading(false);
     }
   }
 
+  async function capture() {
+    if (!cameraRef.current || uploading) return;
+    setUploading(true);
+    let small: string | null = null;
+    try {
+      const photo = await cameraRef.current.takePictureAsync({ quality: 0.6, base64: false, skipProcessing: true });
+      if (!photo?.uri) return;
+      small = await prepareEvidencePhoto(photo.uri, photo.width, photo.height);
+    } catch (error) {
+      appAlert("Photo not taken", error instanceof Error ? error.message : "Try again.");
+      return;
+    } finally {
+      setUploading(false);
+    }
+    if (small) await send(small);
+  }
+
   return (
     <View style={styles.wrap}>
+      {unsent && (
+        <View style={styles.unsent}>
+          <Image source={{ uri: unsent }} style={styles.unsentThumb} />
+          <View style={styles.unsentText}>
+            <Text style={styles.unsentTitle}>Not sent yet</Text>
+            <Text style={styles.unsentHint}>The photo is kept on this phone.</Text>
+          </View>
+          <Button fullWidth={false} variant="outline" disabled={uploading} loading={uploading} onPress={() => send(unsent)}>
+            Retry
+          </Button>
+          <Button fullWidth={false} variant="ghost" disabled={uploading} onPress={() => setUnsent(null)}>
+            Discard
+          </Button>
+        </View>
+      )}
       {cameraOn ? (
         <View style={styles.frame}>
           <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing="back" />
@@ -70,7 +107,7 @@ export function PhotoCapture({
             </View>
           )}
           <View style={styles.actions}>
-            <Button variant="outline" style={styles.action} disabled={uploading || files.length >= max} loading={uploading} onPress={capture}>
+            <Button variant="outline" style={styles.action} disabled={uploading || !!unsent || files.length >= max} loading={uploading} onPress={capture}>
               Take photo
             </Button>
             <Button variant="outline" style={styles.action} onPress={() => setCameraOn(false)}>
@@ -123,6 +160,19 @@ const styles = themedStyles(() =>
     actions: { position: "absolute", bottom: 8, left: 8, right: 8, flexDirection: "row", gap: spacing.sm },
     action: { flex: 1 },
     error: { color: colors.destructive, fontSize: typography.tiny },
+    unsent: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.sm,
+      borderWidth: 1,
+      borderColor: colors.destructive,
+      borderRadius: radius.md,
+      padding: spacing.sm,
+    },
+    unsentThumb: { width: 48, height: 48, borderRadius: radius.md },
+    unsentText: { flex: 1 },
+    unsentTitle: { fontSize: typography.small, fontWeight: "700", color: colors.foreground },
+    unsentHint: { fontSize: typography.tiny, color: colors.mutedForeground },
     row: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
     thumbWrap: { width: 64, height: 64 },
     thumb: { width: "100%", height: "100%", borderRadius: radius.md },

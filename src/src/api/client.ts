@@ -1,4 +1,5 @@
 import Constants from "expo-constants";
+import { isDefinitiveRefreshRejection } from "@/domain/refreshRejection";
 import type { VerificationStep, buildAnswers as buildVerificationAnswers } from "@/domain/verification";
 import type {
   AirbnbTurnover,
@@ -287,10 +288,8 @@ async function refreshAccessToken(): Promise<string | null> {
     } catch (error) {
       // Only a server that says the refresh token is dead ends the session. A
       // dropped connection or a server hiccup must not sign the person out.
-      if (
-        error instanceof ApiError &&
-        (error.status === 401 || error.status === 403)
-      ) {
+      // The server says a dead refresh token is 409, not 401, so any definitive 4xx counts.
+      if (isDefinitiveRefreshRejection(error)) {
         sessionHandlers?.onRefreshFailed();
       }
       return null;
@@ -1215,7 +1214,8 @@ export async function uploadImage(
       body: form,
     });
   };
-  let response = await send(freshestAccessToken(accessToken));
+  // Renew first when the token is about to lapse, so the first attempt rarely meets a 401.
+  let response = await send(await ensureFreshAccessToken(accessToken));
   // Cannot go through request() (it forces application/json), so it refreshes
   // an expired access token and retries once the same way request() does.
   if (response.status === 401) {
