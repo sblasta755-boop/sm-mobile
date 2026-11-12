@@ -60,6 +60,8 @@ export interface WorkflowPolicy {
     requireGeofence: boolean;
     /** Clock people out when they leave the site radius and back in when they return. */
     autoClock?: { enabled: boolean; graceMinutes: number; overtimeCheck: boolean };
+    /** Proof of presence while clocked in: how long a silent phone is tolerated, and how often the web app asks "still on site?". */
+    presence?: { enabled: boolean; gapMinutes: number; checkInMinutes: number };
   };
   tasks: {
     enabled: boolean;

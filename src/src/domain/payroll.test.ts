@@ -1,5 +1,5 @@
 import type { PayPerson, PayRun } from "@/api/client";
-import { buildInvoicesHtml, buildSummaryHtml, dayDetailCsv, formatDays, formatHours, formatMoney, summaryCsv } from "./payroll";
+import { buildInvoicesHtml, buildSummaryHtml, dayDetailCsv, formatDays, formatHours, formatMoney, payBreakdown, payeeStatements, buildPayeeStatementsHtml, summaryCsv } from "./payroll";
 
 const person = {
   userId: "u1",
@@ -67,5 +67,68 @@ describe("pay run wording and documents", () => {
     expect(invoices.match(/class="page"/g)).toHaveLength(2);
     expect(invoices).not.toContain("DRAFT");
     expect(invoices).toContain("Weekend cover");
+  });
+});
+
+describe("pay runs with flat fees and suppliers", () => {
+  const mixed = {
+    ...run,
+    flatLines: [{ payee: "DJ <A>", group: "Service providers", description: "Friday", amount: "2500.00", fine: "100.00", net: "2400.00" }],
+    supplierPayments: [{ payableId: "p1", amount: "500.00", payee: "Ice Co", description: "Ice", popEmail: "ap@ice.co" }],
+    totals: {
+      ...run.totals,
+      gross: "3532.12",
+      staffGross: "632.12",
+      flat: { lines: 1, gross: "2500.00", fines: "100.00", net: "2400.00", byGroup: { "Service providers": "2400.00" } },
+      suppliers: { lines: 1, total: "500.00", byPayee: { "Ice Co": "500.00" } },
+    },
+  } as unknown as PayRun;
+
+  it("leaves an attendance-only run unchanged", () => {
+    expect(payBreakdown(run)).toEqual([]);
+    expect(buildSummaryHtml(run, { brandName: "B", logoUrl: null, generatedLabel: "" })).not.toContain("Total payable");
+  });
+  it("breaks the total down by staff, each fee group and suppliers", () => {
+    expect(payBreakdown(mixed).map((b) => b.label)).toEqual([
+      "Staff (attendance)", "Service providers", "Suppliers", "Fines already taken off above", "Total payable",
+    ]);
+    expect(payBreakdown(mixed).at(-1)?.amount).toBe("3532.12");
+  });
+  it("prints flat fees and suppliers in the summary, escaped, and adds them to the CSV", () => {
+    const html = buildSummaryHtml(mixed, { brandName: "B", logoUrl: null, generatedLabel: "" });
+    expect(html).toContain("DJ &lt;A&gt;");
+    expect(html).toContain("ap@ice.co");
+    expect(html).toContain("R 3,532.12");
+    const lines = summaryCsv(mixed).split("\n");
+    expect(lines).toHaveLength(5); // header, person, DJ, supplier, total
+    expect(lines[2]).toContain("DJ <A> (Service providers)");
+  });
+  it("prints a flat-fee-only run without an empty staff table", () => {
+    const html = buildSummaryHtml({ ...mixed, people: [] } as unknown as PayRun, { brandName: "B", logoUrl: null, generatedLabel: "" });
+    expect(html).not.toContain("<th>Rate / h</th>");
+    expect(html).toContain("Amounts as entered.");
+  });
+});
+
+describe("flat-fee payee statements", () => {
+  const r = {
+    ...run,
+    flatLines: [
+      { id: "a", payee: "DJ <A>", group: "Service providers", description: "Fri", amount: "2500.00", fine: "100.00", net: "2400.00" },
+      { id: "b", payee: "dj <a>", group: "Service providers", description: "Sat", amount: "1000.10", fine: "0.00", net: "1000.10" },
+      { id: "c", payee: "MC B", group: "Service providers", description: "", amount: "1400.00", fine: "0.00", net: "1400.00" },
+    ],
+  } as unknown as PayRun;
+  it("groups by payee ignoring case and sums exactly in cents", () => {
+    const st = payeeStatements(r);
+    expect(st.map((s) => s.payee)).toEqual(["DJ <A>", "MC B"]);
+    expect(st[0]).toMatchObject({ amount: "3500.10", fine: "100.00", net: "3400.10" });
+  });
+  it("prints one escaped page per payee, showing fines only when there are some", () => {
+    const html = buildPayeeStatementsHtml(r, payeeStatements(r), { brandName: "B", logoUrl: null, generatedLabel: "" });
+    expect(html.match(/class="page"/g)).toHaveLength(2);
+    expect(html).toContain("DJ &lt;A&gt;");
+    expect(html).toContain("R 3,400.10");
+    expect(html.split("Fines</span>")).toHaveLength(2);
   });
 });

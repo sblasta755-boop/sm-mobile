@@ -222,6 +222,11 @@ export function setSessionHandlers(handlers: typeof sessionHandlers) {
   sessionHandlers = handlers;
 }
 
+/** False in a headless background task, where nothing owns the session and a caller must renew it itself. */
+export function hasSessionHandlers(): boolean {
+  return sessionHandlers !== null;
+}
+
 let refreshInFlight: Promise<string | null> | null = null;
 
 // The session a refresh just produced, until the provider has re-rendered
@@ -588,6 +593,27 @@ export interface ClockPayload {
   offlineRecorded?: boolean;
 }
 
+/** One location heartbeat while clocked in. The server decides whether it is on site. */
+export interface PresenceSamplePayload {
+  latitude?: number;
+  longitude?: number;
+  accuracy?: number;
+  source: "native_bg" | "native_fg";
+  /** What the phone says about its own location access. */
+  permission: "always" | "foreground" | "denied" | "off" | "unknown";
+  mocked?: boolean;
+  /** ISO time the fix was taken, for samples that waited for a connection. */
+  capturedAt: string;
+}
+
+export function sendPresence(accessToken: string, samples: PresenceSamplePayload[]) {
+  return request<{ recorded: number; reopened: boolean }>(
+    "/attendance/presence",
+    { method: "POST", body: JSON.stringify({ samples }) },
+    accessToken,
+  );
+}
+
 export function clockIn(accessToken: string, payload: ClockPayload) {
   return request<Record<string, unknown>>(
     "/attendance/clock-in",
@@ -630,6 +656,52 @@ export function getMyAttendanceDays(
 ) {
   return request<AttendanceDay[]>(
     `/attendance/my-history?start=${start}&end=${end}`,
+    {},
+    accessToken,
+  );
+}
+
+/** One stretch on site within a day. */
+export interface TimesheetSegment {
+  id: string;
+  startedAt: string;
+  endedAt?: string | null;
+  endReason?: string | null;
+}
+
+/** One person's day on the manager timesheet. The server sends null (not absent) for a time that has not happened. */
+export interface TimesheetDay {
+  id: string;
+  userId: string;
+  userName?: string | null;
+  siteId: string;
+  siteName?: string | null;
+  /** Local calendar day, "YYYY-MM-DD". */
+  workDate: string;
+  clockInAt?: string | null;
+  clockOutAt?: string | null;
+  /** null while the day is still open, deliberately not 0. */
+  workedMinutes?: number | null;
+  exceptions: string[];
+  /** scanned | auto_closed | amended */
+  source?: string;
+  approvalState: string;
+  segments?: TimesheetSegment[];
+}
+
+export interface AttendanceTimesheet {
+  days: TimesheetDay[];
+  /** Per-user worked minutes over the range, summed server-side. */
+  totals: Record<string, number>;
+  periodStart: string;
+  periodEnd: string;
+}
+
+/** Computed hours, flags and approval state for the people the caller manages ("YYYY-MM-DD", inclusive). Every figure is
+ * summed server-side, so this screen and the web timesheet never disagree. Managers and supervisors only. */
+export function getAttendanceTimesheet(accessToken: string, start: string, end: string) {
+  return request<AttendanceTimesheet>(
+    `/attendance/timesheet?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`,
     {},
     accessToken,
   );
@@ -1214,6 +1286,43 @@ export function updateLocationPosition(
   return request<Location>(
     `/site-layout/locations/${locationId}/position`,
     { method: "PATCH", body: JSON.stringify(payload) },
+    accessToken,
+  );
+}
+
+export type LocationLiveStatusValue =
+  | "incident_open"
+  | "overdue"
+  | "in_progress"
+  | "awaiting_review"
+  | "clean"
+  | "no_data";
+
+/** What is going on in one room right now (the live floor plan). */
+export interface LocationLiveStatus {
+  locationId: string;
+  status: LocationLiveStatusValue;
+  taskId: string | null;
+  incidentId: string | null;
+  detail: string | null;
+  openTasks?: number | null;
+  assignees?: string[] | null;
+  /** People with a task in progress in this room right now. */
+  workingNow?: string[] | null;
+  lastCleanedAt?: string | null;
+}
+
+export interface SiteLayoutStatusResponse {
+  siteId: string;
+  computedAt: string;
+  statuses: LocationLiveStatus[];
+}
+
+/** Every room's live status for one site: managers, on organisations with the site layout module. */
+export function getSiteLayoutStatus(accessToken: string, siteId: string) {
+  return request<SiteLayoutStatusResponse>(
+    `/site-layout/sites/${siteId}/status`,
+    { method: "GET" },
     accessToken,
   );
 }
@@ -2483,7 +2592,11 @@ export interface PayTotals {
   paidHours: string;
   earned: string;
   adjustments: string;
+  /** Everything payable: attendance pay plus flat lines. */
   gross: string;
+  staffGross?: string;
+  suppliers?: { lines: number; total: string; byPayee: Record<string, string> };
+  flat?: { lines: number; gross: string; fines: string; net: string; byGroup: Record<string, string> };
 }
 
 export interface PayManualEntry {
@@ -2513,7 +2626,53 @@ export interface PayRunInput {
   includeUserIds: string[];
   /** Left out on purpose, for a run covering one person or a chosen few. */
   excludeUserIds: string[];
+  /** Flat fees and fines (needs the flat_lines pay feature). */
+  flatLines: PayFlatLine[];
+  /** Tips to share between staff (needs the tip_pools pay feature); null for none. */
+  tipPool: PayTipPool | null;
+  /** Payments to suppliers, drawn from what is owed (needs the payables pay feature). */
+  supplierPayments: { payableId: string; amount: string }[];
   notes: string | null;
+}
+
+export interface PaySupplierLine {
+  payableId: string;
+  amount: string;
+  payee?: string;
+  description?: string;
+  remaining?: string;
+  popEmail?: string | null;
+}
+
+export interface Payable {
+  id: string;
+  payeeId: string;
+  payee: string;
+  payeeKind: string;
+  popEmail: string | null;
+  description: string;
+  amount: string;
+  amountPaid: string;
+  remaining: string;
+  status: "open" | "partial" | "paid";
+  incurredOn: string | null;
+  reference: string | null;
+}
+
+export interface PayTipPool {
+  amount: string;
+  mode: "days" | "equal";
+  userIds: string[];
+}
+
+export interface PayFlatLine {
+  id?: string;
+  payee: string;
+  group: string;
+  description: string;
+  amount: string;
+  fine: string;
+  net?: string;
 }
 
 export interface PayPreview {
@@ -2537,6 +2696,9 @@ export interface PayRun {
   ruleName: string;
   ruleDescription: string;
   holidays: PayHoliday[];
+  flatLines?: PayFlatLine[];
+  tipPool?: PayTipPool | null;
+  supplierPayments?: PaySupplierLine[];
   currency: string;
   status: "draft" | "final" | "void";
   totals: PayTotals;
@@ -2548,6 +2710,46 @@ export interface PayRun {
   people?: PayPerson[];
 }
 
+export type PayFrequency = "weekly" | "biweekly" | "semimonthly" | "monthly" | "custom";
+export type PayFeature = "staff_pay" | "pay_schedule" | "auto_create_runs" | "flat_lines" | "tip_pools" | "payables";
+export interface PaySchedule {
+  frequency: PayFrequency;
+  /** 0 = Monday .. 6 = Sunday */
+  weekStart: number;
+  anchorDate: string | null;
+  semimonthlyDays: [number, number];
+  payLagDays: number;
+  autoCreateLeadDays: number;
+}
+export interface PaySettings {
+  features: Record<PayFeature, boolean>;
+  schedule: PaySchedule;
+}
+export interface PayPeriod {
+  start: string;
+  end: string;
+  label: string;
+  payDate: string;
+}
+export interface PayPeriods {
+  frequency: PayFrequency;
+  current: PayPeriod | null;
+  previous: PayPeriod | null;
+  next: PayPeriod | null;
+}
+export const getPaySettings = (t: string) => request<PaySettings>("/payroll/settings", {}, t);
+export const savePaySettings = (t: string, settings: PaySettings) =>
+  request<PaySettings>("/payroll/settings", { method: "PUT", body: JSON.stringify(settings) }, t);
+export const getPayPeriods = (t: string) => request<PayPeriods>("/payroll/schedule/periods", {}, t);
+
+export const listPayables = (t: string, status?: "outstanding" | "open" | "partial" | "paid") =>
+  request<{ items: Payable[]; outstanding: string }>(`/payroll/payables${status ? `?status=${status}` : ""}`, {}, t);
+export const createPayable = (
+  t: string,
+  body: { payeeName: string; description: string; amount: string; reference?: string | null },
+) => request<Payable>("/payroll/payables", { method: "POST", body: JSON.stringify(body) }, t);
+export const deletePayable = (t: string, id: string) =>
+  request<void>(`/payroll/payables/${id}`, { method: "DELETE" }, t);
 export const listPayRules = (t: string) =>
   request<PayRuleRecord[]>("/payroll/rules", {}, t);
 export const previewPayRun = (t: string, input: PayRunInput) =>

@@ -65,7 +65,7 @@ interface State {
   turnovers: AirbnbTurnover[];
   stock: StockItem[];
   assets: Asset[];
-  attendance: Record<string, { clockedInAt?: string; siteId?: string; locationCapturedAt?: string }>;
+  attendance: Record<string, { clockedInAt?: string; siteId?: string; locationCapturedAt?: string; locationLostAt?: string }>;
   /** The organisation's plan and unlocked modules. Null until bootstrap
    * lands; consumers treat that as "not yet known" and fail open, since
    * the server enforces the real answer. */

@@ -7,6 +7,7 @@ import * as TaskManager from "expo-task-manager";
 import { buildConfig, classify, freshState, reconcile, step, type Fix, type GeofenceAction, type GeofenceConfig, type MachineState } from "@/domain/geofenceClock";
 import { distanceM } from "@/domain/nearestBeacon";
 import { enqueueMutation } from "@/features/outbox";
+import { reportPresenceFix } from "@/features/presence";
 import { ANDROID_CHANNEL_ID } from "@/features/pushNotifications";
 import { useSmartClean } from "@/features/store";
 
@@ -147,6 +148,8 @@ TaskManager.defineTask(TASK_LOCATION, async ({ data, error }) => {
   if (error || !data) return;
   const { locations } = data as { locations?: Location.LocationObject[] };
   for (const loc of locations ?? []) {
+    // The same fix is a heartbeat for the presence check; it does nothing unless the person is clocked in.
+    void reportPresenceFix(loc, "native_bg");
     await processFix({
       latitude: loc.coords.latitude,
       longitude: loc.coords.longitude,

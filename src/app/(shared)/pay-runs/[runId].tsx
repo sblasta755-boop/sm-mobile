@@ -13,6 +13,8 @@ import { appAlert } from "@/components/Dialog";
 import { deletePayRunDraft, finalisePayRun, getPayRun, logPayRunExport, voidPayRun, type PayRun } from "@/api/client";
 import {
   buildInvoicesHtml,
+  buildPayeeStatementsHtml,
+  payeeStatements,
   buildSummaryHtml,
   dayDetailCsv,
   formatDays,
@@ -286,6 +288,35 @@ export default function PayRunDetailScreen() {
           </View>
         </View>
       </Modal>
+      {(run.supplierPayments?.length ?? 0) > 0 && (
+        <Card>
+          <Text style={styles.sectionTitle}>Suppliers</Text>
+          {run.supplierPayments?.map((l) => (
+            <View key={l.payableId} style={styles.flatLine}>
+              <Text style={styles.flatName} numberOfLines={2}>{l.payee}{l.description ? ` · ${l.description}` : ""}</Text>
+              <Text style={styles.flatNet}>{formatMoney(l.amount, run.currency)}</Text>
+            </View>
+          ))}
+        </Card>
+      )}
+      {(run.flatLines?.length ?? 0) > 0 && (
+        <Card>
+          <Button variant="outline" onPress={() => act(async () => { await sharePdf(buildPayeeStatementsHtml(run, payeeStatements(run), docOptions()), `${run.title}_payee_statements`); note("payee-statements"); })}>
+            Statements for flat-fee payees
+          </Button>
+          <Text style={styles.sectionTitle}>Flat fees (tap one for that payee's statement)</Text>
+          {run.flatLines?.map((l, i) => (
+            <Pressable key={l.id ?? i} style={styles.flatLine} accessibilityRole="button" accessibilityLabel={`Statement for ${l.payee}`}
+              onPress={() => act(async () => { const only = payeeStatements(run).filter((s) => s.payee.toLowerCase() === l.payee.trim().toLowerCase()); await sharePdf(buildPayeeStatementsHtml(run, only, docOptions()), `${run.title}_${l.payee}`); note("payee-statements", l.payee); })}>
+              <Text style={styles.flatName} numberOfLines={1}>{l.payee}{l.description ? ` · ${l.description}` : ""}</Text>
+              <Text style={styles.flatNet}>
+                {formatMoney(l.net ?? l.amount, run.currency)}
+                {Number(l.fine) > 0 ? ` (fine ${formatMoney(l.fine, run.currency)})` : ""}
+              </Text>
+            </Pressable>
+          ))}
+        </Card>
+      )}
     </Screen>
   );
 }
@@ -293,6 +324,10 @@ export default function PayRunDetailScreen() {
 const styles = themedStyles(() =>
   StyleSheet.create({
     row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.sm },
+    sectionTitle: { fontSize: typography.body, fontWeight: "800", color: colors.foreground, marginBottom: spacing.xs },
+    flatLine: { flexDirection: "row", justifyContent: "space-between", gap: spacing.sm, paddingVertical: 4 },
+    flatName: { flex: 1, fontSize: typography.small, color: colors.foreground },
+    flatNet: { fontSize: typography.small, fontWeight: "700", color: colors.foreground },
     flex: { flex: 1, minWidth: 0 },
     muted: { fontSize: typography.small, color: colors.mutedForeground },
     error: { fontSize: typography.small, color: colors.destructive },

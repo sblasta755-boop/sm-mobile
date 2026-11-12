@@ -13,6 +13,7 @@ import { useDeviceHealthReporting } from "@/features/deviceHealth";
 import { useEvidenceUploader } from "@/features/evidenceUploader";
 import { useRememberLocation } from "@/features/lastLocation";
 import { useGeofenceClock } from "@/features/geofenceClock";
+import { usePresenceReporting } from "@/features/presence";
 import { OvertimePrompt } from "@/components/OvertimePrompt";
 import { TourOverlay } from "@/components/TourOverlay";
 
@@ -61,6 +62,8 @@ function PushNotificationsBridge() {
   useRememberLocation();
   // Clocks people out when they leave their site and back in when they return, if their site uses it.
   useGeofenceClock();
+  // Reports where the phone is while clocked in, so a silent phone is noticed.
+  usePresenceReporting();
   return null;
 }
 

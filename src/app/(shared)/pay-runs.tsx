@@ -5,7 +5,7 @@ import { Screen } from "@/components/Screen";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { StatusBadge } from "@/components/StatusBadge";
-import { listPayRuns, type PayRun } from "@/api/client";
+import { getPaySettings, listPayRuns, type PayRun } from "@/api/client";
 import { formatDays, formatHours, formatMoney, periodLabel } from "@/domain/payroll";
 import { useCanUsePayroll } from "@/features/payroll";
 import { useHomePath } from "@/features/roles";
@@ -26,6 +26,7 @@ export default function PayRunsScreen() {
   const allowed = useCanUsePayroll();
   const homePath = useHomePath();
   const [runs, setRuns] = useState<PayRun[] | null>(null);
+  const [payablesOn, setPayablesOn] = useState(false);
 
   const load = useCallback(async () => {
     if (!state.accessToken) return;
@@ -41,6 +42,11 @@ export default function PayRunsScreen() {
       if (allowed) void load();
     }, [allowed, load]),
   );
+  useFocusEffect(
+    useCallback(() => {
+      if (allowed && state.accessToken) getPaySettings(state.accessToken).then((s) => setPayablesOn(s.features.payables)).catch(() => undefined);
+    }, [allowed, state.accessToken]),
+  );
   useEffect(() => {
     if (!allowed) setRuns(null);
   }, [allowed]);
@@ -55,6 +61,14 @@ export default function PayRunsScreen() {
       </Text>
       <Button style={styles.newButton} onPress={() => router.push("/pay-run-new" as never)}>
         New pay run
+      </Button>
+      {payablesOn && (
+        <Button variant="outline" onPress={() => router.push("/pay-payables" as never)}>
+          Suppliers and outstanding
+        </Button>
+      )}
+      <Button variant="outline" onPress={() => router.push("/pay-settings" as never)}>
+        Pay settings
       </Button>
       {!runs && <ActivityIndicator color={colors.primary} />}
       {runs && runs.length === 0 && (

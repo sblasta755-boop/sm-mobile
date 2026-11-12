@@ -10,11 +10,19 @@ import { appAlert } from "@/components/Dialog";
 import {
   createPayRun,
   finalisePayRun,
+  getPayPeriods,
+  listPayables,
+  getPaySettings,
   getPayRun,
   listPayRules,
   previewPayRun,
   updatePayRun,
+  type Payable,
   type PayAdjustment,
+  type PayFlatLine,
+  type PayTipPool,
+  type PaySettings,
+  type PayPeriods,
   type PayHoliday,
   type PayManualEntry,
   type PayPerson,
@@ -51,6 +59,19 @@ export default function PayRunNewScreen() {
   const [title, setTitle] = useState("");
   const [[start, end], setRange] = useState<[string, string]>(() => preset("month"));
   const [siteIds, setSiteIds] = useState<string[]>([]);
+  // The organisation's pay schedule; when set, its periods replace the fixed presets below.
+  const [periods, setPeriods] = useState<PayPeriods | null>(null);
+  // Which pay features this organisation uses (default: staff pay only).
+  const [settings, setSettings] = useState<PaySettings | null>(null);
+  const [flatLines, setFlatLines] = useState<PayFlatLine[]>([]);
+  // payableId -> amount to pay now
+  const [supplierPay, setSupplierPay] = useState<Record<string, string>>({});
+  const [owed, setOwed] = useState<Payable[]>([]);
+  const payablesOn = settings?.features.payables ?? false;
+  const [tipPool, setTipPool] = useState<PayTipPool>({ amount: "", mode: "days", userIds: [] });
+  const staffPay = settings?.features.staff_pay ?? true;
+  const tipsOn = (settings?.features.tip_pools ?? false) && staffPay;
+  const flatOn = settings?.features.flat_lines ?? false;
   const [rules, setRules] = useState<PayRuleRecord[]>([]);
   const [ruleName, setRuleName] = useState(STANDARD);
   const [loadedRuleId, setLoadedRuleId] = useState<string | null>(null);
@@ -69,6 +90,30 @@ export default function PayRunNewScreen() {
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [moreOpen, setMoreOpen] = useState(false);
   const prefilled = useRef(new Set<string>());
+  // Flat-fee-only organisations have no people step.
+  useEffect(() => {
+    if (!staffPay && step === 2) setStep(3);
+  }, [staffPay, step]);
+
+  useEffect(() => {
+    if (!token || !allowed || !payablesOn) return;
+    listPayables(token, "outstanding").then((r) => setOwed(r.items)).catch(() => setOwed([]));
+  }, [token, allowed, payablesOn]);
+
+  useEffect(() => {
+    if (!token || !allowed) return;
+    getPaySettings(token).then(setSettings).catch(() => setSettings(null));
+  }, [token, allowed]);
+
+  useEffect(() => {
+    if (!token || !allowed) return;
+    getPayPeriods(token)
+      .then((p) => {
+        setPeriods(p);
+        if (!draft && p.next) setRange([p.next.start, p.next.end]);
+      })
+      .catch(() => setPeriods(null));
+  }, [token, allowed, draft]);
 
   useEffect(() => {
     if (!token || !allowed) return;
@@ -95,6 +140,9 @@ export default function PayRunNewScreen() {
         setRange([run.periodStart, run.periodEnd]);
         setHolidays(run.holidays);
         setNotes(run.notes ?? "");
+        setFlatLines(run.flatLines ?? []);
+        if (run.tipPool) setTipPool(run.tipPool);
+        setSupplierPay(Object.fromEntries((run.supplierPayments ?? []).map((l) => [l.payableId, l.amount])));
         setLoadedRuleId(run.ruleId);
         const saved: Record<string, string> = {};
         const adj: Record<string, PayAdjustment[]> = {};
@@ -104,7 +152,9 @@ export default function PayRunNewScreen() {
             saved[p.userId] = p.rate;
             prefilled.current.add(p.userId);
           }
-          if (p.adjustments.length) adj[p.userId] = p.adjustments;
+          // A tip share is worked out again from the pool, so it is not kept as a typed adjustment.
+          const own = p.adjustments.filter((a) => a.label !== "Tip share");
+          if (own.length) adj[p.userId] = own;
           const rows = p.days.filter((d) => d.manual).map((d) => ({ label: d.label ?? "", date: d.date, days: d.fraction, hours: d.hoursEntered ?? null }));
           if (rows.length) typed[p.userId] = rows;
         }
@@ -132,9 +182,14 @@ export default function PayRunNewScreen() {
       manual: Object.fromEntries(Object.entries(manual).map(([id, list]) => [id, list.filter((m) => Number(m.days) > 0)])),
       includeUserIds,
       excludeUserIds: excluded,
+      flatLines: flatLines.filter((l) => l.payee.trim()),
+      tipPool: tipsOn && Number(tipPool.amount) > 0 ? tipPool : null,
+      supplierPayments: payablesOn
+        ? Object.entries(supplierPay).filter(([, v]) => Number(v) > 0).map(([payableId, amount]) => ({ payableId, amount }))
+        : [],
       notes: notes.trim() || null,
     }),
-    [title, siteIds, start, end, ruleId, holidays, rates, adjustments, manual, includeUserIds, excluded, notes],
+    [title, siteIds, start, end, ruleId, holidays, rates, adjustments, manual, includeUserIds, excluded, flatLines, tipPool, tipsOn, supplierPay, payablesOn, notes],
   );
 
   // Work the figures out on the server a moment after anything changes.
@@ -233,6 +288,17 @@ export default function PayRunNewScreen() {
       {step === 1 && (
         <Card style={styles.card}>
           <Text style={styles.heading}>When is this pay for?</Text>
+          {periods && periods.frequency !== "custom" && (
+            <View style={styles.chips}>
+              {([["Next to pay", periods.next], ["Current period", periods.current], ["Previous period", periods.previous]] as const).map(([label, period]) =>
+                period ? (
+                  <Pressable key={label} style={styles.chip} onPress={() => setRange([period.start, period.end])}>
+                    <Text style={styles.chipText}>{label}: {period.label}</Text>
+                  </Pressable>
+                ) : null,
+              )}
+            </View>
+          )}
           <View style={styles.chips}>
             {([["month", "This month"], ["last", "Last month"], ["14", "Last 14 days"]] as const).map(([k, label]) => (
               <Pressable key={k} style={styles.chip} onPress={() => setRange(preset(k))}>
@@ -299,7 +365,7 @@ export default function PayRunNewScreen() {
         </Card>
       )}
 
-      {step === 2 && (
+      {step === 2 && staffPay && (
         <Card style={styles.card}>
           <Text style={styles.heading}>Who is being paid?</Text>
           <Text style={styles.muted}>
@@ -355,7 +421,71 @@ export default function PayRunNewScreen() {
         </Card>
       )}
 
-      {step === 3 && (
+      {step === 3 && payablesOn && (
+        <Card style={styles.card}>
+          <Text style={styles.heading}>Pay suppliers</Text>
+          <Text style={styles.muted}>Part payments are fine; the rest stays outstanding. Nothing is marked paid until you finalise.</Text>
+          {owed.length === 0 && <Text style={styles.muted}>Nothing is owed right now.</Text>}
+          {owed.map((i) => (
+            <View key={i.id} style={styles.flatRow}>
+              <Text style={styles.subheading} numberOfLines={1}>{i.payee}</Text>
+              <Text style={styles.muted} numberOfLines={2}>{i.description} · left {formatMoney(i.remaining)}</Text>
+              <View style={styles.pair}>
+                <TextInput
+                  style={[styles.input, styles.flex]}
+                  value={supplierPay[i.id] ?? ""}
+                  onChangeText={(v) => setSupplierPay((p) => { const n = { ...p }; if (v.trim() === "") delete n[i.id]; else n[i.id] = v; return n; })}
+                  placeholder="Pay now"
+                  keyboardType="decimal-pad"
+                  placeholderTextColor={colors.mutedForeground}
+                />
+                <Pressable style={styles.chip} onPress={() => setSupplierPay((p) => ({ ...p, [i.id]: i.remaining }))}>
+                  <Text style={styles.chipText}>Full</Text>
+                </Pressable>
+              </View>
+            </View>
+          ))}
+        </Card>
+      )}
+      {step === 3 && tipsOn && (
+        <Card style={styles.card}>
+          <Text style={styles.heading}>Tip pool</Text>
+          <Text style={styles.muted}>Total tips to share. Only people with days counted in this run get a share.</Text>
+          <TextInput style={styles.input} value={tipPool.amount} onChangeText={(v) => setTipPool((t) => ({ ...t, amount: v }))} placeholder="Total tips" keyboardType="decimal-pad" placeholderTextColor={colors.mutedForeground} />
+          <SelectField
+            label="Share by"
+            value={tipPool.mode === "days" ? "Days worked" : "Equally"}
+            options={["Days worked", "Equally"]}
+            onChange={(v) => setTipPool((t) => ({ ...t, mode: v === "Equally" ? "equal" : "days" }))}
+          />
+        </Card>
+      )}
+      {step === 3 && flatOn && (
+        <Card style={styles.card}>
+          <Text style={styles.heading}>Flat fees and fines</Text>
+          <Text style={styles.muted}>A fixed fee, such as a DJ or MC. A fine is taken off what that person is paid.</Text>
+          {flatLines.map((line, i) => {
+            const set = (patch: Partial<PayFlatLine>) => setFlatLines((ls) => ls.map((l, n) => (n === i ? { ...l, ...patch } : l)));
+            return (
+              <View key={i} style={styles.flatRow}>
+                <TextInput style={styles.input} value={line.payee} onChangeText={(v) => set({ payee: v })} placeholder="Payee" placeholderTextColor={colors.mutedForeground} />
+                <TextInput style={styles.input} value={line.description} onChangeText={(v) => set({ description: v })} placeholder="What for" placeholderTextColor={colors.mutedForeground} />
+                <View style={styles.pair}>
+                  <TextInput style={[styles.input, styles.flex]} value={line.amount} onChangeText={(v) => set({ amount: v })} placeholder="Amount" keyboardType="decimal-pad" placeholderTextColor={colors.mutedForeground} />
+                  <TextInput style={[styles.input, styles.flex]} value={line.fine} onChangeText={(v) => set({ fine: v })} placeholder="Fine" keyboardType="decimal-pad" placeholderTextColor={colors.mutedForeground} />
+                  <Pressable accessibilityLabel="Remove fee" onPress={() => setFlatLines((ls) => ls.filter((_, n) => n !== i))}>
+                    <Ionicons name="trash-outline" size={22} color={colors.destructive} />
+                  </Pressable>
+                </View>
+              </View>
+            );
+          })}
+          <Button variant="outline" onPress={() => setFlatLines((ls) => [...ls, { payee: "", group: "Service providers", description: "", amount: "", fine: "" }])}>
+            Add a fee
+          </Button>
+        </Card>
+      )}
+      {step === 3 && staffPay && (
         <>
           <Card style={styles.card}>
             <Text style={styles.heading}>What is each person paid per hour?</Text>
@@ -535,6 +665,7 @@ function RateRow({
 const styles = themedStyles(() =>
   StyleSheet.create({
     card: { marginBottom: spacing.md, gap: spacing.sm },
+    flatRow: { gap: spacing.xs, paddingVertical: spacing.xs, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
     heading: { fontSize: typography.body, fontWeight: "800", color: colors.foreground },
     subheading: { fontSize: typography.small, fontWeight: "700", color: colors.foreground, marginTop: spacing.sm },
     label: { fontSize: typography.small, fontWeight: "600", color: colors.mutedForeground, marginTop: spacing.xs },

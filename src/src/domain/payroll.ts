@@ -2,7 +2,7 @@
 // (smart-property-operations/src/src/lib/smartclean/payroll.ts and routes/payroll.print.*) - keep
 // the figures identical: they come from the server as exact decimal strings and are only shown here.
 
-import type { PayPerson, PayRun } from "@/api/client";
+import type { PayFlatLine, PayPerson, PayRun } from "@/api/client";
 import { esc } from "./managementReportHtml";
 
 const SYMBOLS: Record<string, string> = { ZAR: "R", USD: "$", EUR: "€", GBP: "£" };
@@ -37,6 +37,59 @@ const clock = (iso: string | null) => {
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 };
 
+/** Where the run's money goes, from the server's own totals (nothing is added up here). Empty for an
+ * attendance-only run, so existing documents look the same. Mirrors the web app's payBreakdown. */
+export function payBreakdown(run: PayRun): { label: string; amount: string }[] {
+  const t = run.totals;
+  const extras = (t.flat?.lines ?? 0) > 0 || (t.suppliers?.lines ?? 0) > 0;
+  if (!extras) return [];
+  const rows: { label: string; amount: string }[] = [];
+  if ((run.people?.length ?? 0) > 0) rows.push({ label: "Staff (attendance)", amount: t.staffGross ?? t.gross });
+  for (const [group, amount] of Object.entries(t.flat?.byGroup ?? {})) rows.push({ label: group, amount });
+  if (t.suppliers && t.suppliers.lines > 0) rows.push({ label: "Suppliers", amount: t.suppliers.total });
+  if (Number(t.flat?.fines ?? 0) > 0) rows.push({ label: "Fines already taken off above", amount: t.flat!.fines });
+  rows.push({ label: "Total payable", amount: t.gross });
+  return rows;
+}
+
+/** The small-print line under a document. */
+export function payDisclaimer(run: PayRun): string {
+  const attendance = (run.people?.length ?? 0) > 0;
+  const other = (run.flatLines?.length ?? 0) > 0 || (run.supplierPayments?.length ?? 0) > 0;
+  if (attendance && other)
+    return "Staff pay is worked out from approved attendance records; flat fees and supplier payments are as entered. Tax and other deductions are not included.";
+  if (!attendance) return "Amounts as entered. Tax and other deductions are not included.";
+  return DISCLAIMER;
+}
+
+
+export interface PayeeStatement {
+  payee: string;
+  lines: PayFlatLine[];
+  amount: string;
+  fine: string;
+  net: string;
+}
+
+const cents = (v: string | undefined) => Math.round(Number(v ?? 0) * 100);
+const fromCents = (c: number) => (c / 100).toFixed(2);
+
+/** Flat-fee lines grouped by payee (case-insensitive), in the order first seen. Sums are whole cents,
+ * so they match the server's two-decimal figures exactly. */
+export function payeeStatements(run: PayRun): PayeeStatement[] {
+  const map = new Map<string, PayeeStatement>();
+  for (const l of run.flatLines ?? []) {
+    const key = l.payee.trim().toLowerCase();
+    const cur = map.get(key) ?? { payee: l.payee.trim(), lines: [], amount: "0.00", fine: "0.00", net: "0.00" };
+    cur.lines.push(l);
+    cur.amount = fromCents(cents(cur.amount) + cents(l.amount));
+    cur.fine = fromCents(cents(cur.fine) + cents(l.fine));
+    cur.net = fromCents(cents(cur.net) + cents(l.net ?? l.amount));
+    map.set(key, cur);
+  }
+  return [...map.values()];
+}
+
 const csvCell = (value: string | number) => `"${String(value).replace(/"/g, '""')}"`;
 
 /** The summary as CSV: opens in Excel and any spreadsheet. */
@@ -52,6 +105,13 @@ export function summaryCsv(run: PayRun): string {
     Number(p.adjustmentTotal),
     Number(p.gross),
   ]);
+  // Flat fees and fines: the amount sits under "Earned", any fine under "Adjustments". Suppliers likewise.
+  for (const l of run.flatLines ?? []) {
+    rows.push([`${l.payee} (${l.group})`, "", "", "", "", Number(l.amount), -Number(l.fine || 0), Number(l.net ?? l.amount)]);
+  }
+  for (const l of run.supplierPayments ?? []) {
+    rows.push([`${l.payee} (Supplier)`, "", "", "", "", Number(l.amount), 0, Number(l.amount)]);
+  }
   rows.push(["Total", Number(run.totals.daysCounted), run.totals.daysExcluded, Number(run.totals.paidHours), "", Number(run.totals.earned), Number(run.totals.adjustments), Number(run.totals.gross)]);
   return [header, ...rows].map((row) => row.map(csvCell).join(",")).join("\n");
 }
@@ -96,6 +156,7 @@ const STYLE = `
   .muted { color: #475569; font-size: 10px; }
   table { width: 100%; border-collapse: collapse; margin-top: 12px; }
   th { background: ${NAVY}; color: #fff; padding: 6px 7px; font-size: 10px; text-align: right; }
+  h2 { font-size: 13px; margin: 18px 0 0; color: ${NAVY}; }
   th:first-child, td:first-child { text-align: left; }
   td { padding: 5px 7px; text-align: right; }
   tr:nth-child(even) td { background: #f8fafc; }
@@ -130,11 +191,38 @@ export interface PayDocOptions {
 /** The whole run on one document: totals, one row per person, and the approval lines. */
 export function buildSummaryHtml(run: PayRun, o: PayDocOptions): string {
   const money = (v: string) => formatMoney(v, run.currency);
+  const people = run.people ?? [];
+  const breakdown = payBreakdown(run);
+  const flat = run.flatLines ?? [];
+  const suppliers = run.supplierPayments ?? [];
   const rows = (run.people ?? [])
     .map(
       (p) => `<tr><td>${esc(p.name)}</td><td>${formatDays(p.daysCounted)}</td><td>${formatHours(p.paidHours)}</td><td>${money(p.rate)}</td><td>${money(p.earned)}</td><td>${money(p.adjustmentTotal)}</td><td><b>${money(p.gross)}</b></td></tr>`,
     )
     .join("");
+  const peopleTable = people.length
+    ? `<table><thead><tr><th>Name</th><th>Days</th><th>Hours</th><th>Rate / h</th><th>Earned</th><th>Adjust.</th><th>Gross pay</th></tr></thead>
+    <tbody>${rows}</tbody>
+    <tfoot><tr><td>Total</td><td>${formatDays(run.totals.daysCounted)}</td><td>${formatHours(run.totals.paidHours)}</td><td></td><td>${money(run.totals.earned)}</td><td>${money(run.totals.adjustments)}</td><td>${money(run.totals.gross)}</td></tr></tfoot></table>`
+    : "";
+  const tipNote = run.tipPool && people.length
+    ? `<p class="muted">Tip pool of ${money(run.tipPool.amount)} shared ${run.tipPool.mode === "equal" ? "equally" : "by days worked"} (included in Adjust.).</p>`
+    : "";
+  const flatTable = flat.length
+    ? `<h2>Flat fees</h2><table><thead><tr><th>Payee</th><th>Group</th><th>For</th><th>Amount</th><th>Fine</th><th>Net</th></tr></thead><tbody>${flat
+        .map((l) => `<tr><td>${esc(l.payee)}</td><td>${esc(l.group)}</td><td>${esc(l.description)}</td><td>${money(l.amount)}</td><td>${money(l.fine)}</td><td><b>${money(l.net ?? l.amount)}</b></td></tr>`)
+        .join("")}</tbody></table>`
+    : "";
+  const supplierTable = suppliers.length
+    ? `<h2>Suppliers</h2><table><thead><tr><th>Supplier</th><th>For</th><th>Proof of payment to</th><th>Paid</th></tr></thead><tbody>${suppliers
+        .map((l) => `<tr><td>${esc(l.payee ?? "")}</td><td>${esc(l.description ?? "")}</td><td>${esc(l.popEmail ?? "")}</td><td><b>${money(l.amount)}</b></td></tr>`)
+        .join("")}</tbody></table>`
+    : "";
+  const breakdownBlock = breakdown.length
+    ? `<div class="total">${breakdown
+        .map((b, i) => `<div${i === breakdown.length - 1 ? ' class="gross"' : ""}><span>${esc(b.label)}</span><span>${money(b.amount)}</span></div>`)
+        .join("")}</div>`
+    : "";
   return `<html><head><meta charset="utf-8"/><style>${STYLE}</style></head><body><div class="page">
     ${head(run, o.brandName, o.logoUrl, "PAY RUN SUMMARY", o.generatedLabel)}
     <div class="eyebrow">${esc(periodLabel(run))} | ${esc(run.siteNames.join(", ") || "All sites")}</div>
@@ -144,14 +232,12 @@ export function buildSummaryHtml(run: PayRun, o: PayDocOptions): string {
       <div><span>People</span><b>${run.totals.people}</b></div>
       <div><span>Days paid</span><b>${formatDays(run.totals.daysCounted)}</b></div>
       <div><span>Hours paid</span><b>${formatHours(run.totals.paidHours)}</b></div>
-      <div><span>Gross pay</span><b>${money(run.totals.gross)}</b></div>
+      <div><span>${breakdown.length ? "Total payable" : "Gross pay"}</span><b>${money(run.totals.gross)}</b></div>
     </div>
-    <table><thead><tr><th>Name</th><th>Days</th><th>Hours</th><th>Rate / h</th><th>Earned</th><th>Adjust.</th><th>Gross pay</th></tr></thead>
-    <tbody>${rows}</tbody>
-    <tfoot><tr><td>Total</td><td>${formatDays(run.totals.daysCounted)}</td><td>${formatHours(run.totals.paidHours)}</td><td></td><td>${money(run.totals.earned)}</td><td>${money(run.totals.adjustments)}</td><td>${money(run.totals.gross)}</td></tr></tfoot></table>
+    ${peopleTable}${tipNote}${flatTable}${supplierTable}${breakdownBlock}
     ${run.notes ? `<p class="muted" style="margin-top:12px;white-space:pre-line">${esc(run.notes)}</p>` : ""}
     <div class="sign"><div>Prepared by ${esc(run.createdByName)}</div><div>Approved by ${esc(run.finalisedByName ?? "________________")}</div></div>
-    <div class="foot">${DISCLAIMER}</div>
+    <div class="foot">${payDisclaimer(run)}</div>
   </div></body></html>`;
 }
 
@@ -184,4 +270,23 @@ function statement(run: PayRun, p: PayPerson, o: PayDocOptions): string {
 /** One page per person (or the single person given). */
 export function buildInvoicesHtml(run: PayRun, people: PayPerson[], o: PayDocOptions): string {
   return `<html><head><meta charset="utf-8"/><style>${STYLE}</style></head><body>${people.map((p) => statement(run, p, o)).join("")}</body></html>`;
+}
+
+/** One page per flat-fee payee: what they are paid, any fine, and the amount payable. */
+export function buildPayeeStatementsHtml(run: PayRun, statements: PayeeStatement[], o: PayDocOptions): string {
+  const money = (v: string) => formatMoney(v, run.currency);
+  const page = (st: PayeeStatement) => `<div class="page">
+    ${head(run, o.brandName, o.logoUrl, "PAYMENT STATEMENT", o.generatedLabel)}
+    <div class="eyebrow">${esc(periodLabel(run))} | ${esc(run.title)}</div>
+    <h1>${esc(st.payee)}</h1>
+    <table><thead><tr><th>For</th><th>Group</th><th>Amount</th><th>Fine</th><th>Net</th></tr></thead><tbody>${st.lines
+      .map((l) => `<tr><td>${esc(l.description || "Fee")}</td><td>${esc(l.group)}</td><td>${money(l.amount)}</td><td>${money(l.fine)}</td><td><b>${money(l.net ?? l.amount)}</b></td></tr>`)
+      .join("")}</tbody></table>
+    <div class="total">
+      ${Number(st.fine) > 0 ? `<div><span>Fees</span><span>${money(st.amount)}</span></div><div><span>Fines</span><span>-${money(st.fine)}</span></div>` : ""}
+      <div class="gross"><span>Amount payable</span><span>${money(st.net)}</span></div>
+    </div>
+    <div class="foot">Amounts as entered. Tax and other deductions are not included.</div>
+  </div>`;
+  return `<html><head><meta charset="utf-8"/><style>${STYLE}</style></head><body>${statements.map(page).join("")}</body></html>`;
 }

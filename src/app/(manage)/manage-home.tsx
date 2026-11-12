@@ -45,6 +45,7 @@ export default function ManageHome() {
   const scheduleOn = useScheduleOn();
   const leaveOn = useLeaveOn();
   const wayfindingOn = useHasModule("wayfinding");
+  const layoutOn = useHasModule("site_layout");
   const [view, setView] = useState<View3>("tasks");
 
   const mySites = useMemo(() => {
@@ -63,7 +64,7 @@ export default function ManageHome() {
   // Only people clocked in at this manager's own sites - state.attendance can hold every site's.
   const mySiteIds = new Set(mySites.map((s) => s.id));
   const onShift = Object.values(state.attendance).filter(
-    (entry) => entry?.clockedInAt && !!entry.siteId && mySiteIds.has(entry.siteId),
+    (entry) => entry?.clockedInAt && !entry.locationLostAt && !!entry.siteId && mySiteIds.has(entry.siteId),
   );
   const onShiftBySite = (siteId: string) => onShift.filter((e) => e.siteId === siteId).length;
   const staffedSites = mySites.filter((s) => onShiftBySite(s.id) > 0).length;
@@ -173,7 +174,11 @@ export default function ManageHome() {
       </View>
 
       <View style={styles.pair}>
-        <View style={[styles.card, styles.half]}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push("/attendance" as never)}
+          style={[styles.card, styles.half]}
+        >
           <Label icon="people-outline" text="On shift now" />
           <Text style={styles.big}>{onShift.length}</Text>
           <View style={styles.track}>
@@ -182,10 +187,10 @@ export default function ManageHome() {
           <Text style={styles.sub}>
             {onShift.length === 0 ? "Nobody clocked in yet" : `At ${staffedSites} of ${mySites.length} sites`}
           </Text>
-        </View>
+        </Pressable>
         <Pressable
           accessibilityRole="button"
-          onPress={() => setView("issues")}
+          onPress={() => router.push("/incidents" as never)}
           style={[styles.card, styles.half]}
         >
           <Label icon="warning-outline" text="Open incidents" />
@@ -260,22 +265,47 @@ export default function ManageHome() {
         {mySites.length === 0 ? (
           <Text style={[styles.sub, { paddingVertical: spacing.md }]}>No sites to show.</Text>
         ) : (
-          mySites.map((site, i) => (
-            <View key={site.id} style={[styles.row, i > 0 && styles.divider]}>
-              <View style={[styles.disc, { backgroundColor: colors.accent }]}>
-                <Ionicons name="business-outline" size={16} color={colors.primary} />
+          mySites.map((site, i) => {
+            // The live floor plan is an Enterprise feature for managers; a site with no floors has nothing to show.
+            const hasPlan = layoutOn && (site.profile?.floors?.length ?? 0) > 0;
+            const content = (
+              <>
+                <View style={[styles.disc, { backgroundColor: colors.accent }]}>
+                  <Ionicons name="business-outline" size={16} color={colors.primary} />
+                </View>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={styles.rowTitle} numberOfLines={1}>
+                    {site.name}
+                  </Text>
+                  <Text style={styles.sub} numberOfLines={1}>
+                    {site.workingHours ? `Open ${hoursText(site.workingHours, "–")} · ` : ""}
+                    {onShiftBySite(site.id)} on shift
+                  </Text>
+                </View>
+                {hasPlan && (
+                  <View style={styles.planLink}>
+                    <Text style={styles.link}>Floor plan</Text>
+                    <Ionicons name="chevron-forward" size={16} color={colors.primary} />
+                  </View>
+                )}
+              </>
+            );
+            return hasPlan ? (
+              <Pressable
+                key={site.id}
+                accessibilityRole="button"
+                accessibilityLabel={`${site.name} floor plan`}
+                onPress={() => router.push({ pathname: "/site-floor", params: { siteId: site.id } } as never)}
+                style={({ pressed }) => [styles.row, i > 0 && styles.divider, pressed && { opacity: 0.7 }]}
+              >
+                {content}
+              </Pressable>
+            ) : (
+              <View key={site.id} style={[styles.row, i > 0 && styles.divider]}>
+                {content}
               </View>
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={styles.rowTitle} numberOfLines={1}>
-                  {site.name}
-                </Text>
-                <Text style={styles.sub} numberOfLines={1}>
-                  {site.workingHours ? `Open ${hoursText(site.workingHours, "–")} · ` : ""}
-                  {onShiftBySite(site.id)} on shift
-                </Text>
-              </View>
-            </View>
-          ))
+            );
+          })
         )}
       </View>
 
@@ -351,6 +381,7 @@ const styles = themedStyles(() =>
     },
     sectionTitle: { fontSize: typography.h2, fontWeight: "600", color: colors.foreground },
     link: { fontSize: typography.small + 1, color: colors.primary, fontWeight: "600" },
+    planLink: { flexDirection: "row", alignItems: "center", gap: 2 },
     listCard: { paddingVertical: 2 },
     row: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingVertical: spacing.md },
     divider: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
