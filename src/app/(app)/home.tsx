@@ -52,6 +52,7 @@ import { fileUrl } from "@/api/client";
 import { useStaffRole } from "@/features/roles";
 import { useCanOpenStock } from "@/features/stock";
 import { useSmartClean } from "@/features/store";
+import { isMyTask } from "@/domain/taskWorkflows";
 import { hexAlpha } from "@/domain/calendarGrid";
 import {
   colors,
@@ -112,7 +113,7 @@ export default function HomeScreen() {
   // the "Task progress" done/total count with rounds that already have
   // their own place to live.
   const allMyTasks = state.tasks.filter(
-    (t) => t.assigneeId === currentUser?.id && !t.isHourlyCompliance,
+    (t) => isMyTask(t, currentUser?.id) && !t.isHourlyCompliance,
   );
   // Hourly-compliance rounds where this user is a named candidate but
   // isn't the current assignee - either still open for them to claim

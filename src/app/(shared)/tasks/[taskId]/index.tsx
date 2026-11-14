@@ -32,6 +32,8 @@ import { mergeQueuedEvidence, waitingCount } from "@/domain/evidenceQueue";
 import { FINISHED_VIEW_STATUSES, TaskSummary } from "@/components/TaskSummary";
 import { TagChips } from "@/components/TagChip";
 import { StatusBadge, VerifiedBadge } from "@/components/StatusBadge";
+import { WorkflowTaskPanel } from "@/components/taskWorkflows/WorkflowTaskPanel";
+import { isWorkflowTask } from "@/domain/taskWorkflows";
 import { useSmartClean } from "@/features/store";
 import { useHomePath, useScanPath } from "@/features/roles";
 import { fileUrl } from "@/api/client";
@@ -219,6 +221,20 @@ export default function TaskDetailScreen() {
         >
           Back home
         </Button>
+      </Screen>
+    );
+  }
+
+  // A task made from a workflow is worked item by item, each signed by its own person, and signed off by its
+  // supervisor, so it has its own view instead of the single checklist below (and has no inspection to go to).
+  if (isWorkflowTask(task)) {
+    return (
+      <Screen title={task.title} backTo={homePath}>
+        <View style={styles.workflowHeader}>
+          <StatusBadge tone={toneForTask(task.status)} label={humanStatus(task.status)} />
+          {task.locationName ? <Text style={styles.mutedSmall}>{task.locationName}</Text> : null}
+        </View>
+        <WorkflowTaskPanel task={task} />
       </Screen>
     );
   }
@@ -1084,6 +1100,12 @@ const styles = themedStyles(() =>
       fontSize: typography.body,
       fontWeight: "700",
       color: colors.destructive,
+    },
+    workflowHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.sm,
+      marginBottom: spacing.md,
     },
     mutedSmall: {
       fontSize: typography.small,

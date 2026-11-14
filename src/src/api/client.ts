@@ -43,6 +43,8 @@ import type {
   TableSessionClaimResult,
   Tenant,
   WaiterSessionEndReason,
+  WorkflowCandidates,
+  WorkflowSignPayload,
 } from "@/types/smartclean";
 import { formatTime } from "@/services/formatDateTime";
 
@@ -3623,3 +3625,93 @@ export const submitVerificationRun = (
     answers: ReturnType<typeof buildVerificationAnswers>;
   },
 ) => request<VerificationRunReceipt>("/verification/runs", { method: "POST", body: JSON.stringify(body) }, token);
+
+export interface VerificationRunAnswer {
+  stepId: string;
+  type: VerificationStep["type"];
+  label: string;
+  value?: string | boolean;
+  filePaths?: string[];
+  scan?: { value: string; userId?: string; name?: string };
+  signoff?: {
+    name: string | null;
+    mode: string;
+    path: string | null;
+    width: number | null;
+    height: number | null;
+    signedAt: string;
+  };
+}
+
+export interface VerificationRunRecord {
+  id: string;
+  reference: string | null;
+  siteName: string;
+  workflowName: string;
+  operatorName: string;
+  answers: VerificationRunAnswer[];
+  submittedAt: string;
+}
+
+/** Orders in a date range. For floor staff the server returns only the orders they verified themselves. */
+export const listVerificationRuns = (
+  token: string,
+  filters: { startDate: string; endDate: string; q?: string },
+) => {
+  const params = new URLSearchParams({ startDate: filters.startDate, endDate: filters.endDate });
+  if (filters.q?.trim()) params.set("q", filters.q.trim());
+  return request<{ total: number; truncated: boolean; runs: VerificationRunRecord[] }>(
+    `/verification/runs?${params}`,
+    {},
+    token,
+  );
+};
+
+
+// ---- Task workflows ----
+// A task made from a workflow is worked item by item. These mirror the web client's functions of the same
+// names (lib/smartclean/api.ts). Making the tasks and designing the workflows is done on the web.
+
+/** Sign off one of your own items. `actionAt` and `offlineRecorded` are set when it was signed offline. */
+export const signWorkflowItem = (accessToken: string, taskId: string, itemId: string, body: WorkflowSignPayload) =>
+  request<Task>(
+    `/task-workflows/tasks/${encodeURIComponent(taskId)}/items/${encodeURIComponent(itemId)}/signoff`,
+    { method: "POST", body: JSON.stringify(body) },
+    accessToken,
+  );
+
+/** Supervisor: send a signed item back to be redone, with the reason. */
+export const returnWorkflowItem = (accessToken: string, taskId: string, itemId: string, note: string) =>
+  request<Task>(
+    `/task-workflows/tasks/${encodeURIComponent(taskId)}/items/${encodeURIComponent(itemId)}/return`,
+    { method: "POST", body: JSON.stringify({ note }) },
+    accessToken,
+  );
+
+/** Supervisor or above: who could take over on this task, booked staff first. */
+export const getWorkflowCandidatesForTask = (accessToken: string, taskId: string) =>
+  request<WorkflowCandidates>(`/task-workflows/tasks/${encodeURIComponent(taskId)}/candidates`, {}, accessToken);
+
+/** Supervisor or above: swap who does one item, or everything a person has not yet signed. */
+export const replaceWorkflowPerson = (
+  accessToken: string,
+  taskId: string,
+  body: { assigneeId: string; reason: string; itemId?: string; fromUserId?: string; allowUnbooked?: boolean },
+) =>
+  request<Task>(
+    `/task-workflows/tasks/${encodeURIComponent(taskId)}/replace`,
+    { method: "POST", body: JSON.stringify(body) },
+    accessToken,
+  );
+
+/** The task's supervisor (or a manager): sign the whole task off once every item is signed. */
+export const signOffWorkflowTask = (
+  accessToken: string,
+  taskId: string,
+  body: { signoff?: WorkflowSignPayload["signoff"] },
+) =>
+  request<Task>(
+    `/task-workflows/tasks/${encodeURIComponent(taskId)}/signoff`,
+    { method: "POST", body: JSON.stringify(body) },
+    accessToken,
+  );

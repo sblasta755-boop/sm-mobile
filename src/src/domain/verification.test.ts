@@ -1,4 +1,6 @@
 import {
+  friendlyWhen,
+  workflowOutline,
   buildAnswers,
   firstIncomplete,
   photoLimits,
@@ -87,5 +89,61 @@ describe("referenceFromScan", () => {
   it("keeps a plain code and takes the last part of an address", () => {
     expect(referenceFromScan(" ORD-77 ")).toBe("ORD-77");
     expect(referenceFromScan("https://shop.example.com/orders/ORD-77?x=1")).toBe("ORD-77");
+  });
+});
+
+describe("sign-off steps", () => {
+  const strokes = [{ points: Array.from({ length: 12 }, (_, i) => [i * 5, 10 + (i % 3)] as [number, number]) }];
+  const signStep = (config: Record<string, unknown> = {}, required = true) =>
+    step({ id: "s", type: "signoff", required, config: { mode: "name_and_signature", requireNameMatch: true, ...config } });
+
+  it("needs a matching name and a real signature when both are asked for", () => {
+    const s = signStep();
+    expect(stepComplete(s, undefined, "Thandi N")).toBe(false);
+    expect(stepComplete(s, { signoff: { name: "Thandi N", strokes: [], width: 0, height: 0 } }, "Thandi N")).toBe(false);
+    expect(stepComplete(s, { signoff: { name: "Someone", strokes, width: 300, height: 200 } }, "Thandi N")).toBe(false);
+    expect(stepComplete(s, { signoff: { name: " thandi  n ", strokes, width: 300, height: 200 } }, "Thandi N")).toBe(true);
+  });
+
+  it("follows the mode and leaves name matching to the server when the account name is unknown", () => {
+    expect(stepComplete(signStep(), { signoff: { name: "Anyone", strokes, width: 300, height: 200 } })).toBe(true);
+    const nameOnly = signStep({ mode: "name", requireNameMatch: false });
+    expect(stepComplete(nameOnly, { signoff: { name: "Any", strokes: [], width: 0, height: 0 } })).toBe(true);
+    const drawOnly = signStep({ mode: "signature" });
+    expect(stepComplete(drawOnly, { signoff: { name: "", strokes, width: 300, height: 200 } })).toBe(true);
+    expect(stepComplete(drawOnly, { signoff: { name: "typed", strokes: [], width: 0, height: 0 } })).toBe(false);
+    expect(stepComplete(signStep({}, false), undefined, "Thandi N")).toBe(true);
+  });
+
+  it("sends the name only when the mode wants it, and the strokes in the server's shape", () => {
+    const answers = { s: { signoff: { name: " Thandi N ", strokes, width: 300, height: 200 } } };
+    const both = buildAnswers([signStep()], answers)[0].signoff;
+    expect(both?.name).toBe("Thandi N");
+    expect(both?.signature?.width).toBe(300);
+    expect(both?.signature?.strokes[0][0]).toEqual([0, 10]);
+    expect(buildAnswers([signStep({ mode: "signature" })], answers)[0].signoff?.name).toBeUndefined();
+    expect(buildAnswers([signStep()], { s: { signoff: { name: "", strokes: [], width: 0, height: 0 } } })).toEqual([]);
+  });
+});
+
+describe("screen helpers", () => {
+  it("outlines a workflow", () => {
+    const steps = [
+      step({ id: "a", type: "scan", config: { scanKind: "staff_qr" } }),
+      step({ id: "b", type: "photo", config: { min: 2, max: 3 } }),
+      step({ id: "c", type: "signoff" }),
+      step({ id: "d", type: "reference" }),
+    ];
+    expect(workflowOutline(steps)).toEqual(["2 photos", "Staff QR", "Sign-off", "Order number"]);
+    expect(workflowOutline([])).toEqual([]);
+  });
+
+  it("says when in plain words", () => {
+    const now = new Date(2026, 10, 12, 23, 0);
+    expect(friendlyWhen(new Date(2026, 10, 12, 22, 58).toISOString(), now)).toBe("Today, 22:58");
+    expect(friendlyWhen(new Date(2026, 10, 11, 9, 5).toISOString(), now)).toBe("Yesterday, 09:05");
+    expect(friendlyWhen(new Date(2026, 10, 3, 14, 0).toISOString(), now)).toBe("3 Nov, 14:00");
+    expect(friendlyWhen(new Date(2025, 11, 31, 8, 0).toISOString(), now)).toBe("31 Dec 2025, 08:00");
+    expect(friendlyWhen("nope", now)).toBe("nope");
   });
 });

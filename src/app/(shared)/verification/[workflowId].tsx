@@ -74,16 +74,23 @@ export default function VerificationRunScreen() {
       </Screen>
     );
   }
-  return <Runner workflow={workflow} token={token} siteId={workflow.siteId ?? currentUser?.siteIds?.[0] ?? null} />;
+  return <Runner
+      workflow={workflow}
+      token={token}
+      accountName={currentUser?.name ?? ""}
+      siteId={workflow.siteId ?? currentUser?.siteIds?.[0] ?? null}
+    />;
 }
 
 function Runner({
   workflow,
   token,
+  accountName,
   siteId,
 }: {
   workflow: VerificationWorkflow;
   token: string;
+  accountName: string;
   siteId: string | null;
 }) {
   const steps = workflow.steps;
@@ -98,7 +105,7 @@ function Runner({
 
   const reviewing = run.index >= steps.length;
   const step: VerificationStep | undefined = steps[Math.min(run.index, steps.length - 1)];
-  const percent = progressPercent(steps, run.answers);
+  const percent = progressPercent(steps, run.answers, accountName);
   const reference = useMemo(() => referenceOf(steps, run.answers), [steps, run.answers]);
 
   const setAnswer = (stepId: string, next: VerificationAnswerDraft) =>
@@ -106,7 +113,7 @@ function Runner({
   const go = (index: number) => setRun((prev) => ({ ...prev, index }));
 
   async function send() {
-    const missing = firstIncomplete(steps, run.answers);
+    const missing = firstIncomplete(steps, run.answers, accountName);
     if (missing >= 0) {
       appAlert("Not finished", `${steps[missing].label} still needs doing.`);
       go(missing);
@@ -151,6 +158,7 @@ function Runner({
               key={step.id}
               step={step}
               token={token}
+              accountName={accountName}
               answer={run.answers[step.id]}
               onChange={(next) => setAnswer(step.id, next)}
             />
@@ -168,7 +176,7 @@ function Runner({
             <Button
               fullWidth={false}
               style={styles.navButton}
-              disabled={!stepComplete(step, run.answers[step.id])}
+              disabled={!stepComplete(step, run.answers[step.id], accountName)}
               onPress={() => go(run.index + 1)}
             >
               {run.index === steps.length - 1 ? "Review" : "Next"}
@@ -185,7 +193,7 @@ function Runner({
                   <Text style={styles.summaryLabel} numberOfLines={1}>
                     {s.label}
                   </Text>
-                  <Text style={stepComplete(s, run.answers[s.id]) ? styles.summaryDone : styles.summaryTodo}>
+                  <Text style={stepComplete(s, run.answers[s.id], accountName) ? styles.summaryDone : styles.summaryTodo}>
                     {summaryOf(s, run.answers[s.id])}
                   </Text>
                 </Pressable>
@@ -219,6 +227,11 @@ function summaryOf(step: VerificationStep, answer: VerificationAnswerDraft | und
   }
   if (step.type === "scan") return answer?.scan ? (answer.scan.name ?? answer.scan.value) : "Not scanned";
   if (step.type === "confirm") return answer?.value === true ? "Yes" : "Not confirmed";
+  if (step.type === "signoff") {
+    const given = answer?.signoff;
+    if (!given || (!given.name.trim() && given.strokes.length === 0)) return step.required ? "Not signed" : "Skipped";
+    return given.name.trim() || "Signed";
+  }
   const text = typeof answer?.value === "string" ? answer.value.trim() : "";
   return text || (step.required ? "Missing" : "Skipped");
 }

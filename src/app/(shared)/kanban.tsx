@@ -8,6 +8,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { TaskSearchBar } from "@/components/TaskSearchBar";
 import { TagChips } from "@/components/TagChip";
 import { useSmartClean } from "@/features/store";
+import { isMyTask } from "@/domain/taskWorkflows";
 import { taskDestination } from "@/domain/inspections";
 import { boardColumns, filterTasks, isOverdue, tagsOf } from "@/domain/taskBoard";
 import { isOnToday } from "@/domain/todayFocus";
@@ -40,7 +41,7 @@ export default function KanbanScreen() {
       state.tasks.filter(
         (task) =>
           !task.isHourlyCompliance &&
-          (!mineOnly || task.assigneeId === currentUser?.id) &&
+          (!mineOnly || isMyTask(task, currentUser?.id)) &&
           (allDays || isOnToday(task, now)),
       ),
     [state.tasks, mineOnly, currentUser, allDays, now],

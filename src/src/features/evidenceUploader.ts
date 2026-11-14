@@ -18,6 +18,7 @@ import {
   resolveQr,
   updateCorrectiveAction,
   saveTaskNote,
+  signWorkflowItem,
   startTask,
   submitTask,
   updateChecklistItem,
@@ -227,6 +228,13 @@ async function sendMutation(
         actionAt: m.createdAt,
         offlineRecorded: true,
       }) as Promise<Task>;
+    case "workflow.sign":
+      // Judged at the moment the person signed, not when it reached the server.
+      return signWorkflowItem(ctx.token, m.taskId!, String(p.itemId), {
+        ...(m.payload.body as Record<string, unknown>),
+        actionAt: m.createdAt,
+        offlineRecorded: true,
+      });
     case "task.note":
       return saveTaskNote(ctx.token, m.taskId!, String(m.payload.note ?? ""), {
         actionAt: m.createdAt,

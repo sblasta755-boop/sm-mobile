@@ -32,6 +32,9 @@ export default function VerificationDoneScreen() {
       </Card>
       <View style={styles.actions}>
         <Button onPress={() => router.replace("/verification" as never)}>Verify another order</Button>
+        <Button variant="outline" onPress={() => router.push("/verification/orders" as never)}>
+          My verified orders
+        </Button>
         <Button
           variant="outline"
           onPress={() => router.replace(homePathForRole(currentUser?.role) as never)}

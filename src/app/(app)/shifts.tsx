@@ -11,6 +11,7 @@ import { filterTasks, filtersActive, tagsOf } from "@/domain/taskBoard";
 import { DateStrip, isSameDay } from "@/components/DateStrip";
 import { useDaySelection } from "@/features/useDaySelection";
 import { useSmartClean } from "@/features/store";
+import { isMyTask } from "@/domain/taskWorkflows";
 import { toneForTask, humanStatus } from "@/domain/status";
 import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 import type { TaskStatus } from "@/types/smartclean";
@@ -40,7 +41,7 @@ export default function ShiftsScreen() {
       filterTasks(
         state.tasks.filter(
           (t) =>
-            t.assigneeId === currentUser?.id &&
+            isMyTask(t, currentUser?.id) &&
             !t.isHourlyCompliance &&
             isSameDay(new Date(t.scheduledAt), selectedDate),
         ),

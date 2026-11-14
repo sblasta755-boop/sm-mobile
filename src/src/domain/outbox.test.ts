@@ -6,6 +6,7 @@ import {
   applyMutations,
   applyStockCount,
   clockBodyFromMutation,
+  pendingCount,
   pendingStockUse,
   type OutboxMutation,
 } from "./outbox";
@@ -198,5 +199,43 @@ describe("a refused submit", () => {
       { id: "m1", kind: "task.submit", taskId: "t1", createdAt: "2026-01-01T10:00:00Z", payload: {}, status: "rejected", attempts: 1, userId: "u" } as never,
     ]);
     expect((out[0] as { status: string }).status).toBe("submitted");
+  });
+});
+
+describe("workflow items signed offline", () => {
+  const item = (id: string, over: Record<string, unknown> = {}) => ({ id, type: "workflow_item", done: false, signedAt: null, ...over });
+  const wf = (checklist: unknown[], status = "assigned") =>
+    ({ id: "t1", status, checklist }) as unknown as Parameters<typeof applyMutations>[0][number];
+  const sign = (itemId: string, over: Partial<OutboxMutation> = {}) =>
+    mut({ kind: "workflow.sign", payload: { itemId, body: {}, signedByName: "Ada" }, ...over });
+
+  it("shows the item as signed at once, marked as waiting to be sent, and starts the task", () => {
+    const [after] = applyMutations([wf([item("i1"), item("i2")])], [sign("i1")]);
+    expect(after.status).toBe("in_progress");
+    const first = after.checklist[0] as unknown as Record<string, unknown>;
+    expect(first).toMatchObject({ done: true, signedBy: "u1", signedByName: "Ada", pendingSign: true, returned: false });
+    expect(first.signedAt).toBe("2026-10-15T10:00:00.000Z");
+    expect((after.checklist[1] as unknown as Record<string, unknown>).signedAt).toBeNull();
+  });
+
+  it("hands the task to the supervisor when the last item is signed, or resubmits after a send back", () => {
+    const rest = item("i2", { signedAt: "2026-10-15T09:00:00.000Z" });
+    expect(applyMutations([wf([item("i1"), rest])], [sign("i1")])[0].status).toBe("submitted");
+    expect(applyMutations([wf([item("i1"), rest], "rework_required")], [sign("i1")])[0].status).toBe("resubmitted");
+  });
+
+  it("leaves other tasks, and a refused sign-off, alone", () => {
+    const original = wf([item("i1")]);
+    expect(applyMutations([original], [sign("i1", { taskId: "other" })])[0]).toBe(original);
+    expect(applyMutations([original], [sign("i1", { status: "rejected" })])[0]).toBe(original);
+  });
+
+  it("keeps one sign-off per item: signing the same item again replaces the earlier attempt", () => {
+    const first = sign("i1", { id: "m1" });
+    const again = sign("i1", { id: "m2" });
+    const other = sign("i2", { id: "m3" });
+    const queue = addMutation(addMutation([], first), other);
+    expect(addMutation(queue, again).map((m) => m.id).sort()).toEqual(["m2", "m3"]);
+    expect(pendingCount(addMutation(queue, again))).toBe(2);
   });
 });

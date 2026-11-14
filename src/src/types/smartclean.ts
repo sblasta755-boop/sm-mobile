@@ -1055,3 +1055,104 @@ export interface TableOrderLineDecision {
   qty?: number;
   reason?: string;
 }
+
+// ---- Task workflows ----
+// A task made from a manager-built design: each item has its own person who signs it off, then the
+// supervisor signs the whole task off. Mirrors the web app's lib/smartclean/types.ts and the backend's
+// app/services/task_workflows.py. The builder is web-only, so only what a task carries is here.
+
+export type TaskWorkflowItemType = "check" | "photo" | "text" | "note" | "confirm" | "scan" | "measurement";
+
+/** "tick" records a time only; the others follow the task sign-off rules (typed name, drawn signature, both). */
+export type TaskSignoffMode = "tick" | "name" | "signature" | "name_and_signature";
+
+export interface TaskWorkflowItem {
+  id: string;
+  type: TaskWorkflowItemType;
+  label: string;
+  helpText: string;
+  required: boolean;
+  config: Record<string, unknown>;
+  assigneeRole: string | null;
+  signoff: { mode: TaskSignoffMode; requireNameMatch: boolean } | null;
+}
+
+export interface TaskWorkflowSettings {
+  itemSignoffMode: TaskSignoffMode;
+  supervisorSignoffMode: TaskSignoffMode;
+  requireNameMatch: boolean;
+}
+
+/** One item's state on a workflow task (the task's checklist entry). */
+export interface WorkflowItemState {
+  id: string;
+  label: string;
+  type: "workflow_item";
+  itemType: TaskWorkflowItemType;
+  helpText: string;
+  required: boolean;
+  config: Record<string, unknown>;
+  assigneeRole: string | null;
+  done: boolean;
+  assigneeId: string;
+  assigneeName: string;
+  plannedAssigneeId: string;
+  content: { value?: string | number | boolean; filePaths?: string[]; scan?: { value: string; name?: string } } | null;
+  signoff: {
+    name: string | null;
+    mode: TaskSignoffMode;
+    path: string | null;
+    width: number | null;
+    height: number | null;
+    signedAt: string;
+  } | null;
+  signedAt: string | null;
+  signedBy: string | null;
+  signedByName: string | null;
+  returned: boolean;
+  returnNote: string | null;
+  /** True while this person's sign-off is saved on the phone and not yet sent. */
+  pendingSign?: boolean;
+}
+
+export interface WorkflowReplacement {
+  itemIds: string[];
+  fromUserIds: string[];
+  fromNames: string[];
+  toUserId: string;
+  toName: string;
+  reason: string;
+  byUserId: string;
+  byName: string;
+  at: string;
+  booked: boolean;
+  bookingId: string | null;
+}
+
+/** A person who could do the work on a day: booked in the Schedule first, then everyone else at the site. */
+export interface WorkflowCandidate {
+  id: string;
+  name: string;
+  role: string;
+  onLeave: boolean;
+  itemCount: number;
+  bookingId: string | null;
+  startTime: string | null;
+  endTime: string | null;
+}
+
+export interface WorkflowCandidates {
+  day: string;
+  booked: WorkflowCandidate[];
+  others: WorkflowCandidate[];
+}
+
+/** What a person sends when signing an item (the same shapes order verification uses). */
+export interface WorkflowSignPayload {
+  value?: string | boolean;
+  filePaths?: string[];
+  scan?: { value: string; name?: string };
+  signoff?: { name?: string; signature?: { strokes: number[][][]; width: number; height: number } };
+  actionAt?: string;
+  offlineRecorded?: boolean;
+}

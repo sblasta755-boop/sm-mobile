@@ -2,13 +2,18 @@ import { useCallback, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from "expo-camera";
+import Svg, { Path } from "react-native-svg";
 import { Button } from "@/components/Button";
 import { PhotoCapture } from "@/components/PhotoCapture";
+import { SignatureDrawer } from "@/components/SignatureDrawer";
 import { appAlert } from "@/components/Dialog";
 import { resolveVerificationScan } from "@/api/client";
+import { nameFieldCopy, strokesToPath } from "@/domain/signoff";
 import {
   photoLimits,
   referenceFromScan,
+  signoffMode,
+  signoffStepProblems,
   type VerificationAnswerDraft,
   type VerificationStep,
 } from "@/domain/verification";
@@ -18,6 +23,8 @@ interface StepProps {
   step: VerificationStep;
   answer: VerificationAnswerDraft | undefined;
   token: string;
+  /** The signed-in person's name, for a sign-off that must match their account. */
+  accountName: string;
   onChange: (next: VerificationAnswerDraft) => void;
 }
 
@@ -38,6 +45,7 @@ export function StepBody(props: StepProps) {
       {step.type === "confirm" && <ConfirmStep {...props} />}
       {step.type === "scan" && <ScanStep {...props} />}
       {step.type === "reference" && <ReferenceStep {...props} />}
+      {step.type === "signoff" && <SignoffStep {...props} />}
     </View>
   );
 }
@@ -86,6 +94,91 @@ function ConfirmStep({ answer, onChange }: StepProps) {
         onValueChange={(value) => onChange({ ...answer, value, capturedAt: new Date().toISOString() })}
         accessibilityLabel="Confirm"
       />
+    </View>
+  );
+}
+
+/** Sign with a typed name, a drawn signature or both, as the workflow says (same rules as a task sign-off). */
+function SignoffStep({ step, answer, accountName, onChange }: StepProps) {
+  const mode = signoffMode(step);
+  const requireMatch = step.config.requireNameMatch !== false;
+  const given = answer?.signoff ?? { name: "", strokes: [], width: 0, height: 0 };
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const copy = nameFieldCopy({ mode, requireNameMatch: requireMatch, accountName });
+  const problems = signoffStepProblems(step, answer, accountName);
+  const mismatch = given.name.trim() !== "" && problems.includes("The name must match your account name");
+  const signed = given.strokes.length > 0;
+
+  return (
+    <View style={styles.gap}>
+      {mode !== "signature" && (
+        <View style={styles.gap}>
+          <Text style={styles.help}>{copy.label}</Text>
+          <TextInput
+            value={given.name}
+            onChangeText={(name) =>
+              onChange({ ...answer, signoff: { ...given, name }, capturedAt: new Date().toISOString() })
+            }
+            autoCapitalize="words"
+            autoCorrect={false}
+            maxLength={160}
+            placeholder={copy.placeholder}
+            placeholderTextColor={colors.mutedForeground}
+            style={[styles.input, mismatch && styles.inputError]}
+          />
+          {mismatch && <Text style={styles.error}>The name must match your account name.</Text>}
+        </View>
+      )}
+      {mode !== "name" && (
+        <View style={styles.gap}>
+          <Text style={styles.help}>Signature</Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={signed ? "Change your signature" : "Tap to sign"}
+            style={styles.signatureBox}
+            onPress={() => setDrawerOpen(true)}
+          >
+            {signed ? (
+              <Svg width="100%" height="100%" viewBox={`0 0 ${given.width} ${given.height}`}>
+                <Path
+                  d={strokesToPath(given.strokes)}
+                  stroke={colors.foreground}
+                  strokeWidth={2.5}
+                  fill="none"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </Svg>
+            ) : (
+              <View style={styles.signatureEmpty}>
+                <Ionicons name="create-outline" size={20} color={colors.primary} />
+                <Text style={styles.signatureAdd}>Tap to sign</Text>
+              </View>
+            )}
+          </Pressable>
+          {signed && (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => onChange({ ...answer, signoff: { ...given, strokes: [], width: 0, height: 0 } })}
+            >
+              <Text style={styles.clearLink}>Clear signature</Text>
+            </Pressable>
+          )}
+          <SignatureDrawer
+            visible={drawerOpen}
+            initial={signed ? { strokes: given.strokes, width: given.width, height: given.height } : null}
+            onClose={() => setDrawerOpen(false)}
+            onDone={(result) => {
+              onChange({
+                ...answer,
+                signoff: { ...given, strokes: result.strokes, width: result.width, height: result.height },
+                capturedAt: new Date().toISOString(),
+              });
+              setDrawerOpen(false);
+            }}
+          />
+        </View>
+      )}
     </View>
   );
 }
@@ -244,6 +337,21 @@ const styles = themedStyles(() =>
       backgroundColor: colors.card,
     },
     textarea: { minHeight: 96, textAlignVertical: "top" },
+    inputError: { borderColor: colors.destructive },
+    signatureBox: {
+      height: 140,
+      borderWidth: 2,
+      borderStyle: "dashed",
+      borderColor: colors.border,
+      borderRadius: radius.lg,
+      backgroundColor: colors.card,
+      alignItems: "center",
+      justifyContent: "center",
+      padding: spacing.sm,
+    },
+    signatureEmpty: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+    signatureAdd: { fontSize: typography.body, fontWeight: "700", color: colors.primary },
+    clearLink: { fontSize: typography.small, color: colors.mutedForeground, textDecorationLine: "underline" },
     confirmRow: {
       flexDirection: "row",
       alignItems: "center",

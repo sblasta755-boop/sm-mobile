@@ -21,6 +21,7 @@ import { ActionTiles } from "@/components/ActionTiles";
 import { StatusBadge } from "@/components/StatusBadge";
 import { TaskRow } from "@/components/TaskRow";
 import { useSmartClean } from "@/features/store";
+import { isMyTask } from "@/domain/taskWorkflows";
 import { useCanOpenStock } from "@/features/stock";
 import { useHasCapability, useHasModule } from "@/features/modules";
 import { toneForTask, humanStatus } from "@/domain/status";
@@ -71,7 +72,7 @@ export default function SuperviseHome() {
   // for later stay off it (the full list is under "View all").
   const now = useNow();
   const myTasks = useMemo(
-    () => focusTasks(state.tasks.filter((task) => task.assigneeId === currentUser?.id), now),
+    () => focusTasks(state.tasks.filter((task) => isMyTask(task, currentUser?.id)), now),
     [state.tasks, currentUser, now],
   );
 

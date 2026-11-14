@@ -9,6 +9,8 @@ export type OutboxKind =
   | "task.checklist"
   | "task.note"
   | "task.submit"
+  // A person signing off one of their items on a workflow task (see domain/taskWorkflows.ts).
+  | "workflow.sign"
   | "task.scan"
   | "attendance.clock"
   | "overtime.request"
@@ -50,6 +52,39 @@ interface TaskLike {
   startMethod?: string | null;
   note?: string | null;
   qrVerified?: boolean;
+}
+
+/**
+ * A workflow item signed offline reads as signed at once, marked as still waiting to be sent. When the last
+ * item is signed the task reads as handed to the supervisor, the same as the server will make it.
+ */
+function applyWorkflowSign<T extends TaskLike>(task: T, m: OutboxMutation): T {
+  const itemId = String(m.payload.itemId);
+  const signedAt = String(m.payload.signedAt ?? m.createdAt);
+  const checklist = task.checklist.map((item) =>
+    item.id === itemId
+      ? {
+          ...item,
+          done: true,
+          signedAt,
+          signedBy: m.userId,
+          signedByName: typeof m.payload.signedByName === "string" ? m.payload.signedByName : undefined,
+          returned: false,
+          returnNote: null,
+          pendingSign: true,
+        }
+      : item,
+  );
+  const items = checklist.filter((item) => item.type === "workflow_item") as (ChecklistLike & { signedAt?: string | null })[];
+  const everyoneDone = items.length > 0 && items.every((item) => item.signedAt);
+  const status = everyoneDone ? (task.status === "rework_required" ? "resubmitted" : "submitted") : "in_progress";
+  return {
+    ...task,
+    checklist,
+    status,
+    startedAt: task.startedAt ?? signedAt,
+    ...(everyoneDone ? { submittedAt: signedAt } : {}),
+  };
 }
 
 /**
@@ -113,6 +148,8 @@ export function applyMutations<T extends TaskLike>(tasks: T[], mutations: Outbox
         next = { ...next, status: m.payload.decision === "approve" ? "approved" : "rework_required" };
       } else if (m.kind === "task.submit") {
         next = { ...next, status: "submitted", submittedAt: String(m.payload.submittedAt ?? m.createdAt) };
+      } else if (m.kind === "workflow.sign") {
+        next = applyWorkflowSign(next, m);
       }
     }
     return next;
@@ -123,6 +160,8 @@ export function applyMutations<T extends TaskLike>(tasks: T[], mutations: Outbox
 export function supersedes(incoming: OutboxMutation, existing: OutboxMutation): boolean {
   if (existing.status === "sending" || incoming.kind !== existing.kind || incoming.taskId !== existing.taskId) return false;
   if (incoming.kind === "task.checklist") return incoming.payload.itemId === existing.payload.itemId;
+  // Signing the same workflow item again replaces the earlier attempt; each item is its own sign-off.
+  if (incoming.kind === "workflow.sign") return incoming.payload.itemId === existing.payload.itemId;
   // Clock events are a sequence (in, then out), a corrective action moves
   // through steps, and each incident is its own report: none replaces another.
   if (
