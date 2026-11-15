@@ -54,6 +54,12 @@
       "expo-router",
       "expo-secure-store",
       [
+        "expo-contacts",
+        {
+          "contactsPermission": "Šoma360 reads your contacts only when you choose Add from contacts, to fill in a contractor's details."
+        }
+      ],
+      [
         "expo-camera",
         {
           "cameraPermission": "Šoma360 uses the camera to scan QR codes and capture required evidence."

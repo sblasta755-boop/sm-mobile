@@ -80,3 +80,32 @@ export function initialsOf(name: string): string {
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
+
+/** A person picked from the phone's contacts (or a vCard), before it becomes contractor form fields. */
+export type PickedContact = {
+  name?: string | null;
+  company?: string | null;
+  phones: string[];
+  emails: string[];
+};
+
+/**
+ * Contractor form fields from a picked contact. A contact with a company is the business (name) and the person is
+ * who you speak to; a contact with only a person's name is filed under that name.
+ */
+export function contactToContractorFields(c: PickedContact): {
+  name: string;
+  contactPerson: string;
+  phone: string;
+  email: string;
+} {
+  const person = (c.name ?? "").trim();
+  const company = (c.company ?? "").trim();
+  const clean = (list: string[]) => list.map((x) => x.trim()).filter(Boolean);
+  return {
+    name: company || person,
+    contactPerson: company ? person : "",
+    phone: clean(c.phones)[0] ?? "",
+    email: clean(c.emails)[0] ?? "",
+  };
+}

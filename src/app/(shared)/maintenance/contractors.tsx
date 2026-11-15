@@ -12,10 +12,12 @@ import {
 } from "react-native";
 import { useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import * as Contacts from "expo-contacts";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Screen } from "@/components/Screen";
 import { Button } from "@/components/Button";
 import { appAlert } from "@/components/Dialog";
+import { PickerSheet, type PickerItem } from "@/components/PickerSheet";
 import { useSmartClean } from "@/features/store";
 import {
   createMaintenanceContractor,
@@ -29,9 +31,11 @@ import {
 import {
   CONTRACTOR_SUGGESTIONS,
   categoriesInUse,
+  contactToContractorFields,
   filterContractors,
   initialsOf,
   orderContractors,
+  type PickedContact,
   telLink,
   usageText,
   whatsappLink,
@@ -338,6 +342,14 @@ function ContractorSheet({
   const [bank, setBank] = useState({ name: "", branch: "", account: "" });
   const [busy, setBusy] = useState(false);
   const [loadedFor, setLoadedFor] = useState<string | null>(null);
+  // Adding from the phone's contacts: the list to pick from, then (only when a contact has several) which number or email.
+  const [phoneContacts, setPhoneContacts] = useState<
+    { id: string; contact: PickedContact }[] | null
+  >(null);
+  const [choose, setChoose] = useState<{
+    contact: PickedContact;
+    field: "phones" | "emails";
+  } | null>(null);
 
   // Fill the form when a contractor is opened, and empty it for a new one.
   const key = visible ? (contractor?.id ?? "new") : null;
@@ -371,6 +383,82 @@ function ContractorSheet({
         ? cur.filter((x) => x.toLowerCase() !== k.toLowerCase())
         : [...cur, k],
     );
+
+  function fillFrom(contact: PickedContact) {
+    const f = contactToContractorFields(contact);
+    setName(f.name);
+    setPerson(f.contactPerson);
+    setPhone(f.phone);
+    setEmail(f.email);
+  }
+
+  /** Fill the form, first asking which number or email when the contact has more than one. */
+  function advance(contact: PickedContact) {
+    if (contact.phones.length > 1) setChoose({ contact, field: "phones" });
+    else if (contact.emails.length > 1) setChoose({ contact, field: "emails" });
+    else fillFrom(contact);
+  }
+
+  async function openPhoneContacts() {
+    try {
+      const { status } = await Contacts.requestPermissionsAsync();
+      if (status !== "granted") {
+        appAlert(
+          "Contacts are off",
+          "To add someone from your contacts, allow Contacts for this app in your phone's settings. You can still type their details in.",
+        );
+        return;
+      }
+      const { data } = await Contacts.getContactsAsync({
+        fields: [
+          Contacts.Fields.Name,
+          Contacts.Fields.Company,
+          Contacts.Fields.PhoneNumbers,
+          Contacts.Fields.Emails,
+        ],
+        sort: Contacts.SortTypes.FirstName,
+      });
+      const unique = (list: (string | undefined)[]) => [
+        ...new Set(list.map((x) => (x ?? "").trim()).filter(Boolean)),
+      ];
+      const rows = data
+        .filter((c) => c.id)
+        .map((c) => ({
+          id: c.id as string,
+          contact: {
+            name: c.name ?? null,
+            company: c.company ?? null,
+            phones: unique((c.phoneNumbers ?? []).map((n) => n.number)),
+            emails: unique((c.emails ?? []).map((e) => e.email)),
+          },
+        }))
+        .filter(
+          (r) => r.contact.name || r.contact.company || r.contact.phones.length,
+        );
+      if (rows.length === 0) {
+        appAlert("No contacts found", "Your phone has no contacts this app can read.");
+        return;
+      }
+      setPhoneContacts(rows);
+    } catch (error) {
+      appAlert(
+        "Could not open your contacts",
+        error instanceof Error ? error.message : "Try again.",
+      );
+    }
+  }
+
+  const contactItems: PickerItem[] = (phoneContacts ?? []).map(({ id, contact }) => ({
+    key: id,
+    label: contact.company || contact.name || contact.phones[0] || "Unnamed",
+    sub: [contact.company ? contact.name : "", contact.phones[0]]
+      .filter(Boolean)
+      .join(" · "),
+  }));
+
+  const chooseItems: PickerItem[] = choose
+    ? choose.contact[choose.field].map((value, i) => ({ key: String(i), label: value }))
+    : [];
 
   async function save() {
     if (!token) return;
@@ -481,6 +569,23 @@ function ContractorSheet({
                 Restore
               </Button>
             </View>
+          ) : null}
+          {!editing ? (
+            <Button
+              variant="outline"
+              icon={
+                <Ionicons
+                  name="person-add-outline"
+                  size={18}
+                  color={colors.foreground}
+                />
+              }
+              fullWidth
+              onPress={() => void openPhoneContacts()}
+              disabled={busy}
+            >
+              Add from contacts
+            </Button>
           ) : null}
           {/* A live card, the way this contractor will look in the list. */}
           <View style={styles.preview}>
@@ -702,6 +807,37 @@ function ContractorSheet({
           </Button>
         </View>
       </View>
+      <PickerSheet
+        visible={phoneContacts !== null}
+        title="Add from contacts"
+        searchPlaceholder="Search your contacts"
+        items={contactItems}
+        noun="contacts"
+        emptyHint="No contacts match"
+        onPick={(id) => {
+          const hit = phoneContacts?.find((r) => r.id === id);
+          setPhoneContacts(null);
+          if (hit) advance(hit.contact);
+        }}
+        onClose={() => setPhoneContacts(null)}
+      />
+      <PickerSheet
+        visible={choose !== null}
+        title={choose?.field === "emails" ? "Which email?" : "Which number?"}
+        searchPlaceholder="Search"
+        items={chooseItems}
+        noun={choose?.field === "emails" ? "emails" : "numbers"}
+        emptyHint="Nothing to choose"
+        onPick={(key) => {
+          if (!choose) return;
+          const value = choose.contact[choose.field][Number(key)];
+          const next = { ...choose.contact, [choose.field]: [value] };
+          setChoose(null);
+          if (choose.field === "phones") advance(next);
+          else fillFrom(next);
+        }}
+        onClose={() => setChoose(null)}
+      />
     </Modal>
   );
 }

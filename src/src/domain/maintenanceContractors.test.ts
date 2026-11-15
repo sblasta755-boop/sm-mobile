@@ -1,4 +1,4 @@
-import { categoriesInUse, filterContractors, orderContractors, telLink, usageText, whatsappLink } from "./maintenanceContractors";
+import { categoriesInUse, contactToContractorFields, filterContractors, orderContractors, telLink, usageText, whatsappLink } from "./maintenanceContractors";
 
 const c = (over: Record<string, unknown> = {}) => ({
   name: "Spark Electrical", contactPerson: "Thabo", phone: "082 123 4567", categories: ["Electrical"], notes: null,
@@ -30,4 +30,11 @@ test("kinds of work in use, most common first; preferred first and archived last
 test("usage in words", () => {
   expect(usageText({ jobs: 0, openJobs: 0 })).toBe("Not used yet");
   expect(usageText({ jobs: 4, openJobs: 2 })).toBe("4 jobs · 2 open");
+});
+
+test("contactToContractorFields files a company contact under the company", () => {
+  expect(contactToContractorFields({ name: "Thabo Dlamini", company: "Spark Electrical", phones: ["082 123 4567"], emails: ["t@spark.co.za"] }))
+    .toEqual({ name: "Spark Electrical", contactPerson: "Thabo Dlamini", phone: "082 123 4567", email: "t@spark.co.za" });
+  expect(contactToContractorFields({ name: " Sipho ", phones: [" ", "0831112222"], emails: [] }))
+    .toEqual({ name: "Sipho", contactPerson: "", phone: "0831112222", email: "" });
 });
