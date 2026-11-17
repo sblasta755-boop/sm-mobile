@@ -78,12 +78,15 @@ export function Screen({
    * place and should always return to one specific screen regardless
    * (e.g. task sub-screens always returning to that task). */
   backTo,
+  /** Pinned under the content, above the tab bar: a screen's own actions (for example Save). */
+  footer,
 }: {
   children: ReactNode;
   title?: string;
   headerContent?: ReactNode;
   scroll?: boolean;
   backTo?: string;
+  footer?: ReactNode;
 }) {
   useThemeVersion();
   const { state, currentUser } = useSmartClean();
@@ -212,6 +215,8 @@ export function Screen({
       >
         {children}
       </Content>
+
+      {footer ? <View style={styles.footer}>{footer}</View> : null}
 
       <ProfileMenuSheet visible={menuOpen} onClose={() => setMenuOpen(false)} />
     </View>
@@ -383,6 +388,16 @@ const styles = themedStyles(() => StyleSheet.create({
   offlineText: {
     fontSize: typography.tiny,
     color: colors.warningForeground,
+  },
+  // The tab bar sits below the screen and does its own bottom inset, so only a rule and padding here.
+  footer: {
+    flexDirection: "row",
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    backgroundColor: colors.background,
   },
   content: {
     flex: 1,

@@ -106,6 +106,9 @@ export interface BackendBootstrap {
   tagColors?: Record<string, string>;
   /** Field-staff role definitions. Optional so a build running against an older backend still type-checks. */
   staffRoles?: StaffRole[];
+  /** This person's saved home-screen layouts. Absent from an older backend; null when their role has no
+   * customisable home. The phone keeps its own copy and only replaces it when a rev is newer. */
+  homeLayout?: ServerHomeLayouts | null;
   users: DemoUser[];
   sites: Site[];
   locations: Location[];
@@ -124,6 +127,25 @@ export interface BackendBootstrap {
   stock?: StockItem[];
   assets?: Asset[];
 }
+
+/** One saved home layout as the server holds it. `rev` rises on every write; `locked` means an administrator set it. */
+export interface ServerHomeLayout {
+  layout: unknown;
+  rev: number;
+  locked: boolean;
+  setBy?: string | null;
+  updatedAt?: string;
+}
+export type ServerHomeLayouts = { phone?: ServerHomeLayout | null; desktop?: ServerHomeLayout | null };
+
+export const putMyHomeLayout = (token: string, layout: unknown) =>
+  request<{ homeLayout: ServerHomeLayout }>(
+    "/me/home-layout",
+    { method: "PUT", body: JSON.stringify({ surface: "phone", layout }) },
+    token,
+  );
+export const resetMyHomeLayout = (token: string) =>
+  request<void>("/me/home-layout?surface=phone", { method: "DELETE" }, token);
 
 export async function loginToBackend(username: string, password: string) {
   const auth = await request<{
@@ -1341,6 +1363,7 @@ function normalizeBootstrap(
     subscription: payload.subscription as SubscriptionState | undefined,
     tagColors: (payload.tagColors as Record<string, string> | undefined) ?? {},
     staffRoles: list(payload.staffRoles) as unknown as StaffRole[],
+    homeLayout: payload.homeLayout as ServerHomeLayouts | null | undefined,
     users: list(payload.users).map(normalizeUser),
     sites: list(payload.sites).map((site) => ({
       clientId: "",

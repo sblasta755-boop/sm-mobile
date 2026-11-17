@@ -1,6 +1,7 @@
 import { loadEvidenceView } from "@/features/evidenceView";
 import { loadLastSynced, markSynced } from "@/features/lastSynced";
 import { clearLastLocation } from "@/features/lastLocationStore";
+import { clearHomeLayout } from "@/features/homeLayoutCache";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import NetInfo from "@react-native-community/netinfo";
 import {
@@ -19,6 +20,7 @@ import {
   markWelcomeSeen as markWelcomeSeenOnBackend,
   setSessionHandlers,
   type BackendBootstrap,
+  type ServerHomeLayouts,
   type BackendSession,
 } from "@/api/client";
 import type {
@@ -66,6 +68,10 @@ interface State {
   stock: StockItem[];
   assets: Asset[];
   attendance: Record<string, { clockedInAt?: string; siteId?: string; locationCapturedAt?: string; locationLostAt?: string }>;
+  /** The person's saved home-screen layouts from the server. Undefined until bootstrap lands or from an older
+   * backend, null when their role has no customisable home. The home draws from this phone's own copy
+   * (features/homeLayout.ts); this is only what feeds that copy. */
+  homeLayout?: ServerHomeLayouts | null;
   /** The organisation's plan and unlocked modules. Null until bootstrap
    * lands; consumers treat that as "not yet known" and fail open, since
    * the server enforces the real answer. */
@@ -215,6 +221,8 @@ function bootstrapState(bootstrap: BackendBootstrap): Partial<State> {
     subscription: bootstrap.subscription ?? null,
     tagColors: bootstrap.tagColors ?? {},
     staffRoles: bootstrap.staffRoles ?? [],
+    // Left undefined when the backend does not send it, so an older backend never clears a saved layout.
+    homeLayout: bootstrap.homeLayout,
   };
 }
 
@@ -508,6 +516,8 @@ export function SmartCleanProvider({ children }: { children: ReactNode }) {
     resetTaskFilters();
     // ...nor inherit where they were.
     clearLastLocation();
+    // ...nor their home screen.
+    clearHomeLayout(state.currentUserId);
     await SecureSessionService.clear();
     dispatch({ type: "SIGN_OUT" });
     if (accessToken && refreshToken) {
