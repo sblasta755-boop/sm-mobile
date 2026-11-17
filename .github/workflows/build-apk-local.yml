@@ -244,10 +244,18 @@ jobs:
         run: |
           tag="build-${{ github.run_number }}"
           if [ "$APP_ENV" != "prod" ]; then tag="${APP_ENV}-${tag}"; fi
-          gh release create "$tag" "${{ steps.apk.outputs.name }}" \
-            --repo "$GITHUB_REPOSITORY" --prerelease \
-            --title "Šoma360 ${{ steps.apk.outputs.version }} (build ${{ github.run_number }})" \
-            --notes "Branch \`${{ github.ref_name }}\`, commit ${GITHUB_SHA::7}. Signed release APK."
+          # A re-run of the same run keeps its run_number, so the release may
+          # already exist: replace its APK instead of failing.
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json assets -q '.assets[].name' \
+              | while read -r old; do gh release delete-asset "$tag" "$old" --repo "$GITHUB_REPOSITORY" -y; done
+            gh release upload "$tag" "${{ steps.apk.outputs.name }}" --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$tag" "${{ steps.apk.outputs.name }}" \
+              --repo "$GITHUB_REPOSITORY" --prerelease \
+              --title "Šoma360 ${{ steps.apk.outputs.version }} (build ${{ github.run_number }})" \
+              --notes "Branch \`${{ github.ref_name }}\`, commit ${GITHUB_SHA::7}. Signed release APK."
+          fi
           echo "url=https://github.com/$GITHUB_REPOSITORY/releases/download/$tag/${{ steps.apk.outputs.name }}" >> "$GITHUB_OUTPUT"
         env:
           GH_TOKEN: ${{ github.token }}
@@ -269,10 +277,17 @@ jobs:
           RELEASES_REPO="${RELEASES_REPO%/}"
           tag="build-${{ github.run_number }}"
           if [ "$APP_ENV" != "prod" ]; then tag="${APP_ENV}-${tag}"; fi
-          gh release create "$tag" "${{ steps.apk.outputs.name }}" \
-            --repo "$RELEASES_REPO" \
-            --title "Šoma360 ${{ steps.apk.outputs.version }} (build ${{ github.run_number }})" \
-            --notes "Signed release APK."
+          # Re-runs keep the same run_number: replace the APK if the release exists.
+          if gh release view "$tag" --repo "$RELEASES_REPO" >/dev/null 2>&1; then
+            gh release view "$tag" --repo "$RELEASES_REPO" --json assets -q '.assets[].name' \
+              | while read -r old; do gh release delete-asset "$tag" "$old" --repo "$RELEASES_REPO" -y; done
+            gh release upload "$tag" "${{ steps.apk.outputs.name }}" --repo "$RELEASES_REPO" --clobber
+          else
+            gh release create "$tag" "${{ steps.apk.outputs.name }}" \
+              --repo "$RELEASES_REPO" \
+              --title "Šoma360 ${{ steps.apk.outputs.version }} (build ${{ github.run_number }})" \
+              --notes "Signed release APK."
+          fi
           url="https://github.com/$RELEASES_REPO/releases/download/$tag/${{ steps.apk.outputs.name }}"
           echo "url=$url" >> "$GITHUB_OUTPUT"
           if [ -n "$APP_RELEASE_TOKEN" ] && [ -n "$EXPO_PUBLIC_API_BASE_URL" ]; then
