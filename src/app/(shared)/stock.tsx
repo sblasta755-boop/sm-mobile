@@ -13,6 +13,7 @@ import { StockOverviewView } from "@/components/StockOverviewView";
 import { canSeeAllSites, canSeeStockOverview } from "@/domain/stockOverview";
 import { useSmartClean } from "@/features/store";
 import { useStockAccess } from "@/features/stock";
+import { canCountLine, canManageCounts } from "@/domain/stockAccess";
 import { enqueueMutation, useOutbox } from "@/features/outbox";
 import { drainQueue } from "@/features/evidenceUploader";
 import { loadCachedCount, saveCachedCount } from "@/features/stockCountCache";
@@ -107,17 +108,18 @@ export default function StockScreen() {
     if (!siteId && sites[0]) setSiteId(sites[0].id);
   }, [sites, siteId]);
 
+  // Each mode is a grant an owner gave this person (the server checks the same grants again).
+  const grants = access.tabs;
   const modes = useMemo<Mode[]>(
     () => [
-      // Insights are for site managers and above.
-      ...(canSeeStockOverview(currentUser?.role) ? (["overview"] as Mode[]) : []),
-      ...(access.issue ? (["issue", "waste"] as Mode[]) : []),
-      ...(access.keep ? (["restock", "receive"] as Mode[]) : []),
-      // A helper with issue access can count the lines a supervisor gave them.
-      ...(access.keep || access.issue ? (["count"] as Mode[]) : []),
-      ...(access.manage ? (["report"] as Mode[]) : []),
+      ...(grants.overview ? (["overview"] as Mode[]) : []),
+      ...(grants.issue ? (["issue", "waste"] as Mode[]) : []),
+      ...(grants.restock ? (["restock"] as Mode[]) : []),
+      ...(grants.receive ? (["receive"] as Mode[]) : []),
+      ...(grants.count ? (["count"] as Mode[]) : []),
+      ...(grants.history ? (["report"] as Mode[]) : []),
     ],
-    [access.issue, access.keep, access.manage, currentUser?.role],
+    [grants],
   );
   const [mode, setMode] = useState<Mode>(() => (canSeeStockOverview(currentUser?.role) ? "overview" : "issue"));
   useEffect(() => {
@@ -143,10 +145,15 @@ export default function StockScreen() {
     Promise.all([
       listStockLocations(token, siteId),
       listStockLevels(token, siteId),
-      listStockRestockTasks(token, siteId).catch(() => []),
-      listStockTransfersInTransit(token, siteId).catch(() => []),
+      // The restock list, stock on the way and loans are behind their own grants on the server.
+      grants.restock ? listStockRestockTasks(token, siteId).catch(() => []) : Promise.resolve([]),
+      grants.restock || grants.receive || grants.loans
+        ? listStockTransfersInTransit(token, siteId).catch(() => [])
+        : Promise.resolve([]),
       listStockConversions(token, siteId).catch(() => []),
-      listStockLoans(token, siteId).catch(() => ({ toBeReturned: [], weOwe: [] })),
+      grants.loans
+        ? listStockLoans(token, siteId).catch(() => ({ toBeReturned: [], weOwe: [] }))
+        : Promise.resolve({ toBeReturned: [], weOwe: [] }),
     ])
       .then(([nextLocations, nextLevels, nextRestock, nextTransfers, nextConversions, nextLoans]) => {
         if (cancelled) return;
@@ -183,7 +190,7 @@ export default function StockScreen() {
     return () => {
       cancelled = true;
     };
-  }, [token, siteId, version, currentUser?.id]);
+  }, [token, siteId, version, currentUser?.id, grants.restock, grants.receive, grants.loans]);
 
   const items = useMemo(() => state.stock.filter((item) => item.siteId === siteId), [state.stock, siteId]);
   const itemName = (id: string) => items.find((i) => i.id === id)?.name ?? id;
@@ -193,7 +200,7 @@ export default function StockScreen() {
   const outbox = useOutbox();
   const waitingToSend = outbox.filter((m) => m.userId === (currentUser?.id ?? "") && m.status !== "rejected" && m.kind.startsWith("stock.")).length;
   const summary = [
-    ...(access.keep ? [{ label: "To restock", value: restock.length }, { label: "On the way", value: transfers.length }] : []),
+    ...(grants.restock ? [{ label: "To restock", value: restock.length }, { label: "On the way", value: transfers.length }] : []),
     ...(waitingToSend > 0 ? [{ label: "Waiting to send", value: waitingToSend }] : []),
   ];
 
@@ -445,7 +452,7 @@ export default function StockScreen() {
 
       {mode === "report" && <HandoverReportView siteId={siteId} />}
 
-      {mode === "count" && <CountView siteId={siteId} locations={locations} items={items} canApprove={access.manage} canSubmit={access.keep} onDone={reload} />}
+      {mode === "count" && <CountView siteId={siteId} locations={locations} items={items} canApprove={grants.countApprove} canSubmit={grants.count} canManage={canManageCounts(access, currentUser?.role)} onDone={reload} />}
 
       {mode === "receive" && (
         <ReceiveView
@@ -568,6 +575,7 @@ function CountView({
   items,
   canApprove,
   canSubmit,
+  canManage,
   onDone,
 }: {
   siteId: string;
@@ -575,6 +583,8 @@ function CountView({
   items: { id: string; name: string; unit: string }[];
   canApprove: boolean;
   canSubmit: boolean;
+  /** A supervisor or above who has Count: hands lines to helpers and sees every line. */
+  canManage: boolean;
   onDone: () => void;
 }) {
   const { state, currentUser } = useSmartClean();
@@ -657,21 +667,13 @@ function CountView({
         appAlert("No connection", "Today's list is built on the server, so you need a connection to start the count. After that you can count offline.");
       }
     };
-    if (!canSubmit) {
-      return (
-        <View style={styles.stack}>
-          <Text style={styles.muted}>Open the count to see the lines a supervisor has given you to count.</Text>
-          <Button onPress={() => begin({})}>Open my lines</Button>
-        </View>
-      );
-    }
     return (
       <View style={styles.stack}>
         <HandoverStart shifts={shifts} onStart={begin} />
         <Text style={styles.muted}>
           You won't see what the system expects until you submit. Once the list is on your phone you can count with no signal.
         </Text>
-        {canApprove && shifts.length === 0 && (
+        {canManage && shifts.length === 0 && (
           <Text style={styles.muted}>
             This site has no shifts yet. Set them up under Schedule (Book staff, then Shifts) to run shift handover counts. Until then you can run a spot check.
           </Text>
@@ -683,8 +685,8 @@ function CountView({
   const name = (id: string) => items.find((i) => i.id === id)?.name ?? id;
   const place = (id: string) => locations.find((l) => l.id === id)?.name ?? id;
   const open = count.status === "open" && !submitPending;
-  // A helper sees and counts only the lines a supervisor gave them.
-  const visibleLines = canSubmit ? count.lines : count.lines.filter((l) => l.assigneeId === userId);
+  // A line handed to someone is theirs to count; the rest are open to anyone who counts.
+  const visibleLines = count.lines.filter((l) => canCountLine(l, userId, canManage));
   const allCounted = visibleLines.every((l) => l.counted != null);
   const counted = visibleLines.filter((l) => l.counted != null).length;
 
@@ -714,14 +716,14 @@ function CountView({
             : "Saved on this phone - it will go to the server as soon as there is a connection."}
         </Text>
       )}
-      {count.kind === "handover" && count.status === "open" && canApprove && count.lines.length > 0 && (
+      {count.kind === "handover" && count.status === "open" && canManage && count.lines.length > 0 && (
         <AssignHelpers count={count} locationName={place} onChanged={keep} />
       )}
       {visibleLines.length === 0 && (
         <EmptyState
           icon="clipboard-outline"
           text={
-            canSubmit
+            canManage || count.lines.length === 0
               ? "Nothing to count yet. Products are picked from stock held in a store or cart at this site. Record a delivery on the Receive tab, then open Count again."
               : "No lines have been assigned to you yet. Ask your supervisor to give you some, then open Count again."
           }
@@ -741,7 +743,7 @@ function CountView({
                 keyboardType="number-pad"
                 placeholder="Counted"
                 placeholderTextColor={colors.mutedForeground}
-                editable={open && (canSubmit || line.assigneeId === userId)}
+                editable={open && canCountLine(line, userId, canManage)}
                 value={entries[line.id] ?? (line.counted != null ? String(line.counted) : "")}
                 onChangeText={(text) => setEntries({ ...entries, [line.id]: text.replace(/[^0-9]/g, "") })}
                 onEndEditing={() => {

@@ -889,8 +889,25 @@ export interface StockConversion {
   baseQty: number;
 }
 
+/** One stock tab, or one separable action, that a person can be given. */
+export type StockGrantKey =
+  | "overview"
+  | "restock"
+  | "issue"
+  | "receive"
+  | "count"
+  | "loans"
+  | "layout"
+  | "history"
+  | "settings"
+  | "countApprove"
+  | "issueApprove";
+
 /** What the signed-in person may do with stock. */
 export interface StockAccess {
+  /** Which tabs and actions this person has. The stock screen builds itself from this. */
+  tabs: Record<StockGrantKey, boolean>;
+  /** Derived from `tabs`, for code written before per-tab access. */
   issue: boolean;
   keep: boolean;
   manage: boolean;
