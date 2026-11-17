@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { router, useLocalSearchParams } from "expo-router";
 import { Screen } from "@/components/Screen";
 import { Button } from "@/components/Button";
 import { appAlert } from "@/components/Dialog";
@@ -16,6 +17,12 @@ import {
   SummaryCard,
 } from "@/components/home/ManagerCards";
 import { HomeEditFrame } from "@/components/home/HomeEditFrame";
+import { CustomCard } from "@/components/home/CustomCards";
+import { OperationsCard } from "@/components/home/OperationsCards";
+import { useHomeSummary, type HomeSummaryApi } from "@/features/useHomeSummary";
+import { useHasModule } from "@/features/modules";
+import { isOperationsCard, operationsAvailable } from "@/domain/homeSummary";
+import { CustomEditor } from "@/components/home/CustomEditor";
 import { SiteManagerClockCard } from "@/components/SiteManagerClockCard";
 import { useManagerOverviewData, type ManagerOverviewData } from "@/features/managerOverview";
 import { useHomeLayout } from "@/features/useHomeLayout";
@@ -23,10 +30,13 @@ import { reportTiles } from "@/features/tour";
 import {
   cardLabel,
   defaultCards,
+  defaultCustom,
+  isDefaultCustom,
   isDefaultLayout,
   moveCard,
   setVisible,
   type ResolvedCard,
+  type ResolvedCustom,
 } from "@/domain/homeLayout";
 import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 
@@ -39,7 +49,13 @@ import { colors, radius, spacing, typography, themedStyles, useThemeVersion } fr
  */
 
 /** The card for an id, drawn full width (a miniature in the editor, or on its own in the list). */
-function cardNode(id: string, data: ManagerOverviewData): ReactNode {
+function cardNode(id: string, data: ManagerOverviewData, ops: { summary: HomeSummaryApi; attendanceOn: boolean }): ReactNode {
+  // The operations cards (not about tasks) draw nothing when their data is left out, so no empty gap.
+  if (isOperationsCard(id)) {
+    return operationsAvailable(id, ops.summary.status, ops.attendanceOn) ? (
+      <OperationsCard id={id} summary={ops.summary} data={data} />
+    ) : null;
+  }
   switch (id) {
     case "clock":
       return <SiteManagerClockCard />;
@@ -63,7 +79,7 @@ function cardNode(id: string, data: ManagerOverviewData): ReactNode {
 }
 
 /** The visible cards in order. On shift now and Open incidents next to each other share a row, as they always have. */
-function liveCards(cards: ResolvedCard[], data: ManagerOverviewData): ReactNode[] {
+function liveCards(cards: ResolvedCard[], data: ManagerOverviewData, ops: { summary: HomeSummaryApi; attendanceOn: boolean }): ReactNode[] {
   const shown = cards.filter((c) => c.visible).map((c) => c.id);
   const out: ReactNode[] = [];
   for (let i = 0; i < shown.length; i++) {
@@ -87,14 +103,16 @@ function liveCards(cards: ResolvedCard[], data: ManagerOverviewData): ReactNode[
       );
       i++;
     } else {
-      out.push(<View key={id}>{cardNode(id, data)}</View>);
+      const node = cardNode(id, data, ops);
+      if (node != null) out.push(<View key={id}>{node}</View>);
     }
   }
   return out;
 }
 
 /** Why a card has no miniature right now, when it has nothing to draw. */
-function emptyReason(id: string, data: ManagerOverviewData): string | undefined {
+function emptyReason(id: string, data: ManagerOverviewData, ops: { summary: HomeSummaryApi; attendanceOn: boolean }): string | undefined {
+  if (isOperationsCard(id) && !operationsAvailable(id, ops.summary.status, ops.attendanceOn)) return "Shows when its information is available to you.";
   if (id === "clock") return "Shown only to site managers whose organisation lets them clock in.";
   if (id === "overdue_tasks" && data.overdue.length === 0) return "Shows when something is overdue.";
   if (id === "shortcuts" && data.shortcuts.length === 0) return "Shows when you have shortcuts available.";
@@ -106,11 +124,22 @@ export default function ManageHome() {
   useThemeVersion(); // re-render with the new colours when the theme changes
   const data = useManagerOverviewData();
   const home = useHomeLayout();
+  // Arranging the home is started from Profile > Home screen, which opens this screen with arrange=classic|custom.
+  const { arrange: asked } = useLocalSearchParams<{ arrange?: string }>();
+  const arrange = asked === "classic" || asked === "custom" ? asked : null;
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<ResolvedCard[]>([]);
+  const [customDraft, setCustomDraft] = useState<ResolvedCustom>(home.custom);
+  const [editingCustom, setEditingCustom] = useState(false);
 
   const cards = editing ? draft : home.cards;
-  const shortcutsShown = !editing && home.cards.some((c) => c.id === "shortcuts" && c.visible);
+  const customOn = home.canCustomise && (arrange ?? home.active) === "custom";
+  // The operations cards ask the server only for what the visible ones need.
+  const visibleIds = (customOn ? home.custom.cards : cards).filter((c) => c.visible).map((c) => c.id);
+  const summary = useHomeSummary(visibleIds);
+  const attendanceOn = useHasModule("attendance");
+  const ops = { summary, attendanceOn };
+  const shortcutsShown = !editing && !customOn && home.cards.some((c) => c.id === "shortcuts" && c.visible);
 
   // Tell the guided tour what is here, so every shortcut that is on screen still gets a step (and none that is hidden).
   const shortcutKey = shortcutsShown ? data.shortcuts.map((s) => s.key).join("|") : "";
@@ -126,18 +155,78 @@ export default function ManageHome() {
     setDraft(home.cards);
     setEditing(true);
   };
-  const cancelEdit = () => setEditing(false);
+  const backToSettings = () => router.replace("/manage-profile");
+  const cancelEdit = () => {
+    setEditing(false);
+    if (arrange) backToSettings();
+  };
   const resetDraft = () =>
     appAlert("Reset to the default home?", "Every card comes back, in the original order.", [
       { text: "Keep my layout", style: "cancel" },
       { text: "Reset", style: "destructive", onPress: () => setDraft(defaultCards()) },
     ]);
   const finish = async () => {
-    // Back to exactly today's screen: forget the saved layout rather than store a copy of the default.
-    if (isDefaultLayout(draft)) await home.reset();
-    else await home.save(draft);
+    // Saving drops a Classic home that is just the default, so a person who changes nothing stores nothing, and it
+    // keeps the Custom home they may have set up.
+    await home.save(draft);
     setEditing(false);
+    if (arrange) backToSettings();
   };
+
+  const startCustomEdit = () => {
+    setCustomDraft(home.custom);
+    setEditingCustom(true);
+  };
+  const resetCustomDraft = () =>
+    appAlert("Reset the custom home?", "The look and every card go back to the default custom home.", [
+      { text: "Keep my layout", style: "cancel" },
+      { text: "Reset", style: "destructive", onPress: () => setCustomDraft(defaultCustom()) },
+    ]);
+  const finishCustom = async () => {
+    await home.saveCustom(customDraft);
+    setEditingCustom(false);
+    if (arrange) backToSettings();
+  };
+  useEffect(() => {
+    if (!home.canCustomise || home.locked) return;
+    if (arrange === "classic") startEdit();
+    if (arrange === "custom") startCustomEdit();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [arrange, home.canCustomise, home.locked]);
+
+  if (editingCustom) {
+    return (
+      <Screen
+        title="Custom home look"
+        footer={
+          <>
+            <View style={styles.footerHalf}>
+              <Button
+                variant="outline"
+                icon={<Ionicons name="refresh-outline" size={18} color={colors.foreground} />}
+                onPress={resetCustomDraft}
+                disabled={isDefaultCustom(customDraft)}
+              >
+                Reset look
+              </Button>
+            </View>
+            <View style={styles.footerHalf}>
+              <Button onPress={finishCustom}>Save</Button>
+            </View>
+          </>
+        }
+      >
+        <Pressable accessibilityRole="button" onPress={() => {
+            setEditingCustom(false);
+            if (arrange) backToSettings();
+          }} style={styles.cancel}>
+          <Ionicons name="close" size={16} color={colors.foreground} />
+          <Text style={styles.chipText}>Cancel</Text>
+        </Pressable>
+        <CustomEditor draft={customDraft} onChange={setCustomDraft} />
+      </Screen>
+    );
+  }
 
   if (editing) {
     const onlyOne = draft.filter((c) => c.visible).length <= 1;
@@ -173,7 +262,7 @@ export default function ManageHome() {
           <Text style={styles.chipText}>Cancel</Text>
         </Pressable>
         {draft.map((card, i) => {
-          const reason = emptyReason(card.id, data);
+          const reason = emptyReason(card.id, data, ops);
           return (
             <HomeEditFrame
               key={card.id}
@@ -187,7 +276,7 @@ export default function ManageHome() {
               onToggle={() => setDraft((cur) => setVisible(cur, card.id, !card.visible))}
               placeholder={reason}
             >
-              {cardNode(card.id, data)}
+              {cardNode(card.id, data, ops)}
             </HomeEditFrame>
           );
         })}
@@ -195,11 +284,38 @@ export default function ManageHome() {
     );
   }
 
-  const list = liveCards(cards, data);
+  const list = liveCards(cards, data, ops);
   // The warning is not a card: it explains an empty screen, so it always shows. It follows the clock card when that
   // comes first, as it always did.
   const warning = data.needsSiteAssignment ? <NoSitesWarning key="no-sites" /> : null;
   const firstIsClock = cards.find((c) => c.visible)?.id === "clock";
+
+  if (customOn) {
+    return (
+      <Screen title="Overview">
+        {home.locked ? (
+          <View style={[styles.chip, styles.chipLocked]}>
+            <Ionicons name="lock-closed-outline" size={15} color={colors.mutedForeground} />
+            <Text style={[styles.chipText, { color: colors.mutedForeground }]}>Set by your administrator</Text>
+          </View>
+        ) : (
+          null
+        )}
+        {home.custom.cards
+          .filter((c) => c.visible)
+          .map((c) =>
+            isOperationsCard(c.id) ? (
+              // A card with nothing to show (its module is off, or the server left its data out) is not drawn at all.
+              operationsAvailable(c.id, summary.status, attendanceOn) ? (
+                <OperationsCard key={c.id} id={c.id} summary={summary} data={data} view={c.view} look={home.custom.look} />
+              ) : null
+            ) : (
+              <CustomCard key={c.id} card={c} look={home.custom.look} data={data} />
+            ),
+          )}
+      </Screen>
+    );
+  }
 
   return (
     <Screen title="Overview">
@@ -209,12 +325,7 @@ export default function ManageHome() {
             <Ionicons name="lock-closed-outline" size={15} color={colors.mutedForeground} />
             <Text style={[styles.chipText, { color: colors.mutedForeground }]}>Set by your administrator</Text>
           </View>
-        ) : (
-          <Pressable accessibilityRole="button" accessibilityLabel="Customise home" onPress={startEdit} style={styles.chip}>
-            <Ionicons name="options-outline" size={15} color={colors.foreground} />
-            <Text style={styles.chipText}>Customise</Text>
-          </Pressable>
-        )
+        ) : null
       ) : null}
       {firstIsClock ? (
         <>

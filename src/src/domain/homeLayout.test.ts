@@ -23,11 +23,15 @@ const cached = (over: Partial<CachedLayout> = {}): CachedLayout => ({
 });
 const server = (rev: number, locked = false) => ({ layout: stored([{ id: "sites", visible: true }]), rev, locked });
 
-test("today's screen is every card in today's order", () => {
+const OPERATIONS = ["attendance_now", "approvals", "site_pulse", "maintenance", "stock_alerts", "leave_today", "compliance_reviews", "noticeboard", "device_battery"];
+
+test("today's screen is today's eight cards in today's order, with the operations cards waiting after them", () => {
   expect(ids(defaultCards())).toEqual(PHONE_CARDS.map((c) => c.id));
   expect(ids(defaultCards())[0]).toBe("clock");
-  expect(ids(defaultCards()).slice(-1)[0]).toBe("add_member");
-  expect(defaultCards().every((c) => c.visible)).toBe(true);
+  expect(defaultCards().filter((c) => c.visible).map((c) => c.id)).toEqual([
+    "clock", "summary", "on_shift", "open_incidents", "shortcuts", "overdue_tasks", "sites", "add_member",
+  ]);
+  expect(defaultCards().filter((c) => !c.visible).map((c) => c.id)).toEqual(OPERATIONS);
 });
 
 describe("resolveLayout never breaks the screen", () => {
@@ -43,7 +47,15 @@ describe("resolveLayout never breaks the screen", () => {
     expect(ids(out).slice(0, 2)).toEqual(["overdue_tasks", "summary"]);
     expect(out[1].visible).toBe(false);
     expect(out).toHaveLength(PHONE_CARDS.length);
-    expect(out.slice(2).every((c) => c.visible)).toBe(true);
+    // a saved home never gains a card on its own: what it predates waits, hidden, in the cards list
+    expect(out.slice(2).every((c) => !c.visible)).toBe(true);
+  });
+
+  test("a layout saved before the operations cards loads with them hidden and everything else as saved", () => {
+    const before = stored(PHONE_CARDS.slice(0, 8).map((c, i) => ({ id: c.id, visible: i !== 3 })));
+    const out = resolveLayout(before);
+    expect(out.slice(0, 8).map((c) => c.visible)).toEqual([true, true, true, false, true, true, true, true]);
+    expect(out.slice(8).map((c) => [c.id, c.visible])).toEqual(OPERATIONS.map((id) => [id, false]));
   });
 
   test("skips unknown cards, repeats and junk", () => {
@@ -70,7 +82,7 @@ describe("arranging", () => {
     const start = defaultCards();
     expect(ids(moveCard(start, "summary", -1))[0]).toBe("summary");
     expect(moveCard(start, "clock", -1)).toBe(start);
-    expect(moveCard(start, "add_member", 1)).toBe(start);
+    expect(moveCard(start, "device_battery", 1)).toBe(start); // the last card
     expect(moveCard(start, "nope", 1)).toBe(start);
   });
   test("will not hide the last visible card", () => {
@@ -120,5 +132,100 @@ describe("the device's copy", () => {
   test("changes nothing against an older backend (undefined) or a role with no customisable home (null)", () => {
     expect(reconcile(cached(), undefined).action).toBe("keep");
     expect(reconcile(cached(), null).action).toBe("keep");
+  });
+});
+
+import {
+  CUSTOM_CARDS,
+  defaultCustom,
+  isDefaultCustom,
+  mergeStored,
+  patchCustomCard,
+  resolveActiveHome,
+  resolveCustom,
+  setCardVisible,
+} from "./homeLayout";
+
+describe("the Custom home", () => {
+  test("defaults to an operations-focused home, with the task cards waiting to be added", () => {
+    const d = defaultCustom();
+    expect(d.cards.filter((c) => c.visible).map((c) => c.id)).toEqual(["attendance_now", "approvals", "attention", "site_pulse", "maintenance", "stock_alerts", "incidents"]);
+    expect(d.cards.filter((c) => !c.visible).map((c) => c.id)).toEqual(["on_shift", "completion", "flow", "activity_map", "quality", "open_tasks", "corrective_actions", "leave_today", "compliance_reviews", "noticeboard", "device_battery"]);
+    expect(isDefaultCustom(d)).toBe(true);
+  });
+
+  test.each([null, undefined, 4, "x", {}, { version: 2, custom: { cards: [] } }, { version: 1 }, { version: 1, custom: "no" }])(
+    "falls back to the default for %j",
+    (bad) => {
+      expect(resolveCustom(bad)).toEqual(defaultCustom());
+    },
+  );
+
+  test("keeps the look, order, views and periods, and fixes what it cannot draw", () => {
+    const out = resolveCustom({
+      version: 1,
+      custom: {
+        look: { density: "compact", cardStyle: "outlined" },
+        cards: [
+          { id: "flow", visible: true, size: "m", view: "bar", period: "7" },
+          { id: "completion", visible: true, view: "hologram", period: "7" },
+          { id: "from_the_future" },
+          { id: "flow" },
+          null,
+        ],
+      },
+    });
+    expect(out.look).toEqual({ density: "compact", cardStyle: "outlined" });
+    expect(out.cards.slice(0, 2).map((c) => c.id)).toEqual(["flow", "completion"]);
+    expect(out.cards[0]).toMatchObject({ size: "m", view: "bar", period: "7" });
+    expect(out.cards[1]).toMatchObject({ view: "gauge", period: null });
+    expect(out.cards).toHaveLength(CUSTOM_CARDS.length);
+  });
+
+  test("returns the default cards when none would be visible", () => {
+    const hidden = { version: 1, custom: { cards: CUSTOM_CARDS.map((c) => ({ id: c.id, visible: false })) } };
+    expect(resolveCustom(hidden).cards).toEqual(defaultCustom().cards);
+  });
+
+  test("opens on Classic unless Custom was chosen", () => {
+    expect(resolveActiveHome(undefined)).toBe("classic");
+    expect(resolveActiveHome({ active: "nonsense" })).toBe("classic");
+    expect(resolveActiveHome({ active: "custom" })).toBe("custom");
+  });
+
+  test("will not hide the last visible Custom card", () => {
+    let cards = defaultCustom().cards;
+    for (const c of cards.slice(1)) cards = setCardVisible(cards, c.id, false);
+    expect(cards.filter((c) => c.visible)).toHaveLength(1);
+    expect(setCardVisible(cards, cards[0].id, false)).toBe(cards);
+  });
+});
+
+describe("storing a layout", () => {
+  test("stores nothing when everything is default and Classic is active", () => {
+    expect(mergeStored(null, { classic: defaultCards() })).toBeNull();
+    expect(mergeStored(null, { custom: defaultCustom(), active: "classic" })).toBeNull();
+  });
+
+  test("stores a changed Classic home and keeps a Custom home saved earlier", () => {
+    const custom = patchCustomCard(defaultCustom(), "completion", { view: "number" });
+    const first = mergeStored(null, { custom, active: "custom" })!;
+    const next = mergeStored(first, { classic: setVisible(defaultCards(), "sites", false), active: "classic" })!;
+    expect(next.active).toBeUndefined();
+    expect(next.classic?.cards.find((c) => c.id === "sites")?.visible).toBe(false);
+    expect(resolveCustom(next).cards.find((c) => c.id === "completion")?.view).toBe("number");
+  });
+
+  test("opening on Custom with everything default is stored as the default Custom home (the server needs a part)", () => {
+    const out = mergeStored(null, { active: "custom" })!;
+    expect(out.active).toBe("custom");
+    expect(out.custom?.cards.length).toBe(CUSTOM_CARDS.length);
+    expect(out.classic).toBeUndefined();
+  });
+
+  test("round-trips a Custom home through storing and resolving", () => {
+    let custom = patchCustomCard(defaultCustom(), "flow", { view: "bar", period: "7", size: "m" });
+    custom = { look: { density: "compact", cardStyle: "outlined" }, cards: setCardVisible(custom.cards, "open_tasks", true) };
+    expect(resolveCustom(mergeStored(null, { custom, active: "custom" }))).toEqual(custom);
   });
 });

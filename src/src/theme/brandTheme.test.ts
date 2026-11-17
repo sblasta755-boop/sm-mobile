@@ -150,6 +150,31 @@ describe("mergeBrandThemes", () => {
       light: { primary: "#e11d48", navBackground: "#112233" },
       dark: {},
       fonts: { body: "inter" },
+      cards: {},
     });
+  });
+});
+
+describe("card design", () => {
+  it("keeps valid settings, drops malformed ones, and defaults to plain", () => {
+    expect(resolveBrandTheme(undefined).cards).toEqual({});
+    expect(
+      resolveBrandTheme({
+        cards: { pattern: "stripes", logoWatermark: true },
+      }).cards,
+    ).toEqual({ pattern: "stripes", logoWatermark: true });
+    expect(
+      resolveBrandTheme({
+        cards: { pattern: "polka" as never, logoWatermark: "yes" as never },
+      }).cards,
+    ).toEqual({});
+  });
+  it("lets a site override single settings and inherit the rest", () => {
+    expect(
+      mergeBrandThemes(
+        { cards: { logoWatermark: true } },
+        { cards: { pattern: "stripes" } },
+      ).cards,
+    ).toEqual({ pattern: "stripes", logoWatermark: true });
   });
 });

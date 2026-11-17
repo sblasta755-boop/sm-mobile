@@ -109,6 +109,7 @@ export default function PlatformTabsLayout() {
       <Tabs.Screen name="platform-organisation/[tenantId]" options={{ href: null }} />
       <Tabs.Screen name="platform-org-users/[tenantId]" options={{ href: null }} />
       <Tabs.Screen name="platform-org-user/[tenantId]" options={{ href: null }} />
+      <Tabs.Screen name="platform-home-layout/[tenantId]" options={{ href: null }} />
     </Tabs>
   );
 }

@@ -26,18 +26,23 @@ export function useManagerOverviewData() {
   const wayfindingOn = useHasModule("wayfinding");
   const layoutOn = useHasModule("site_layout");
 
-  const mySites = useMemo(() => {
-    // org_admin and operations_manager are tenant-wide and carry no siteIds; they legitimately see every site.
-    // A site_manager's list is their own. Mirrors is_site_scoped server-side.
-    const scoped = currentUser?.siteIds ?? [];
-    return scoped.length > 0 ? state.sites.filter((s) => scoped.includes(s.id)) : state.sites;
-  }, [state.sites, currentUser]);
+  // org_admin and operations_manager are tenant-wide and carry no siteIds; they legitimately see every site.
+  // A site_manager's list is their own. Mirrors is_site_scoped server-side.
+  const scopedIds = currentUser?.siteIds ?? [];
+  const mySites = useMemo(
+    () => (scopedIds.length > 0 ? state.sites.filter((s) => scopedIds.includes(s.id)) : state.sites),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [state.sites, currentUser],
+  );
 
   const openTasks = state.tasks.filter((t) => !["approved", "closed"].includes(t.status));
   const overdue = openTasks
     .filter((t) => t.scheduledAt && new Date(t.scheduledAt) < new Date())
     .sort((a, b) => new Date(a.scheduledAt!).getTime() - new Date(b.scheduledAt!).getTime());
-  const openIncidents = state.incidents.filter((i) => i.status !== "closed");
+  // Open means not resolved and not closed, the same as the incidents list and the web. Bootstrap carries every site's
+  // incidents, so a manager with their own sites counts only those.
+  const incidentsHere = state.incidents.filter((i) => scopedIds.length === 0 || scopedIds.includes(i.siteId));
+  const openIncidents = incidentsHere.filter((i) => !["resolved", "closed"].includes(i.status));
   const openActions = state.correctiveActions.filter((c) => c.status !== "closed");
   // Only people clocked in at this manager's own sites - state.attendance can hold every site's.
   const mySiteIds = new Set(mySites.map((s) => s.id));
@@ -69,6 +74,12 @@ export function useManagerOverviewData() {
 
   return {
     currentUser,
+    tasks: state.tasks,
+    incidents: incidentsHere,
+    attendance: state.attendance,
+    users: state.users,
+    inspections: state.inspections,
+    correctiveActions: state.correctiveActions,
     mySites,
     openTasks,
     overdue,

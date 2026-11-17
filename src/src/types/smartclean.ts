@@ -465,6 +465,7 @@ export interface BrandingTheme {
   light?: ThemeColors;
   dark?: ThemeColors;
   fonts?: { heading?: string; body?: string };
+  cards?: { pattern?: "none" | "stripes"; logoWatermark?: boolean };
 }
 
 export interface TenantBranding {
@@ -524,7 +525,7 @@ export interface Location {
   // "table" is a restaurant-style seating location a waiter claims via
   // TableSession, added additively alongside the original cleaner-room
   // types rather than replacing any of them - see TableSession.
-  type: "reception" | "bathroom" | "boardroom" | "kitchen" | "office" | "stockroom" | "table";
+  type: "reception" | "bathroom" | "boardroom" | "kitchen" | "office" | "stockroom" | "table" | "bar" | "play_area" | "patio" | "cold_room" | "counter" | "scullery";
   qr: string;
   // Which floor this room belongs to (matches a SiteFloorProfile.name on
   // the site's layout) - undefined for a location whose site has no

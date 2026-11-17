@@ -138,6 +138,14 @@ export interface ServerHomeLayout {
 }
 export type ServerHomeLayouts = { phone?: ServerHomeLayout | null; desktop?: ServerHomeLayout | null };
 
+/** The counts behind the operations cards. A block the person cannot see is absent from the answer. */
+export const getHomeSummary = (token: string, blocks: string[]) =>
+  request<import("@/domain/homeSummary").HomeSummaryData & { generatedAt?: string }>(
+    `/home/summary?blocks=${encodeURIComponent(blocks.join(","))}`,
+    {},
+    token,
+  );
+
 export const putMyHomeLayout = (token: string, layout: unknown) =>
   request<{ homeLayout: ServerHomeLayout }>(
     "/me/home-layout",
@@ -146,6 +154,34 @@ export const putMyHomeLayout = (token: string, layout: unknown) =>
   );
 export const resetMyHomeLayout = (token: string) =>
   request<void>("/me/home-layout?surface=phone", { method: "DELETE" }, token);
+
+/** Someone else's home layout (the phone one): an organisation admin arranging an operations or site manager's... */
+export const getUserHomeLayout = (token: string, userId: string) =>
+  request<{ homeLayout: ServerHomeLayout | null }>(`/users/${userId}/home-layout?surface=phone`, {}, token);
+export const putUserHomeLayout = (token: string, userId: string, layout: unknown, locked: boolean) =>
+  request<{ homeLayout: ServerHomeLayout }>(
+    `/users/${userId}/home-layout`,
+    { method: "PUT", body: JSON.stringify({ surface: "phone", layout, locked }) },
+    token,
+  );
+export const resetUserHomeLayout = (token: string, userId: string) =>
+  request<void>(`/users/${userId}/home-layout?surface=phone`, { method: "DELETE" }, token);
+
+/** ...and the platform operator doing the same for any person in any customer organisation. */
+export const getPlatformHomeLayout = (token: string, tenantId: string, userId: string) =>
+  request<{ homeLayout: ServerHomeLayout | null }>(
+    `/platform/organisations/${tenantId}/users/${userId}/home-layout?surface=phone`,
+    {},
+    token,
+  );
+export const putPlatformHomeLayout = (token: string, tenantId: string, userId: string, layout: unknown, locked: boolean) =>
+  request<{ homeLayout: ServerHomeLayout }>(
+    `/platform/organisations/${tenantId}/users/${userId}/home-layout`,
+    { method: "PUT", body: JSON.stringify({ surface: "phone", layout, locked }) },
+    token,
+  );
+export const resetPlatformHomeLayout = (token: string, tenantId: string, userId: string) =>
+  request<void>(`/platform/organisations/${tenantId}/users/${userId}/home-layout?surface=phone`, { method: "DELETE" }, token);
 
 export async function loginToBackend(username: string, password: string) {
   const auth = await request<{

@@ -4,6 +4,7 @@ import { Screen } from "@/components/Screen";
 import { UpdateBanner } from "@/components/UpdateBanner";
 import { ProfileHero, SettingsRow, SettingsSection, SignOutButton } from "@/components/SettingsKit";
 import { AppearanceRow, TourRow, ScheduleRow, SyncRow, FeedbackRow, PayRunsRow, ReportsRow } from "@/components/ProfilePreferences";
+import { HomeScreenSettings } from "@/components/home/HomeScreenSettings";
 import { BiometricLockRow } from "@/components/BiometricLockRow";
 import { useRoleLabel } from "@/features/roles";
 import { useSmartClean } from "@/features/store";
@@ -55,6 +56,8 @@ export default function ManageProfile() {
           mySites.map((site) => <SettingsRow key={site.id} icon="business-outline" title={site.name} />)
         )}
       </SettingsSection>
+
+      <HomeScreenSettings />
 
       <SettingsSection title="Settings">
         <SettingsRow icon="person-outline" title="Edit profile" onPress={() => router.push("/profile-edit")} />

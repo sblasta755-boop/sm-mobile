@@ -183,6 +183,9 @@ export default function ManageTeam() {
       selected.role !== "org_admin" &&
       selected.role !== "operations_manager";
     const pending = statusOf(selected) === "Pending Activation";
+    // An organisation admin arranges operations and site managers' homes (never another admin's); the server checks too.
+    const canArrangeHome =
+      currentUser?.role === "org_admin" && (selected.role === "operations_manager" || selected.role === "site_manager");
     return (
       <Screen title={selected.name} backTo="/manage-team">
         <Card style={styles.detailCard}>
@@ -208,6 +211,21 @@ export default function ManageTeam() {
                 onValueChange={(value) => void setCanOnboard(value)}
               />
             </View>
+          </Card>
+        )}
+
+        {canArrangeHome && (
+          <Card style={styles.detailCard}>
+            <Text style={styles.sectionTitle}>Home screen</Text>
+            <Text style={styles.muted}>Choose which cards {selected.name} sees when they open the app, and lock it if you want.</Text>
+            <Button
+              variant="outline"
+              onPress={() =>
+                router.push({ pathname: "/home-layout-admin", params: { userId: selected.id, name: selected.name } } as never)
+              }
+            >
+              Edit home screen
+            </Button>
           </Card>
         )}
 

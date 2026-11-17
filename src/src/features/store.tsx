@@ -2,6 +2,7 @@ import { loadEvidenceView } from "@/features/evidenceView";
 import { loadLastSynced, markSynced } from "@/features/lastSynced";
 import { clearLastLocation } from "@/features/lastLocationStore";
 import { clearHomeLayout } from "@/features/homeLayoutCache";
+import { clearHomeSummary } from "@/features/homeSummaryCache";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import NetInfo from "@react-native-community/netinfo";
 import {
@@ -518,6 +519,7 @@ export function SmartCleanProvider({ children }: { children: ReactNode }) {
     clearLastLocation();
     // ...nor their home screen.
     clearHomeLayout(state.currentUserId);
+    clearHomeSummary(state.currentUserId);
     await SecureSessionService.clear();
     dispatch({ type: "SIGN_OUT" });
     if (accessToken && refreshToken) {

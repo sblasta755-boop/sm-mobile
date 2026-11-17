@@ -291,6 +291,20 @@ export default function PlatformOrganisationUser() {
             <Button variant="outline" loading={busy === "edit"} onPress={openEdit} icon={<Ionicons name="create-outline" size={18} color={colors.foreground} />}>
               Edit
             </Button>
+            {["org_admin", "operations_manager", "site_manager"].includes(user.role) && (
+              <Button
+                variant="outline"
+                onPress={() =>
+                  router.push({
+                    pathname: "/platform-home-layout/[tenantId]",
+                    params: { tenantId: tenantId!, userId: user.id, name: user.name },
+                  } as never)
+                }
+                icon={<Ionicons name="grid-outline" size={18} color={colors.foreground} />}
+              >
+                Edit home screen
+              </Button>
+            )}
             {s === "pending" && (
               <Button
                 variant="outline"

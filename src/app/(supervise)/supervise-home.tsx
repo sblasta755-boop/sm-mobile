@@ -29,6 +29,7 @@ import { taskDestination } from "@/domain/inspections";
 import { hexAlpha } from "@/domain/calendarGrid";
 import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 import { OnboardingShortcuts } from "@/components/OnboardingShortcuts";
+import { CardDecoration } from "@/components/CardDecoration";
 
 /**
  * A supervisor's day: what is waiting to be inspected, and what they
@@ -114,6 +115,7 @@ export default function SuperviseHome() {
       {!noSites && hasAttendance && canScanClock && hasQr && (
         <Card padded={false} style={styles.shiftCard}>
           <View style={styles.shiftOverlay}>
+            <CardDecoration />
             <View style={styles.shiftTopRow}>
               <View style={styles.shiftInfo}>
                 <Text style={styles.shiftEyebrow}>Today&apos;s shift</Text>
@@ -316,6 +318,7 @@ const styles = themedStyles(() => StyleSheet.create({
     marginBottom: spacing.lg,
   },
   shiftOverlay: {
+    overflow: "hidden",
     backgroundColor: colors.shiftBackground,
     padding: spacing.lg,
     gap: spacing.md,

@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { hexAlpha, mixHex } from "@/domain/calendarGrid";
+import { CardDecoration } from "@/components/CardDecoration";
 import { reportTiles, tourTargetRef } from "@/features/tour";
 import { colors, radius, spacing, themedStyles, typography, useThemeVersion } from "@/theme";
 
@@ -103,6 +104,7 @@ export function ActionTiles({ items, max = MAX_TILES }: { items: ActionTile[]; m
                   style={StyleSheet.absoluteFill}
                 />
               )}
+              <CardDecoration />
               <View style={styles.topRow}>
                 {item.badge ? (
                   <View style={[styles.pill, { backgroundColor: hexAlpha(text, 0.2) }]}>

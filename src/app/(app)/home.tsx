@@ -13,6 +13,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { BrokenGlassIcon } from "@/components/BrokenGlassIcon";
 import { Screen } from "@/components/Screen";
 import { Card } from "@/components/Card";
+import { CardDecoration } from "@/components/CardDecoration";
 import { Button } from "@/components/Button";
 import { useMyProgress } from "@/components/ProgressCard";
 import { useUpcomingBooking } from "@/components/UpcomingBookingCard";
@@ -248,6 +249,7 @@ export default function HomeScreen() {
             end={{ x: 0, y: 0 }}
             style={StyleSheet.absoluteFill}
           />
+          <CardDecoration />
           <View style={styles.shiftTopRow}>
             <View style={styles.shiftInfo}>
               <Text style={styles.shiftEyebrow}>
@@ -501,6 +503,7 @@ const styles = themedStyles(() =>
     shiftOverlay: {
       backgroundColor: colors.shiftBackground,
       padding: spacing.lg,
+      overflow: "hidden",
       minHeight: 190,
       justifyContent: "flex-end",
       gap: spacing.md,

@@ -36,6 +36,7 @@ function readBrandTheme(): ResolvedBrandTheme {
       light: parsed.light ?? {},
       dark: parsed.dark ?? {},
       fonts: parsed.fonts ?? {},
+      cards: parsed.cards ?? {},
     };
   } catch {
     return EMPTY_BRAND_THEME;

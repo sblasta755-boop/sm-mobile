@@ -29,10 +29,17 @@ export type ThemeColors = {
 
 export type ThemeFonts = { heading?: string; body?: string };
 
+/** Decoration on the home tiles and shift card. Unset means plain. */
+export type ThemeCards = {
+  pattern?: "none" | "stripes";
+  logoWatermark?: boolean;
+};
+
 export type BrandTheme = {
   light?: ThemeColors;
   dark?: ThemeColors;
   fonts?: ThemeFonts;
+  cards?: ThemeCards;
 };
 
 /** Resolved form used everywhere after sanitising: every part present. */
@@ -40,13 +47,24 @@ export type ResolvedBrandTheme = {
   light: ThemeColors;
   dark: ThemeColors;
   fonts: ThemeFonts;
+  cards: ThemeCards;
 };
 
 export const EMPTY_BRAND_THEME: ResolvedBrandTheme = {
   light: {},
   dark: {},
   fonts: {},
+  cards: {},
 };
+
+function cleanCards(cards: ThemeCards | undefined): ThemeCards {
+  const out: ThemeCards = {};
+  if (cards?.pattern === "none" || cards?.pattern === "stripes")
+    out.pattern = cards.pattern;
+  if (typeof cards?.logoWatermark === "boolean")
+    out.logoWatermark = cards.logoWatermark;
+  return out;
+}
 
 const COLOR_KEYS = [
   "background",
@@ -192,7 +210,7 @@ export function resolveBrandTheme(
     fonts.heading = theme.fonts.heading;
   if (theme?.fonts?.body && known(theme.fonts.body))
     fonts.body = theme.fonts.body;
-  return { light, dark, fonts };
+  return { light, dark, fonts, cards: cleanCards(theme?.cards) };
 }
 
 /** Site over organisation, colour by colour and font by font. */
@@ -204,6 +222,7 @@ export function mergeBrandThemes(
     light: { ...tenant?.light, ...site?.light },
     dark: { ...tenant?.dark, ...site?.dark },
     fonts: { ...tenant?.fonts, ...site?.fonts },
+    cards: { ...tenant?.cards, ...site?.cards },
   };
 }
 
@@ -212,7 +231,8 @@ export function isEmptyBrandTheme(theme: ResolvedBrandTheme): boolean {
     Object.keys(theme.light).length === 0 &&
     Object.keys(theme.dark).length === 0 &&
     !theme.fonts.heading &&
-    !theme.fonts.body
+    !theme.fonts.body &&
+    Object.keys(theme.cards).length === 0
   );
 }
 
