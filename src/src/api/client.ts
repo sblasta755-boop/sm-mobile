@@ -726,7 +726,20 @@ export interface TimesheetSegment {
   id: string;
   startedAt: string;
   endedAt?: string | null;
+  startMethod?: string | null;
+  endMethod?: string | null;
   endReason?: string | null;
+}
+
+/** One manager correction to a day, kept with its reason. */
+export interface TimesheetAmendment {
+  id: string;
+  field: "clock_in_at" | "clock_out_at";
+  previousValue?: string | null;
+  newValue?: string | null;
+  reason: string;
+  actorName?: string | null;
+  createdAt: string;
 }
 
 /** One person's day on the manager timesheet. The server sends null (not absent) for a time that has not happened. */
@@ -742,10 +755,18 @@ export interface TimesheetDay {
   clockOutAt?: string | null;
   /** null while the day is still open, deliberately not 0. */
   workedMinutes?: number | null;
+  expectedStart?: string | null;
+  expectedEnd?: string | null;
   exceptions: string[];
   /** scanned | auto_closed | amended */
   source?: string;
+  /** qr | manual | geofence */
+  clockInMethod?: string | null;
+  clockOutMethod?: string | null;
   approvalState: string;
+  approvedBy?: string | null;
+  approvedAt?: string | null;
+  amendments?: TimesheetAmendment[];
   segments?: TimesheetSegment[];
 }
 
@@ -759,9 +780,10 @@ export interface AttendanceTimesheet {
 
 /** Computed hours, flags and approval state for the people the caller manages ("YYYY-MM-DD", inclusive). Every figure is
  * summed server-side, so this screen and the web timesheet never disagree. Managers and supervisors only. */
-export function getAttendanceTimesheet(accessToken: string, start: string, end: string) {
+export function getAttendanceTimesheet(accessToken: string, start: string, end: string, siteId?: string) {
+  const site = siteId ? `&siteId=${encodeURIComponent(siteId)}` : "";
   return request<AttendanceTimesheet>(
-    `/attendance/timesheet?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`,
+    `/attendance/timesheet?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}${site}`,
     {},
     accessToken,
   );
@@ -2899,9 +2921,9 @@ export type BookStaffInput = {
 };
 export const listMyBookings = (t: string, start: string, end: string) =>
   request<StaffBooking[]>(`/schedule/mine?start=${start}&end=${end}`, {}, t);
-export const listSiteBookings = (t: string, start: string, end: string) =>
+export const listSiteBookings = (t: string, start: string, end: string, siteId?: string) =>
   request<StaffBooking[]>(
-    `/schedule/bookings?start=${start}&end=${end}`,
+    `/schedule/bookings?start=${start}&end=${end}${siteId ? `&siteId=${encodeURIComponent(siteId)}` : ""}`,
     {},
     t,
   );
@@ -2997,6 +3019,7 @@ export type LeaveRequest = {
   reason: string;
   noteUrl: string | null;
   decidedBy: string | null;
+  decidedAt?: string | null;
   decisionNote: string | null;
   recordedByManager: boolean;
   /** Set on a decision: bookings taken off and open tasks to reassign. */
@@ -3034,11 +3057,14 @@ export const getLeaveBalances = (t: string) =>
   request<LeaveBalances>("/leave/balance", {}, t);
 export const listLeaveRequests = (
   t: string,
-  q: { status?: LeaveStatus; mine?: boolean } = {},
+  q: { status?: LeaveStatus; mine?: boolean; siteId?: string; start?: string; end?: string } = {},
 ) => {
   const params = new URLSearchParams();
   if (q.status) params.set("status", q.status);
   if (q.mine) params.set("mine", "true");
+  if (q.siteId) params.set("siteId", q.siteId);
+  if (q.start) params.set("start", q.start);
+  if (q.end) params.set("end", q.end);
   return request<LeaveRequest[]>(`/leave/requests?${params}`, {}, t);
 };
 export const requestLeave = (t: string, input: LeaveRequestInput) =>
@@ -3088,12 +3114,19 @@ export interface OvertimeRequest {
 export const listOvertime = (
   t: string,
   scope: "pending" | "history" | "mine" = "pending",
-) =>
-  request<{ requests: OvertimeRequest[] }>(
-    `/attendance/overtime?scope=${scope}`,
+  /** Narrow to one site and to requests made between two site-local days (for reports). */
+  q: { siteId?: string; start?: string; end?: string } = {},
+) => {
+  const params = new URLSearchParams({ scope });
+  if (q.siteId) params.set("siteId", q.siteId);
+  if (q.start) params.set("start", q.start);
+  if (q.end) params.set("end", q.end);
+  return request<{ requests: OvertimeRequest[] }>(
+    `/attendance/overtime?${params}`,
     {},
     t,
   ).then((r) => r.requests);
+};
 export const decideOvertime = (
   t: string,
   id: string,
@@ -3214,9 +3247,14 @@ export type MaintenanceJob = {
     id?: string;
     checklistItemId?: string;
   };
+  reporterId?: string;
   handlerId: string | null;
   path: "internal" | "contractor";
   state: MaintenanceState;
+  diagnosis?: string;
+  contractorId?: string | null;
+  approval?: string;
+  closedAt?: string | null;
   approvedAmount: number | null;
   /** What the job really cost, typed in when it was closed. May differ from the approved amount. */
   finalCost?: number | null;
@@ -3270,8 +3308,20 @@ const maintenanceBody = (method: string, body?: unknown): RequestInit => ({
 
 export const listMaintenanceJobs = (
   token: string,
-  queue: MaintenanceQueue = "open",
-) => request<MaintenanceJob[]>(`/maintenance/jobs?queue=${queue}`, {}, token);
+  /** "all" is every job, open or closed (used by reports). */
+  queue: MaintenanceQueue | "all" = "open",
+  /** One site, and jobs reported between two site-local days, up to 500 (for reports). */
+  opts: { siteId?: string; start?: string; end?: string } = {},
+) => {
+  const params = new URLSearchParams({ queue });
+  if (opts.siteId) params.set("siteId", opts.siteId);
+  if (opts.start && opts.end) {
+    params.set("start", opts.start);
+    params.set("end", opts.end);
+    params.set("limit", "500");
+  }
+  return request<MaintenanceJob[]>(`/maintenance/jobs?${params}`, {}, token);
+};
 /** Every job raised from one task, open or closed. */
 export const listMaintenanceJobsForTask = (token: string, taskId: string) =>
   request<MaintenanceJob[]>(

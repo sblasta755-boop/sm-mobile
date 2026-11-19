@@ -1,5 +1,7 @@
 import { useMemo, useState } from "react";
+import { router } from "expo-router";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Button } from "@/components/Button";
 import { OnShiftNow } from "@/components/OnShiftNow";
 import { Screen } from "@/components/Screen";
 import { TimesheetView } from "@/components/TimesheetView";
@@ -41,6 +43,21 @@ export default function AttendanceNowScreen() {
         ))}
       </View>
       {view === "timesheet" ? <TimesheetView /> : <OnShiftNow sites={mySites} />}
+      {currentUser && ["org_admin", "operations_manager", "site_manager", "supervisor"].includes(currentUser.role) && (
+        <Button variant="outline" onPress={() => router.push("/attendance-report" as never)}>
+          Attendance reports
+        </Button>
+      )}
+      {currentUser && ["org_admin", "operations_manager", "site_manager", "supervisor"].includes(currentUser.role) && (
+        <Button variant="outline" onPress={() => router.push("/timesheet-report" as never)}>
+          Timesheet reports
+        </Button>
+      )}
+      {currentUser && ["org_admin", "operations_manager", "site_manager", "supervisor"].includes(currentUser.role) && (
+        <Button variant="outline" onPress={() => router.push("/overtime-report" as never)}>
+          Overtime reports
+        </Button>
+      )}
     </Screen>
   );
 }

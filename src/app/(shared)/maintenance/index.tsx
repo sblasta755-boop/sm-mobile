@@ -52,7 +52,7 @@ const NEXT_COLOR = (): Record<NextTone, string> => ({
 
 export default function MaintenanceListScreen() {
   useThemeVersion();
-  const { state } = useSmartClean();
+  const { state, currentUser } = useSmartClean();
   const token = state.accessToken;
   const [queue, setQueue] = useState<MaintenanceQueue>("open");
   const [jobs, setJobs] = useState<MaintenanceJob[] | null>(null);
@@ -118,6 +118,15 @@ export default function MaintenanceListScreen() {
             onPress={() => router.push("/maintenance/contractors" as never)}
           >
             Contractors
+          </Button>
+        ) : null}
+        {currentUser && ["org_admin", "operations_manager", "site_manager", "supervisor"].includes(currentUser.role) ? (
+          <Button
+            variant="outline"
+            icon={<Ionicons name="document-text-outline" size={18} color={colors.foreground} />}
+            onPress={() => router.push("/maintenance-report" as never)}
+          >
+            Maintenance reports
           </Button>
         ) : null}
 

@@ -19,8 +19,14 @@ function safe(text: string): string {
     .replace(/[^\x20-\x7e•]/g, "");
 }
 
-export function footerLine(site: string, reportName: string, page: number, total: number): string {
-  return safe(`${site} | ${reportName} | Management report   •   PAGE ${page} OF ${total}`).toUpperCase();
+export function footerLine(
+  site: string,
+  reportName: string,
+  page: number,
+  total: number,
+  kind = "Management report",
+): string {
+  return safe(`${site} | ${reportName} | ${kind}   •   PAGE ${page} OF ${total}`).toUpperCase();
 }
 
 /** Returns the PDF (base64) with the footer drawn right-aligned on every page. */
@@ -28,12 +34,13 @@ export async function stampReportFooter(
   pdfBase64: string,
   site: string,
   reportName: string,
+  kind?: string,
 ): Promise<string> {
   const doc = await PDFDocument.load(pdfBase64);
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const pages = doc.getPages();
   pages.forEach((page, index) => {
-    const text = footerLine(site, reportName, index + 1, pages.length);
+    const text = footerLine(site, reportName, index + 1, pages.length, kind);
     const width = font.widthOfTextAtSize(text, SIZE);
     page.drawText(text, {
       x: page.getWidth() - MARGIN_X - width,

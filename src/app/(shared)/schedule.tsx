@@ -136,6 +136,11 @@ export default function ScheduleScreen() {
         ))}
       </View>
       {canBook && <Button onPress={() => router.push("/schedule-book" as never)}>Book staff</Button>}
+      {canBook && (
+        <Button variant="outline" onPress={() => router.push("/schedule-report" as never)}>
+          Schedule reports
+        </Button>
+      )}
 
       {!bookings && <ActivityIndicator color={colors.primary} />}
       {bookings && view !== "calendar" && groups.length === 0 && (

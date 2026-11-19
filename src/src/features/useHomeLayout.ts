@@ -43,6 +43,9 @@ export interface HomeLayoutApi {
 const LOCKED = "Your administrator set this home screen, so it cannot be changed.";
 
 /** The manager's home layout. See features/homeLayoutCache.ts for how the local copy and the server's stay in step. */
+/** The save currently going up for each person, so saves are sent one after another and never twice at once. */
+const savesInFlight = new Map<string, Promise<void>>();
+
 export function useHomeLayout(): HomeLayoutApi {
   const { state, currentUser } = useSmartClean();
   const userId = currentUser?.id ?? "";
@@ -66,15 +69,27 @@ export function useHomeLayout(): HomeLayoutApi {
   }, [canCustomise, userId, state.homeLayout]);
 
   const send = useCallback(
-    async (stored: StoredLayout) => {
-      if (!token) return;
-      const { homeLayout } = await putMyHomeLayout(token, stored);
-      writeCached(userId, {
-        layout: homeLayout.layout as StoredLayout,
-        rev: homeLayout.rev,
-        locked: homeLayout.locked,
-        pending: false,
-      });
+    (stored: StoredLayout) => {
+      if (!token) return Promise.resolve();
+      // One save at a time per person, in order, so the same edit is never on the wire twice at once.
+      const previous = savesInFlight.get(userId) ?? Promise.resolve();
+      const run = previous
+        .catch(() => undefined)
+        .then(async () => {
+          const { homeLayout } = await putMyHomeLayout(token, stored);
+          writeCached(userId, {
+            layout: homeLayout.layout as StoredLayout,
+            rev: homeLayout.rev,
+            locked: homeLayout.locked,
+            pending: false,
+          });
+        });
+      savesInFlight.set(userId, run);
+      const clear = () => {
+        if (savesInFlight.get(userId) === run) savesInFlight.delete(userId);
+      };
+      run.then(clear, clear);
+      return run;
     },
     [token, userId],
   );
@@ -83,6 +98,7 @@ export function useHomeLayout(): HomeLayoutApi {
   const pending = !!entry?.pending;
   useEffect(() => {
     if (!canCustomise || !pending || !token || state.connectivity === "offline") return;
+    if (savesInFlight.has(userId)) return; // commit() already has this edit on its way
     const current = readCached(userId);
     if (current?.pending) void send(current.layout).catch(() => undefined);
   }, [canCustomise, pending, token, userId, state.connectivity, send]);
