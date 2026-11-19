@@ -8,8 +8,9 @@ import { colors, spacing, typography, themedStyles, useThemeVersion } from "@/th
 // mirrors the web app's shared copy (see smart-property-operations/src/lib/
 // smartclean/privacyNotice.ts) - keep both in sync if either changes.
 const PRIVACY_NOTICE_PARAGRAPHS = [
-  "Šoma360 collects operational data needed to run cleaning services at your sites: attendance events (QR scan + timestamp; GPS is only recorded where a device supplies it), task photos and checklist evidence, incident reports, and account/audit logs. Emails you receive (invites, password resets, incident and corrective-action alerts) are sent through this deployment's configured mail service.",
-  "Under POPIA you may request access to, correction of, or deletion of your personal information by contacting your organisation's Šoma360 administrator. Retention and deletion are currently handled manually by your administrator rather than by an automated policy.",
+  "Šoma360 collects the operational data needed to run your sites: your account details, attendance events (QR scans, times and, where your organisation has switched it on, GPS position), task photos and checklist evidence, incident reports, leave and overtime requests, and an audit log. Where proof of presence or automatic clock-in is on, your position is sent every few minutes while you are clocked in, and the Android app can do this in the background. Your organisation is the responsible party for this data and Šoma360 processes it on its behalf.",
+  "Emails and notifications are sent through the mail and push services this deployment is configured with. Maps and directions use OpenStreetMap-based services, which see your IP address and, for directions, your position. The web app sets no cookies and uses no analytics or advertising trackers; it keeps your session and preferences in your browser storage.",
+  "Under POPIA you may request access to, correction of, or deletion of your personal information, object to processing, or complain to the Information Regulator. Ask your organisation's Šoma360 administrator or write to us. Sign-in sessions expire after 14 days, visitor contact details left through wayfinding are deleted after 30 days, and other retention is currently managed by your administrator rather than an automatic schedule. The full policy is at /privacy.",
 ];
 
 export default function PrivacyScreen() {

@@ -395,6 +395,9 @@ function OrganisationFlow({ onCreated }: { onCreated: () => void }) {
   const [adminDisplayName, setAdminDisplayName] = useState("");
   const [adminEmail, setAdminEmail] = useState("");
   const [tier, setTier] = useState("professional");
+  // Billing is monthly, so a new organisation starts with a one-month period, renewed on payment. "Open-ended" has
+  // no end date and never expires on its own, so it is a deliberate choice (the console flags it).
+  const [months, setMonths] = useState<1 | 3 | 12 | 0>(1);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<{ id: string; name: string } | null>(null);
@@ -421,6 +424,7 @@ function OrganisationFlow({ onCreated }: { onCreated: () => void }) {
         adminDisplayName: adminDisplayName.trim(),
         adminEmail: adminEmail.trim(),
         tier,
+        periodEnd: months === 0 ? null : periodEndAfter(months),
         // The whole point of this screen: no invite email, a QR instead.
         deliveryMethod: "qr",
       });
@@ -577,6 +581,36 @@ function OrganisationFlow({ onCreated }: { onCreated: () => void }) {
       </View>
 
       <View>
+        <SectionLabel>Billing period</SectionLabel>
+        <View style={styles.plans}>
+          {([
+            { value: 1, label: "1 month" },
+            { value: 3, label: "3 months" },
+            { value: 12, label: "12 months" },
+            { value: 0, label: "Open-ended" },
+          ] as const).map((o) => {
+            const on = o.value === months;
+            return (
+              <Pressable
+                key={o.value}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: on }}
+                onPress={() => setMonths(o.value)}
+                style={[styles.plan, on && styles.planOn]}
+              >
+                <Text style={[styles.planText, on && styles.planTextOn]}>{o.label}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+        <Hint>
+          {months === 0
+            ? "No end date: it never expires and is never suspended automatically."
+            : "Billing is monthly. Renew in the web console once payment is received."}
+        </Hint>
+      </View>
+
+      <View>
         <PillButton label="Create organisation" icon="business-outline" onPress={create} disabled={!canSubmit} busy={busy} />
         {missing.length > 0 && !busy && (
           <MissingNote text={`Add ${missing.length === 1 ? missing[0] : `${missing.slice(0, -1).join(", ")} and ${missing[missing.length - 1]}`} to continue`} />
@@ -584,6 +618,16 @@ function OrganisationFlow({ onCreated }: { onCreated: () => void }) {
       </View>
     </View>
   );
+}
+
+/** End of a first billing period `months` from today (the last moment of that day, local time), as an ISO string. */
+function periodEndAfter(months: number): string {
+  const from = new Date();
+  const target = new Date(from.getFullYear(), from.getMonth() + months, 1);
+  const lastDay = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
+  target.setDate(Math.min(from.getDate(), lastDay));
+  target.setHours(23, 59, 59, 0);
+  return target.toISOString();
 }
 
 const styles = themedStyles(() =>

@@ -1773,6 +1773,8 @@ export function provisionOrganisation(
     adminEmail: string;
     tier: string;
     seats?: number | null;
+    /** When the first billing period ends; null or absent means open-ended (never expires). */
+    periodEnd?: string | null;
     deliveryMethod?: "email" | "qr";
   },
 ) {
