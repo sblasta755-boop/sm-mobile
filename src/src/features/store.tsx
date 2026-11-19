@@ -77,6 +77,9 @@ interface State {
    * lands; consumers treat that as "not yet known" and fail open, since
    * the server enforces the real answer. */
   subscription: SubscriptionState | null;
+  /** Set when the server refuses this session because the organisation is suspended, cancelled or has no
+   * subscription; the app then shows only the blocked gate (AccountBlockedGate). */
+  accountBlocked: { status: string; billingEmail: string | null } | null;
   /** Colours the organisation chose for task tags (lower-cased tag to colour name). */
   tagColors: Record<string, string>;
   /** Field-staff role definitions (label, template, home image...). Empty until bootstrap lands; see features/roles.ts for the fallbacks. */
@@ -156,7 +159,8 @@ type Action =
   | { type: "CREATE_INCIDENT"; incident: Incident }
   | { type: "UPDATE_USER"; userId: string; patch: Partial<DemoUser> }
   | { type: "MARK_NOTIFICATION_READ"; id: string; all?: boolean }
-  | { type: "SIGN_OUT" };
+  | { type: "SIGN_OUT" }
+  | { type: "ACCOUNT_BLOCKED"; status: string; billingEmail: string | null };
 
 const STORAGE_KEY = "smartclean.mobile.state.v1";
 
@@ -185,6 +189,7 @@ function initial(): State {
     assets: [],
     attendance: {},
     subscription: null,
+    accountBlocked: null,
     tagColors: {},
     staffRoles: [],
     locked: false,
@@ -285,7 +290,9 @@ function reducer(state: State, action: Action): State {
         authExpiresAt: action.expiresAt,
       };
     case "HYDRATE":
-      return { ...state, loading: false, error: null, ...bootstrapState(action.bootstrap) };
+      return { ...state, loading: false, error: null, accountBlocked: null, ...bootstrapState(action.bootstrap) };
+    case "ACCOUNT_BLOCKED":
+      return { ...state, accountBlocked: { status: action.status, billingEmail: action.billingEmail } };
     case "SET_CONNECTIVITY":
       return { ...state, connectivity: action.value };
     case "CLOCK_IN":
@@ -424,7 +431,18 @@ export function SmartCleanProvider({ children }: { children: ReactNode }) {
         void SecureSessionService.clear();
         dispatch({ type: "SIGN_OUT" });
       },
-      onSubscriptionBlocked: () => {
+      onSubscriptionBlocked: (code, detail) => {
+        if (code === "subscription_inactive") {
+          // Suspended, cancelled or no subscription. Do NOT refetch: bootstrap is refused too, and refetching
+          // from here would loop. The gate explains it and offers sign out and a check-again.
+          if (!stateRef.current.accessToken) return;
+          dispatch({
+            type: "ACCOUNT_BLOCKED",
+            status: String(detail?.subscriptionStatus ?? "suspended"),
+            billingEmail: typeof detail?.billingEmail === "string" ? detail.billingEmail : null,
+          });
+          return;
+        }
         // A 402 means this app's idea of the plan is out of date - a tier
         // changed, or the subscription lapsed, since the last bootstrap.
         // Refetch so the tab bar and screens match what the server will

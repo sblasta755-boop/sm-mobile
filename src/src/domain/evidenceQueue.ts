@@ -22,7 +22,7 @@ export interface QueuedPhoto {
 
 /** A refusal that was about the session or the connection, never the photo. */
 export const isRetryableRejection = (error?: string) =>
-  !!error && /invalid authentication token|backend 401|network request failed|not active/i.test(error);
+  !!error && /invalid authentication token|backend 401|network request failed|not active|account is (suspended|cancelled|not active)|no active .*subscription/i.test(error);
 
 /**
  * What a saved queue becomes on start: photos stuck mid-upload, or refused only

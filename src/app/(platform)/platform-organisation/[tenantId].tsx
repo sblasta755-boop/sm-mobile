@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { router, useLocalSearchParams } from "expo-router";
-import { Linking, Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { Linking, Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { SvgXml } from "react-native-svg";
 import { Ionicons } from "@expo/vector-icons";
 import { Screen } from "@/components/Screen";
@@ -172,7 +172,10 @@ export default function PlatformOrganisationDetail() {
     }, "Could not show the code");
   }
 
+  const [reasonOpen, setReasonOpen] = useState(false);
+  const [reason, setReason] = useState("");
   const status = organisation?.subscription?.status ?? "none";
+  const neverExpires = !!organisation?.subscription && !organisation.subscription.currentPeriodEnd;
   const suspended = status === "suspended" || status === "cancelled";
 
   if (loading) {
@@ -252,7 +255,7 @@ export default function PlatformOrganisationDetail() {
               ? `Trial ends ${new Date(organisation.subscription.trialEndsAt).toLocaleDateString("en-ZA", { day: "2-digit", month: "short" })}`
               : organisation?.subscription?.currentPeriodEnd
                 ? `Renews ${new Date(organisation.subscription.currentPeriodEnd).toLocaleDateString("en-ZA", { day: "2-digit", month: "short" })}`
-                : "Open-ended"}
+                : "Open-ended: never expires"}
           </Text>
         </View>
       </View>
@@ -402,27 +405,91 @@ export default function PlatformOrganisationDetail() {
         <Text style={styles.sectionTitle}>Account</Text>
         <Text style={styles.muted}>
           {suspended
-            ? "Everyone at this organisation is blocked from the app, except signing in."
-            : "Suspending blocks every user immediately. Reversible at any time."}
+            ? "Everyone at this organisation is signed out and blocked, and nothing runs in the background for it."
+            : "Suspending signs everyone out and stops everything running for this organisation. Its data is kept. Reversible at any time."}
         </Text>
+        {neverExpires && (
+          <Text style={[styles.muted, { color: colors.warning }]}>
+            Open-ended subscription: it has no end date and never expires on its own. Set an end date in the web console if that is not intended.
+          </Text>
+        )}
+        {suspended && organisation?.subscription?.statusReason ? (
+          <Text style={styles.muted}>Reason: {organisation.subscription.statusReason}</Text>
+        ) : null}
         <Button
           variant={suspended ? "primary" : "outline"}
           loading={busy}
-          onPress={() =>
-            void run(
-              () =>
-                setPlatformOrganisationState(
-                  state.accessToken!,
-                  tenantId!,
-                  suspended ? "reactivate" : "suspend",
-                ),
-              suspended ? "Could not reactivate" : "Could not suspend",
-            )
-          }
+          onPress={() => {
+            if (!suspended) {
+              setReason("");
+              setReasonOpen(true);
+              return;
+            }
+            appAlert(
+              `Reactivate ${organisation?.name ?? "this organisation"}?`,
+              "Everyone can sign in again and background work resumes.",
+              [
+                { text: "Cancel", style: "cancel" },
+                {
+                  text: "Reactivate",
+                  onPress: () =>
+                    void run(
+                      () => setPlatformOrganisationState(state.accessToken!, tenantId!, "reactivate"),
+                      "Could not reactivate",
+                    ),
+                },
+              ],
+            );
+          }}
         >
           {suspended ? "Reactivate" : "Suspend"}
         </Button>
       </Card>
+
+      <Modal visible={reasonOpen} transparent animationType="fade" onRequestClose={() => setReasonOpen(false)}>
+        <View style={styles.reasonBackdrop}>
+          <View style={styles.reasonCard}>
+            <Text style={styles.sectionTitle}>Suspend {organisation?.name ?? "organisation"}?</Text>
+            <Text style={styles.muted}>
+              Everyone is signed out and blocked, and nothing runs in the background. Its data is kept. Give a reason:
+              it is kept in the audit trail and shown to the organisation's admins.
+            </Text>
+            <TextInput
+              value={reason}
+              onChangeText={setReason}
+              placeholder="For example: invoice 1043 unpaid after two reminders"
+              placeholderTextColor={colors.mutedForeground}
+              multiline
+              maxLength={500}
+              style={styles.reasonInput}
+              accessibilityLabel="Reason for suspending"
+            />
+            <View style={{ flexDirection: "row", gap: spacing.sm }}>
+              <View style={{ flex: 1 }}>
+                <Button variant="outline" onPress={() => setReasonOpen(false)}>
+                  Cancel
+                </Button>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Button
+                  variant="primary"
+                  disabled={reason.trim().length < 3}
+                  loading={busy}
+                  onPress={() => {
+                    setReasonOpen(false);
+                    void run(
+                      () => setPlatformOrganisationState(state.accessToken!, tenantId!, "suspend", reason),
+                      "Could not suspend",
+                    );
+                  }}
+                >
+                  Suspend
+                </Button>
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       <Modal
         visible={navigatingSite != null}
@@ -447,6 +514,17 @@ function Row({ label, value }: { label: string; value: string }) {
 }
 
 const styles = themedStyles(() => StyleSheet.create({
+  reasonBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", padding: spacing.lg },
+  reasonCard: { backgroundColor: colors.card, borderRadius: radius.lg, padding: spacing.lg, gap: spacing.md },
+  reasonInput: {
+    minHeight: 80,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    padding: spacing.sm,
+    color: colors.foreground,
+    textAlignVertical: "top",
+  },
   oCard: {
     backgroundColor: colors.card,
     borderRadius: radius.xl + 6,

@@ -7,6 +7,7 @@ import { installBrandFonts, ThemeProvider, useTheme } from "@/theme";
 import { useApplyBrandTheme } from "@/services/branding";
 import { DialogHost } from "@/components/Dialog";
 import { UpdateRequiredGate } from "@/components/UpdateBanner";
+import { AccountBlockedGate } from "@/components/AccountBlockedGate";
 import { useAppUpdateWatcher } from "@/features/appUpdate";
 import { usePushRegistration } from "@/features/pushNotifications";
 import { useDeviceHealthReporting } from "@/features/deviceHealth";
@@ -37,6 +38,7 @@ export default function RootLayout() {
           <ThemedStatusBar />
           <Stack screenOptions={{ headerShown: false }} />
           <UpdateRequiredGate />
+          <AccountBlockedGate />
           <OvertimePrompt />
           <TourOverlay />
           <DialogHost />

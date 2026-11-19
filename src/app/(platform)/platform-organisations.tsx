@@ -97,15 +97,26 @@ export default function PlatformOrganisations() {
 
   async function reactivate(org: PlatformOrganisation) {
     if (!state.accessToken) return;
-    setPending(org.id);
-    try {
-      await setPlatformOrganisationState(state.accessToken, org.id, "reactivate");
-      await load();
-    } catch (err) {
-      appAlert("Could not reactivate", err instanceof Error ? err.message : "Please try again.");
-    } finally {
-      setPending(null);
-    }
+    // Reactivating restores access for everyone, so it is asked about first (it used to happen on one tap).
+    appAlert(`Reactivate ${org.name}?`, "Everyone can sign in again and background work resumes.", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Reactivate",
+        onPress: () => {
+          void (async () => {
+            setPending(org.id);
+            try {
+              await setPlatformOrganisationState(state.accessToken!, org.id, "reactivate");
+              await load();
+            } catch (err) {
+              appAlert("Could not reactivate", err instanceof Error ? err.message : "Please try again.");
+            } finally {
+              setPending(null);
+            }
+          })();
+        },
+      },
+    ]);
   }
 
   const total = counts.total || 1;

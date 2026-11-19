@@ -349,6 +349,9 @@ async function refreshAccessToken(): Promise<string | null> {
       // Only a server that says the refresh token is dead ends the session. A
       // dropped connection or a server hiccup must not sign the person out.
       // The server says a dead refresh token is 409, not 401, so any definitive 4xx counts.
+      // A suspended or cancelled organisation refuses the refresh with a 402: the blocked gate explains it, so
+      // the session is not wiped silently (request() has already told the store).
+      if (error instanceof SubscriptionError && error.code === "subscription_inactive") return null;
       if (isDefinitiveRefreshRejection(error)) {
         sessionHandlers?.onRefreshFailed();
       }
@@ -482,6 +485,15 @@ export class SubscriptionError extends ApiError {
   get isModuleLocked(): boolean {
     return this.code === "module_locked";
   }
+}
+
+/** The sentence to show when signing in fails. A suspended organisation's refusal also names who to contact. */
+export function signInErrorMessage(error: unknown, fallback = "Login failed"): string {
+  if (error instanceof SubscriptionError && error.code === "subscription_inactive") {
+    const email = typeof error.detail?.billingEmail === "string" ? error.detail.billingEmail : null;
+    return email ? `${error.message} Contact ${email} to restore access.` : error.message;
+  }
+  return error instanceof Error ? error.message : fallback;
 }
 
 /** Shared non-OK handling, so any call site that cannot go through
@@ -1584,6 +1596,11 @@ export interface PlatformOrganisation {
     trialEndsAt: string | null;
     billingEmail: string | null;
     modules: string[];
+    /** What the organisation is right now, from the stored status and the period dates. */
+    effectiveStatus?: string;
+    /** No end date: never expires on its own. */
+    openEnded?: boolean;
+    statusReason?: string | null;
   } | null;
 }
 
@@ -1722,10 +1739,12 @@ export function setPlatformOrganisationState(
   accessToken: string,
   tenantId: string,
   action: "suspend" | "reactivate" | "cancel",
+  /** Required for suspend and cancel: kept in the audit trail and shown to the organisation's admins. */
+  reason?: string,
 ) {
   return request<PlatformOrganisation>(
     `/platform/organisations/${tenantId}/${action}`,
-    { method: "POST" },
+    { method: "POST", body: JSON.stringify({ reason: reason?.trim() || null }) },
     accessToken,
   );
 }

@@ -20,7 +20,7 @@ import { StatusBar } from "expo-status-bar";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useSmartClean } from "@/features/store";
-import { getPublicTenantBranding } from "@/api/client";
+import { getPublicTenantBranding, signInErrorMessage } from "@/api/client";
 import { resolveBranding, type ResolvedBranding } from "@/services/branding";
 import {
   colors,
@@ -113,7 +113,7 @@ export default function Login() {
       await signIn(username.trim(), password);
       router.replace("/");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Login failed");
+      setError(signInErrorMessage(err));
     } finally {
       setBusy(false);
     }

@@ -19,6 +19,8 @@ describe("isRetryableRejection", () => {
     expect(isRetryableRejection("Invalid authentication token")).toBe(true);
     expect(isRetryableRejection("Backend 401: {}")).toBe(true);
     expect(isRetryableRejection("Network request failed")).toBe(true);
+    // A suspended organisation refuses everything; the photo is fine and goes up after reactivation.
+    expect(isRetryableRejection("Your organisation's Šoma360 account is suspended.")).toBe(true);
     expect(isRetryableRejection("Photo is not a valid image")).toBe(false);
     expect(isRetryableRejection(undefined)).toBe(false);
   });
