@@ -7,6 +7,7 @@ import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { BookingCard } from "@/components/BookingCard";
 import { ScheduleMap } from "@/components/ScheduleMap";
+import { RosterView } from "@/components/RosterView";
 import { CalendarFrame, CalendarLegend, DotStrip, MonthTiles, type DayTileData } from "@/components/MonthCalendar";
 import { heatColor, monthDays, monthTitle } from "@/domain/calendarGrid";
 import { appAlert } from "@/components/Dialog";
@@ -24,12 +25,16 @@ const AHEAD_DAYS = 30;
 /** When and where a person is booked, as a list or on a map. Managers can also see everyone's bookings and book people. */
 export default function ScheduleScreen() {
   useThemeVersion(); // re-render with the new colours when the theme changes
-  const { state } = useSmartClean();
+  const { state, currentUser } = useSmartClean();
   const on = useScheduleOn();
   const canBook = useCanBook();
   const homePath = useHomePath();
   const [scope, setScope] = useState<"mine" | "all">("mine");
-  const [view, setView] = useState<"list" | "map" | "calendar">("list");
+  // The phone has no remembered pick: it opens on the view management set for the person's site, else the list.
+  const [ownView, setView] = useState<"list" | "map" | "calendar" | "roster" | null>(null);
+  const mySite = state.sites.find((x) => x.active && currentUser?.siteIds?.includes(x.id)) ?? state.sites.find((x) => x.active);
+  const siteView = mySite?.scheduleView && (mySite.scheduleView !== "roster" || canBook) ? mySite.scheduleView : null;
+  const view = ownView ?? siteView ?? "list";
   const [monthStart, setMonthStart] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
   const [pickedDay, setPickedDay] = useState(() => dateKey(new Date()));
   const [bookings, setBookings] = useState<StaffBooking[] | null>(null);
@@ -128,7 +133,7 @@ export default function ScheduleScreen() {
         </View>
       )}
       <View style={styles.seg}>
-        {([["list", "List", "list-outline"], ["calendar", "Calendar", "calendar-outline"], ["map", "Map", "map-outline"]] as const).map(([k, label, icon]) => (
+        {([["list", "List", "list-outline"], ["calendar", "Calendar", "calendar-outline"], ["map", "Map", "map-outline"], ...(canBook ? [["roster", "Roster", "people-outline"] as const] : [])] as const).map(([k, label, icon]) => (
           <Pressable key={k} style={[styles.segItem, view === k && styles.segOn]} onPress={() => setView(k)} accessibilityRole="button" accessibilityState={{ selected: view === k }}>
             <Ionicons name={icon} size={16} color={view === k ? colors.white : colors.mutedForeground} />
             <Text style={[styles.segText, view === k && styles.segTextOn]}>{label}</Text>
@@ -142,14 +147,16 @@ export default function ScheduleScreen() {
         </Button>
       )}
 
-      {!bookings && <ActivityIndicator color={colors.primary} />}
-      {bookings && view !== "calendar" && groups.length === 0 && (
+      {!bookings && view !== "roster" && <ActivityIndicator color={colors.primary} />}
+      {bookings && view !== "calendar" && view !== "roster" && groups.length === 0 && (
         <Card>
           <Text style={styles.muted}>
             {scope === "all" ? "No one is booked in the next 30 days." : "You are not booked for anything in the next 30 days."}
           </Text>
         </Card>
       )}
+
+      {view === "roster" && canBook && <RosterView />}
 
       {bookings && groups.length > 0 && view === "map" && (
         <>

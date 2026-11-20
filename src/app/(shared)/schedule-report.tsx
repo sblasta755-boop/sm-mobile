@@ -20,6 +20,7 @@ import {
 import { useSmartClean } from "@/features/store";
 import { useCanBook, useScheduleOn } from "@/features/schedule";
 import { useHomePath } from "@/features/roles";
+import { useReportAccessState } from "@/features/reportAccess";
 import { useTenantBranding } from "@/services/branding";
 import { photoDataUri } from "@/services/reportPhotos";
 import { fuzzyFilter } from "@/domain/fuzzySearch";
@@ -50,6 +51,7 @@ export default function ScheduleReportScreen() {
   const on = useScheduleOn();
   const canBook = useCanBook();
   const homePath = useHomePath();
+  const { grants: reportGrants, ready: reportsReady } = useReportAccessState();
   const branding = useTenantBranding();
   const sites = state.sites.filter((s) => s.active);
   const today = dayKey(new Date());
@@ -136,7 +138,8 @@ export default function ScheduleReportScreen() {
     [people, query],
   );
 
-  if (!currentUser || !on || !canBook) return <Redirect href={homePath as never} />;
+  if (!reportsReady) return null;
+  if (!currentUser || !on || !(canBook || reportGrants.schedule)) return <Redirect href={homePath as never} />;
 
   const empty = !report || report.groups.length === 0;
   const blocked = empty || loading || tooLong || badRange || !!busy;
@@ -224,10 +227,10 @@ export default function ScheduleReportScreen() {
           </>
         ) : (
           <Stepper
-            label={kind === "daily" ? "Day" : kind === "weekly" ? "Week containing" : "Month containing"}
+            label={kind === "daily" ? "Day" : kind === "weekly" || kind === "roster" ? "Week containing" : "Month containing"}
             value={date}
             onChange={setDate}
-            stepDays={kind === "daily" ? 1 : kind === "weekly" ? 7 : 28}
+            stepDays={kind === "daily" ? 1 : kind === "weekly" || kind === "roster" ? 7 : 28}
           />
         )}
         {report && !usesRange && <Text style={styles.muted}>{report.period}</Text>}

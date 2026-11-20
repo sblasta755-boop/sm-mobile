@@ -192,3 +192,30 @@ describe("analysis", () => {
     expect(r.charts).toEqual([]);
   });
 });
+
+
+describe("roster grid", () => {
+  it("lays people down the side and the week's days across", () => {
+    const report = buildScheduleReport({
+      ...base,
+      kind: "roster",
+      bookings: [
+        booking({ id: "1", userId: "u1", userName: "Wesley", date: "2026-11-16" }),
+        booking({ id: "2", userId: "u1", userName: "Wesley", date: "2026-11-18", shiftNames: [], startTime: "09:00", endTime: "13:00" }),
+        booking({ id: "3", userId: "u2", userName: "Anele", date: "2026-11-18" }),
+        booking({ id: "4", userId: "u2", userName: "Anele", date: "2026-11-19", status: "cancelled" }),
+      ],
+    });
+    expect(report.header).toEqual(["Person", "Role", "Mon 16", "Tue 17", "Wed 18", "Thu 19", "Fri 20", "Sat 21", "Sun 22", "Hours"]);
+    const rows = report.groups[0].rows;
+    expect(rows.map((r) => r[0])).toEqual(["Anele", "Wesley"]);
+    // Wesley: Day on Monday, 09:00-13:00 on Wednesday, nothing else; 8 + 4 hours.
+    expect(rows[1]).toEqual(["Wesley", "Cleaner", "Day", "", "09:00-13:00", "", "", "", "", "12"]);
+    // A cancelled booking leaves the cell blank.
+    expect(rows[0][5]).toBe("");
+    expect(report.kpis[0]).toEqual({ label: "People", value: "2" });
+  });
+  it("is a Monday to Sunday week whichever day is chosen", () => {
+    expect(reportRange("roster", "2026-11-18", "", "")).toEqual({ start: "2026-11-16", end: "2026-11-22" });
+  });
+});

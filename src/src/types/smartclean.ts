@@ -407,6 +407,8 @@ export interface Site {
   // banner and the backend's late clock-in watchdog
   // (app/services/attendance_watchdog.py).
   workingHours?: { start: string; end: string };
+  /** The view the schedule opens on for this site, set by management on the web app. */
+  scheduleView?: "list" | "calendar" | "map" | "roster" | null;
   /** workingHours with the shifts that run on from them counted (Day into Night ends when Night does). */
   effectiveWorkingHours?: { start: string; end: string };
   /** The site's named shifts (Day, Night...), for the home card. */

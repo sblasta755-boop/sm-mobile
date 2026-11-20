@@ -9,7 +9,8 @@ export type ScheduleReportKind =
   | "monthly"
   | "role"
   | "individual"
-  | "leave";
+  | "leave"
+  | "roster";
 
 export const SCHEDULE_REPORTS: {
   kind: ScheduleReportKind;
@@ -19,6 +20,11 @@ export const SCHEDULE_REPORTS: {
   { kind: "daily", label: "Daily staff shift schedule", hint: "Who works on one day, by shift." },
   { kind: "weekly", label: "Weekly staff shift roster", hint: "Seven days, Monday to Sunday." },
   { kind: "monthly", label: "Monthly staff shift roster", hint: "A whole calendar month." },
+  {
+    kind: "roster",
+    label: "Weekly roster grid",
+    hint: "People down the side, the week's days across, like the Roster view.",
+  },
   { kind: "role", label: "Role shift roster", hint: "A date range, grouped by staff role." },
   {
     kind: "individual",
@@ -65,7 +71,7 @@ export function reportRange(
   end: string,
 ): { start: string; end: string } {
   if (kind === "daily") return { start: date, end: date };
-  if (kind === "weekly") {
+  if (kind === "weekly" || kind === "roster") {
     const s = weekStart(date);
     return { start: s, end: addDays(s, 6) };
   }
@@ -233,6 +239,66 @@ export function buildScheduleReport(input: ScheduleReportInput): ScheduleReport 
         })),
       ),
       note: "Days are working days: weekends and public holidays are not counted. Status is each request's real approval state.",
+      filename,
+    };
+  }
+
+  if (kind === "roster") {
+    // One row per person who works in the week, a column per day, as the Roster view shows it.
+    const weekDays = Array.from({ length: 7 }, (_, i) => addDays(range.start, i));
+    const week = input.bookings.filter(
+      (b) => b.status === "booked" && b.date >= range.start && b.date <= range.end,
+    );
+    const names = new Map<string, string>();
+    for (const b of week) names.set(b.userId, b.userName);
+    const cellFor = (b: StaffBooking) => {
+      const { start, end } = bookingTimes(b, input.shifts);
+      const times = start && end ? `${start}-${end}` : start ? `from ${start}` : "";
+      return b.shiftNames.length > 0 ? b.shiftNames.join(" + ") : times || "All day";
+    };
+    let total = 0;
+    const rows = [...names.entries()]
+      .sort((a, z) => a[1].localeCompare(z[1]))
+      .map(([userId, name]) => {
+        let hours = 0;
+        const cells = weekDays.map((day) => {
+          const mine = week.filter((b) => b.userId === userId && b.date === day);
+          for (const b of mine) {
+            const { start, end } = bookingTimes(b, input.shifts);
+            hours += hoursBetween(start, end) ?? 0;
+          }
+          return mine.map(cellFor).join(" / ");
+        });
+        total += hours;
+        return [name, roleLabel(input.roles[userId]), ...cells, hoursText(hours) || "0"];
+      });
+    const covered = weekDays.filter((day) => week.some((b) => b.date === day)).length;
+    return {
+      kind,
+      eyebrow: "SCHEDULE",
+      details: [],
+      // Portrait A4 has no room for the role; the Excel and CSV files keep it.
+      hiddenColumns: [1],
+      title: def.label,
+      period,
+      start: range.start,
+      end: range.end,
+      kpis: [
+        { label: "People", value: String(names.size) },
+        { label: "Shifts booked", value: String(week.length) },
+        { label: "Days covered", value: String(covered) },
+        { label: "Hours booked", value: hoursText(total) || "0" },
+      ],
+      header: [
+        "Person",
+        "Role",
+        ...weekDays.map((day) => `${weekday(day).slice(0, 3)} ${Number(day.slice(8))}`),
+        "Hours",
+      ],
+      groups: rows.length ? [{ title: "Roster", rows }] : [],
+      insights: [],
+      charts: [],
+      note: "Each cell is the shift or hours that person is booked for that day; a blank cell means not booked. Cancelled bookings are left out. Times are site-local.",
       filename,
     };
   }

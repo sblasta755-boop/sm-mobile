@@ -21,6 +21,7 @@ import { mapWithProgress } from "@/domain/reportPhotos";
 import { useMaintenanceOn } from "@/features/maintenance";
 import { useSmartClean } from "@/features/store";
 import { useHomePath } from "@/features/roles";
+import { useReportAccessState } from "@/features/reportAccess";
 import { useTenantBranding } from "@/services/branding";
 import { photoDataUri } from "@/services/reportPhotos";
 import { longDate } from "@/domain/managementReport";
@@ -53,6 +54,7 @@ export default function MaintenanceReportScreen() {
   const { state, currentUser } = useSmartClean();
   const on = useMaintenanceOn();
   const homePath = useHomePath();
+  const { grants: reportGrants, ready: reportsReady } = useReportAccessState();
   const branding = useTenantBranding();
   const sites = state.sites.filter((s) => s.active);
   const today = dayKey(new Date());
@@ -156,7 +158,8 @@ export default function MaintenanceReportScreen() {
       : null;
   const report = useMemo(() => build(), [kind, site, today, nowIso, start, end, jobs, job, details, people, locations, contractors]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (!currentUser || !MANAGERS.includes(currentUser.role) || !on) return <Redirect href={homePath as never} />;
+  if (!reportsReady) return null;
+  if (!currentUser || !(MANAGERS.includes(currentUser.role) || reportGrants.maintenance) || !on) return <Redirect href={homePath as never} />;
 
   const empty = !report || report.groups.length === 0;
   const blocked = empty || loading || tooLong || badRange || !!busy;

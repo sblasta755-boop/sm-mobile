@@ -110,12 +110,11 @@ export function resolveStaffRole(staffRoles: StaffRole[], role: string | undefin
 
 const REPORT_MANAGEMENT_ROLES = ["supervisor", "site_manager", "operations_manager", "org_admin", "client_auditor"];
 
-/** Who may produce a client-facing report: management, plus any staff role whose template allows it. */
+/** Who may produce a client-facing report: management by role. Anyone else needs the management report given
+ * to them (see useReportAccess), so this is only the role part. */
 export function useCanMakeReports(): boolean {
-  const { state, currentUser } = useSmartClean();
-  if (!currentUser) return false;
-  if (REPORT_MANAGEMENT_ROLES.includes(currentUser.role)) return true;
-  return !!resolveStaffRole(state.staffRoles, currentUser.role)?.features.reports;
+  const { currentUser } = useSmartClean();
+  return !!currentUser && REPORT_MANAGEMENT_ROLES.includes(currentUser.role);
 }
 
 /** The signed-in person's role definition, or null when they are management. */

@@ -3004,6 +3004,18 @@ export const changeBookings = (
     { method: "POST", body: JSON.stringify(input) },
     t,
   );
+/** Change one booking: its hours or shifts and its instructions. The person is told. */
+export const changeBooking = (
+  t: string,
+  id: string,
+  patch: Partial<Pick<StaffBooking, "date" | "startTime" | "endTime" | "instructions" | "shiftIds">>,
+) =>
+  request<StaffBooking>(
+    `/schedule/bookings/${id}`,
+    { method: "PATCH", body: JSON.stringify(patch) },
+    t,
+  );
+
 export const cancelBooking = (t: string, id: string) =>
   request<StaffBooking>(
     `/schedule/bookings/${id}/cancel`,

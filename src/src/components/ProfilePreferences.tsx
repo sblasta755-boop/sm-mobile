@@ -2,6 +2,7 @@ import { router } from "expo-router";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useCanMakeReports } from "@/features/roles";
+import { useMyReports } from "@/features/myReports";
 import { useHasModule } from "@/features/modules";
 import { useEvidenceViewMode } from "@/features/evidenceView";
 import { useCanUsePayroll } from "@/features/payroll";
@@ -119,17 +120,20 @@ export function AppearanceBlock() {
   );
 }
 
-/** A row that opens the report screen, for the roles that may make reports. */
+/** A row that opens the reports. Management go straight to the management report; staff see the list of reports
+ * they were given, and nothing at all if they were given none that has a screen on the phone. */
 export function ReportsRow() {
   const { currentUser } = useSmartClean();
   const canMakeReports = useCanMakeReports();
-  if (!currentUser || !canMakeReports) return null;
+  const mine = useMyReports();
+  if (!currentUser) return null;
+  if (!canMakeReports && mine.reports.length === 0) return null;
   return (
     <SettingsRow
       icon="document-text-outline"
       title="Reports"
-      sub="Download management reports as PDF"
-      onPress={() => router.push("/management-report")}
+      sub={canMakeReports ? "Download management reports as PDF" : "The reports you have been given"}
+      onPress={() => router.push((canMakeReports ? "/management-report" : "/my-reports") as never)}
     />
   );
 }

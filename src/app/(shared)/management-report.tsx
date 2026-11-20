@@ -9,7 +9,8 @@ import { Screen } from "@/components/Screen";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { useSmartClean } from "@/features/store";
-import { useCanMakeReports, useHomePath } from "@/features/roles";
+import { useHomePath } from "@/features/roles";
+import { useReportAccessState } from "@/features/reportAccess";
 import { thumbUrl } from "@/api/client";
 import { useTenantBranding } from "@/services/branding";
 import {
@@ -26,8 +27,8 @@ import { appAlert } from "@/components/Dialog";
 import { photoDataUri } from "@/services/reportPhotos";
 
 // Who may produce a client-facing report: managers, supervisors, auditors and
-// any staff role whose template allows reports (a cleaner's report covers the
-// work they can see, which is their own). See useCanMakeReports.
+// any staff role it has been given to (a cleaner's report covers the work they
+// can see, which is their own). See useReportAccess.
 
 const pad = (n: number) => String(n).padStart(2, "0");
 const dayKey = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -45,7 +46,8 @@ export default function ManagementReportScreen() {
   useThemeVersion(); // re-render with the new colours when the theme changes
   const { state, currentUser } = useSmartClean();
   const homePath = useHomePath();
-  const canMakeReports = useCanMakeReports();
+  const { grants: reportGrants, ready: reportsReady } = useReportAccessState();
+  const canMakeReports = reportGrants.management;
   const branding = useTenantBranding();
   const sites = state.sites.filter((s) => s.active);
   const [siteId, setSiteId] = useState(() => sites[0]?.id ?? "");
@@ -84,6 +86,7 @@ export default function ManagementReportScreen() {
     [site, date, state.tasks, state.inspections, state.users, tags.join("|"), areaIds.join("|")],
   );
 
+  if (!reportsReady) return null;
   if (!currentUser || !canMakeReports) {
     return <Redirect href={homePath as never} />;
   }

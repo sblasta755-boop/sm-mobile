@@ -12,6 +12,7 @@ import { appAlert } from "@/components/Dialog";
 import { getAttendanceTimesheet, listOvertime, type OvertimeRequest, type TimesheetDay } from "@/api/client";
 import { useSmartClean } from "@/features/store";
 import { useHomePath } from "@/features/roles";
+import { useReportAccessState } from "@/features/reportAccess";
 import { useTenantBranding } from "@/services/branding";
 import { photoDataUri } from "@/services/reportPhotos";
 import { longDate } from "@/domain/managementReport";
@@ -35,6 +36,7 @@ export default function OvertimeReportScreen() {
   useThemeVersion(); // re-render with the new colours when the theme changes
   const { state, currentUser } = useSmartClean();
   const homePath = useHomePath();
+  const { grants: reportGrants, ready: reportsReady } = useReportAccessState();
   const branding = useTenantBranding();
   const sites = state.sites.filter((s) => s.active);
   const today = dayKey(new Date());
@@ -80,7 +82,8 @@ export default function OvertimeReportScreen() {
     [kind, site, start, end, nowIso, requests, days],
   );
 
-  if (!currentUser || !MANAGERS.includes(currentUser.role)) return <Redirect href={homePath as never} />;
+  if (!reportsReady) return null;
+  if (!currentUser || !(MANAGERS.includes(currentUser.role) || reportGrants.overtime)) return <Redirect href={homePath as never} />;
 
   const empty = !report || report.groups.length === 0;
   const blocked = empty || loading || tooLong || badRange || !!busy;
