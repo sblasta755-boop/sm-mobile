@@ -5,6 +5,7 @@ import { listSiteBookings, type StaffBooking } from "@/api/client";
 import { useSmartClean } from "@/features/store";
 import {
   compareToSchedule,
+  scheduleGrace,
   statusText,
   statusTone,
   summarise,
@@ -87,10 +88,12 @@ export function OnShiftNow({ sites }: { sites: { id: string; name: string }[] })
   }, [token, today]);
 
   const siteIds = useMemo(() => new Set(sites.map((s) => s.id)), [sites]);
+  const punctuality = state.subscription?.policy?.attendance?.punctuality;
+  const grace = useMemo(() => scheduleGrace(punctuality), [punctuality]);
   const rows = useMemo(() => {
     const names = Object.fromEntries(state.users.map((u) => [u.id, u.name]));
-    return compareToSchedule({ bookings, attendance: state.attendance, names, now }).filter((r) => siteIds.has(r.siteId));
-  }, [bookings, state.attendance, state.users, now, siteIds]);
+    return compareToSchedule({ bookings, attendance: state.attendance, names, now, grace }).filter((r) => siteIds.has(r.siteId));
+  }, [bookings, state.attendance, state.users, now, siteIds, grace]);
   const summary = useMemo(() => summarise(rows), [rows]);
 
   const toneColor = (tone: ScheduleTone) =>

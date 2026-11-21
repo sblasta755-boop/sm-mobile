@@ -187,3 +187,18 @@ describe("csv", () => {
     expect(csv).toContain(`"'=HYPERLINK(1)"`);
   });
 });
+
+describe("the server's comparison with the schedule", () => {
+  it("is used when the day carries it, including a zero inside the grace period", () => {
+    // Arrived 10 minutes after 08:00 and left 20 minutes early: the client's own sum would say 10 and 20.
+    const d = day({ clockInAt: "2026-11-16T06:10:00Z", clockOutAt: "2026-11-16T13:40:00Z", lateMinutes: 0, earlyLeaveMinutes: 25 });
+    expect(lateMinutes(d)).toBe(0);
+    expect(earlyMinutes(d)).toBe(25);
+  });
+
+  it("falls back to working it out from the clock times on days recorded before the server kept it", () => {
+    const d = day({ clockInAt: "2026-11-16T06:10:00Z", clockOutAt: "2026-11-16T13:40:00Z" });
+    expect(lateMinutes(d)).toBe(10);
+    expect(earlyMinutes(d)).toBe(20);
+  });
+});

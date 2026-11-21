@@ -40,10 +40,29 @@ export interface ScheduleRow {
   since?: string;
   /** Minutes past the booked start, for someone who has not clocked in. */
   lateMinutes?: number;
+  /** The grace this row was judged by (the organisation's setting); the default when absent. */
+  lateGrace?: number;
 }
 
-/** Arriving within this long of the start is on time (the same grace the late-arrival flag uses). */
+/** Arriving within this long of the start is on time (the same grace the late-arrival flag uses). This is the
+ * default; the organisation's own is attendance.punctuality in its workflow policy (see scheduleGrace). */
 export const LATE_GRACE_MINUTES = 15;
+export const EARLY_LEAVE_GRACE_MINUTES = 15;
+
+export interface ScheduleGrace {
+  late: number;
+  earlyLeave: number;
+}
+
+/** The grace to judge today's shifts by, from the organisation's policy (attendance.punctuality). Missing or
+ * malformed values fall back to the defaults. */
+export function scheduleGrace(punctuality?: { lateGraceMinutes?: unknown; earlyLeaveGraceMinutes?: unknown } | null): ScheduleGrace {
+  const pick = (v: unknown, fallback: number) => (typeof v === "number" && Number.isInteger(v) && v >= 0 ? v : fallback);
+  return {
+    late: pick(punctuality?.lateGraceMinutes, LATE_GRACE_MINUTES),
+    earlyLeave: pick(punctuality?.earlyLeaveGraceMinutes, EARLY_LEAVE_GRACE_MINUTES),
+  };
+}
 const MINUTE = 60_000;
 
 const atTime = (date: string, hhmm: string): Date => {
@@ -91,8 +110,11 @@ export function compareToSchedule(input: {
   /** Names for people on site who have no booking. */
   names: Record<string, string>;
   now: Date;
+  /** The organisation's grace periods; the defaults when not given. */
+  grace?: ScheduleGrace;
 }): ScheduleRow[] {
   const { bookings, attendance, names, now } = input;
+  const grace = input.grace ?? { late: LATE_GRACE_MINUTES, earlyLeave: EARLY_LEAVE_GRACE_MINUTES };
   const today = dayKey(now);
 
   // Each person's bookings that matter now: today's, and yesterday's only while an overnight one is still running.
@@ -116,6 +138,7 @@ export function compareToSchedule(input: {
       scheduled: true,
       startTime: w.booking.startTime,
       endTime: w.booking.endTime,
+      lateGrace: grace.late,
     };
     if (entry?.clockedInAt) {
       const lost = Boolean(entry.locationLostAt);
@@ -128,7 +151,7 @@ export function compareToSchedule(input: {
     } else if (entry) {
       // Clocked out. Before the shift is nearly over that is someone who has left or stepped away.
       const nearlyOver =
-        !w.allDay && now.getTime() >= w.end.getTime() - LATE_GRACE_MINUTES * MINUTE;
+        !w.allDay && now.getTime() >= w.end.getTime() - grace.earlyLeave * MINUTE;
       rows.push({
         ...base,
         siteId: w.booking.siteId,
@@ -195,7 +218,7 @@ export function summarise(rows: ScheduleRow[]): ScheduleSummary {
     missing: rows.filter(
       (r) =>
         r.state === "no_show" ||
-        (r.state === "not_in" && (r.lateMinutes ?? 0) > LATE_GRACE_MINUTES),
+        (r.state === "not_in" && (r.lateMinutes ?? 0) > (r.lateGrace ?? LATE_GRACE_MINUTES)),
     ).length,
     locationLost: rows.filter((r) => r.state === "location_lost").length,
     leftEarly: rows.filter((r) => r.state === "clocked_out").length,
@@ -221,7 +244,7 @@ export function statusText(row: ScheduleRow): string {
       return `Location lost since ${clock(row.since)}, time not counting${tag}`;
     case "not_in": {
       const late = row.lateMinutes ?? 0;
-      return late > LATE_GRACE_MINUTES
+      return late > (row.lateGrace ?? LATE_GRACE_MINUTES)
         ? `Not clocked in, ${late}m late (due ${clock(row.startTime)})`
         : row.startTime
           ? `Due at ${clock(row.startTime)}`
@@ -245,7 +268,7 @@ export function statusTone(row: ScheduleRow): ScheduleTone {
     case "on_site":
       return "ok";
     case "not_in":
-      return (row.lateMinutes ?? 0) > LATE_GRACE_MINUTES ? "bad" : "warn";
+      return (row.lateMinutes ?? 0) > (row.lateGrace ?? LATE_GRACE_MINUTES) ? "bad" : "warn";
     case "no_show":
     case "location_lost":
       return "bad";

@@ -11,11 +11,13 @@ import { Button } from "@/components/Button";
 import { appAlert } from "@/components/Dialog";
 import {
   getAttendanceTimesheet,
+  getAttendanceVsSchedule,
   listBookablePeople,
   listLeaveRequests,
   listSiteBookings,
   listSiteShifts,
   type LeaveRequest,
+  type ScheduleComparison,
   type StaffBooking,
   type TimesheetDay,
 } from "@/api/client";
@@ -71,6 +73,8 @@ export default function TimesheetReportScreen() {
   const [days, setDays] = useState<AttDay[]>([]);
   const [bookings, setBookings] = useState<StaffBooking[]>([]);
   const [leave, setLeave] = useState<LeaveRequest[]>([]);
+  // The server's reading of each booking against attendance (variance report only); undefined when not asked for or unavailable.
+  const [schedule, setSchedule] = useState<ScheduleComparison[] | undefined>(undefined);
   const [people, setPeople] = useState<{ id: string; name: string; role: string }[]>([]);
   const [shifts, setShifts] = useState<{ id: string; startTime: string; endTime: string }[]>([]);
   const [loading, setLoading] = useState(false);
@@ -112,19 +116,24 @@ export default function TimesheetReportScreen() {
       needsPlan
         ? listLeaveRequests(token, { siteId: site.id, start: range.start, end: range.end }).catch(() => [] as LeaveRequest[])
         : Promise.resolve([] as LeaveRequest[]),
+      // If this fails the report works the comparison out itself from the days, bookings and leave above.
+      kind === "variance"
+        ? getAttendanceVsSchedule(token, range.start, range.end, { siteId: site.id }).catch(() => undefined)
+        : Promise.resolve(undefined),
     ])
-      .then(([sheet, b, l]) => {
+      .then(([sheet, b, l, sc]) => {
         if (cancelled) return;
         setDays(sheet.days as TimesheetDay[] as AttDay[]);
         setBookings(b);
         setLeave(l);
+        setSchedule(sc);
       })
       .catch((e) => !cancelled && setError(e instanceof Error ? e.message : "Could not load the timesheet."))
       .finally(() => !cancelled && setLoading(false));
     return () => {
       cancelled = true;
     };
-  }, [token, site, range.start, range.end, tooLong, badRange, needsPlan]);
+  }, [token, site, range.start, range.end, tooLong, badRange, needsPlan, kind]);
 
   const roles = useMemo(() => Object.fromEntries(people.map((p) => [p.id, p.role])), [people]);
   const report = useMemo(
@@ -139,7 +148,9 @@ export default function TimesheetReportScreen() {
             end,
             userId: kind === "monthly" ? userId : "",
             days,
+            schedule,
             bookings: bookings.map((b) => ({
+              id: b.id,
               userId: b.userId,
               userName: b.userName,
               date: b.date,
@@ -154,7 +165,7 @@ export default function TimesheetReportScreen() {
             roles,
           })
         : null,
-    [kind, site, today, date, start, end, userId, days, bookings, leave, shifts, roles],
+    [kind, site, today, date, start, end, userId, days, bookings, leave, schedule, shifts, roles],
   );
   const shownPeople = useMemo(() => fuzzyFilter(people, query, (p) => [p.name, p.role.replace(/_/g, " ")]), [people, query]);
 

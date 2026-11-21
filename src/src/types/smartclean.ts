@@ -62,6 +62,15 @@ export interface WorkflowPolicy {
     autoClock?: { enabled: boolean; graceMinutes: number; overtimeCheck: boolean };
     /** Proof of presence while clocked in: how long a silent phone is tolerated, and how often the web app asks "still on site?". */
     presence?: { enabled: boolean; gapMinutes: number; checkInMinutes: number };
+    /** How strictly a day is read against its schedule, in minutes (set by an org admin). */
+    punctuality?: {
+      lateGraceMinutes: number;
+      earlyLeaveGraceMinutes: number;
+      outsideShiftMinutes: number;
+      autoCloseGraceMinutes: number;
+      missedClockInMinutes: number;
+      overtimeLeadMinutes: number;
+    };
   };
   tasks: {
     enabled: boolean;

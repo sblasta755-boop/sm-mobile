@@ -27,6 +27,12 @@ export interface AttDay {
   workedMinutes?: number | null;
   expectedStart?: string | null;
   expectedEnd?: string | null;
+  /** The server's own comparison with the schedule, in minutes; absent on days recorded before it was kept. */
+  bookingId?: string | null;
+  scheduledMinutes?: number | null;
+  lateMinutes?: number | null;
+  earlyLeaveMinutes?: number | null;
+  overtimeMinutes?: number | null;
   exceptions: string[];
   source?: string | null;
   clockInMethod?: string | null;
@@ -84,14 +90,20 @@ export function localHm(iso: string | null | undefined): string {
 }
 const localHour = (iso: string) => Math.floor((((localAbs(iso) % 1440) + 1440) % 1440) / 60);
 
-/** Minutes after the expected start, 0 when on time or when there is no expected start. */
+/**
+ * Minutes after the expected start, 0 when on time or when there is no expected start. The server's own
+ * figure is used when the day carries one (0 inside the organisation's grace period); older days are
+ * worked out here from the clock-in.
+ */
 export function lateMinutes(d: AttDay): number {
+  if (typeof d.lateMinutes === "number") return d.lateMinutes;
   if (!d.clockInAt || !d.expectedStart) return 0;
   return Math.max(0, localAbs(d.clockInAt) - absOf(d.workDate, d.expectedStart));
 }
 
 /** Minutes before the expected end that the person left, 0 when not early. */
 export function earlyMinutes(d: AttDay): number {
+  if (typeof d.earlyLeaveMinutes === "number") return d.earlyLeaveMinutes;
   if (!d.clockOutAt || !d.expectedEnd || !d.expectedStart) return 0;
   const endDay = minutes(d.expectedEnd) <= minutes(d.expectedStart) ? addDays(d.workDate, 1) : d.workDate;
   return Math.max(0, absOf(endDay, d.expectedEnd) - localAbs(d.clockOutAt));

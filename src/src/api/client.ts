@@ -769,6 +769,12 @@ export interface TimesheetDay {
   workedMinutes?: number | null;
   expectedStart?: string | null;
   expectedEnd?: string | null;
+  /** The server's own comparison with the schedule, in minutes; absent on days recorded before it was kept. */
+  bookingId?: string | null;
+  scheduledMinutes?: number | null;
+  lateMinutes?: number | null;
+  earlyLeaveMinutes?: number | null;
+  overtimeMinutes?: number | null;
   exceptions: string[];
   /** scanned | auto_closed | amended */
   source?: string;
@@ -796,6 +802,46 @@ export function getAttendanceTimesheet(accessToken: string, start: string, end: 
   const site = siteId ? `&siteId=${encodeURIComponent(siteId)}` : "";
   return request<AttendanceTimesheet>(
     `/attendance/timesheet?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}${site}`,
+    {},
+    accessToken,
+  );
+}
+
+/** One booking beside what happened, from GET /attendance/vs-schedule. */
+export type ScheduleStatus = "on_time" | "late" | "early_leave" | "in_progress" | "on_leave" | "no_show" | "upcoming";
+
+export interface ScheduleComparison {
+  bookingId: string;
+  userId: string;
+  siteId: string;
+  /** "YYYY-MM-DD". */
+  date: string;
+  scheduledStart?: string | null;
+  scheduledEnd?: string | null;
+  dayId: string | null;
+  clockInAt: string | null;
+  clockOutAt: string | null;
+  workedMinutes: number | null;
+  scheduledMinutes: number | null;
+  lateMinutes: number | null;
+  earlyLeaveMinutes: number | null;
+  overtimeMinutes: number | null;
+  exceptions: string[];
+  status: ScheduleStatus;
+}
+
+/** Every booking in the range beside what the person actually did: late, early leave, overtime, no-show or leave.
+ * Worked out by the server, so the apps never disagree. Staff see their own; managers see their sites'. */
+export function getAttendanceVsSchedule(
+  accessToken: string,
+  start: string,
+  end: string,
+  options: { siteId?: string; personId?: string } = {},
+) {
+  const site = options.siteId ? `&siteId=${encodeURIComponent(options.siteId)}` : "";
+  const person = options.personId ? `&personId=${encodeURIComponent(options.personId)}` : "";
+  return request<ScheduleComparison[]>(
+    `/attendance/vs-schedule?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}${site}${person}`,
     {},
     accessToken,
   );

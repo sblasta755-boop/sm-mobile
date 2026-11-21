@@ -33,6 +33,8 @@ export const TIMESHEET_MAX_DAYS = 62;
 const WEEKLY_LIMIT = 45;
 
 export interface TsBooking {
+  /** Matches ScheduleComparison.bookingId, so the server's comparison can be read for this booking. */
+  id?: string;
   userId: string;
   userName: string;
   date: string;
@@ -41,6 +43,16 @@ export interface TsBooking {
   endTime: string | null;
   shiftIds: string[];
   shiftNames: string[];
+}
+
+/** The server's comparison of one booking with what happened (GET /attendance/vs-schedule). */
+export interface TsScheduleRow {
+  bookingId: string;
+  dayId: string | null;
+  clockInAt: string | null;
+  clockOutAt: string | null;
+  scheduledMinutes: number | null;
+  status: string;
 }
 
 export interface TimesheetReportInput {
@@ -56,6 +68,8 @@ export interface TimesheetReportInput {
   userId?: string;
   days: AttDay[];
   bookings: TsBooking[];
+  /** When given, the variance report reads each booking's day, hours and outcome from here instead of working them out. */
+  schedule?: TsScheduleRow[];
   leave: { userId: string; userName: string; startDate: string; endDate: string; status: string }[];
   shifts: { id: string; startTime: string; endTime: string }[];
   roles: Record<string, string>;
@@ -319,11 +333,16 @@ function monthly(base: Base, c: Ctx): TimesheetReport {
 
 function variance(base: Base, c: Ctx): TimesheetReport {
   interface V { date: string; person: string; userId: string; shift: string; ps: string | null; pe: string | null; inn: string; out: string; brk: number | null; planned: number | null; actual: number | null; review: string }
+  const scheduled = new Map((c.schedule ?? []).map((s) => [s.bookingId, s]));
   const rows: V[] = c.bookings.map((b) => {
     const t = bookedTimes(b, c.shifts);
-    const d = c.days.find((x) => x.userId === b.userId && x.workDate === b.date);
+    // The server knows which day belongs to which booking (a split day has two); without its answer the day
+    // is found by person and date, and the outcome is worked out here.
+    const s = b.id ? scheduled.get(b.id) : undefined;
+    const d = s ? (s.dayId ? c.days.find((x) => x.id === s.dayId) : undefined) : c.days.find((x) => x.userId === b.userId && x.workDate === b.date);
     let review: string;
     if (d) review = d.approvalState === "approved" ? "Reviewed" : d.approvalState === "rejected" ? "Rejected" : "Unverified";
+    else if (s) review = s.status === "on_leave" ? "Approved leave" : s.status === "no_show" ? "No show" : "Upcoming";
     else if (onLeave(c, b.userId, b.date, "approved")) review = "Approved leave";
     else review = b.date < c.today ? "No show" : "Upcoming";
     return {
@@ -336,7 +355,7 @@ function variance(base: Base, c: Ctx): TimesheetReport {
       inn: localHm(d?.clockInAt),
       out: localHm(d?.clockOutAt),
       brk: d ? gapMinutes(d).reduce((n, g) => n + g, 0) : null,
-      planned: hoursBetween(t.start, t.end),
+      planned: s?.scheduledMinutes != null ? s.scheduledMinutes / 60 : hoursBetween(t.start, t.end),
       actual: d?.workedMinutes == null ? null : d.workedMinutes / 60,
       review,
     };

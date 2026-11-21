@@ -1,5 +1,6 @@
 import {
   compareToSchedule,
+  scheduleGrace,
   statusText,
   statusTone,
   summarise,
@@ -177,5 +178,25 @@ describe("ordering and the summary", () => {
       upcoming: 1,
       unscheduled: 1,
     });
+  });
+});
+
+describe("the organisation's own grace", () => {
+  const stricter = { late: 5, earlyLeave: 15 };
+  it("calls someone late sooner under a stricter grace, and the default is unchanged", () => {
+    const now = at(8, 10);
+    const normal = compareToSchedule({ bookings: [booking({})], attendance: {}, names: {}, now })[0];
+    const strict = compareToSchedule({ bookings: [booking({})], attendance: {}, names: {}, now, grace: stricter })[0];
+    expect(statusTone(normal)).toBe("warn");
+    expect(statusTone(strict)).toBe("bad");
+    expect(statusText(strict)).toBe("Not clocked in, 10m late (due 08:00)");
+    expect(summarise([normal]).missing).toBe(0);
+    expect(summarise([strict]).missing).toBe(1);
+  });
+
+  it("reads the grace from the policy, falling back for anything missing or malformed", () => {
+    expect(scheduleGrace(undefined)).toEqual({ late: 15, earlyLeave: 15 });
+    expect(scheduleGrace({ lateGraceMinutes: 5, earlyLeaveGraceMinutes: "x" })).toEqual({ late: 5, earlyLeave: 15 });
+    expect(scheduleGrace({ lateGraceMinutes: -1 })).toEqual({ late: 15, earlyLeave: 15 });
   });
 });
