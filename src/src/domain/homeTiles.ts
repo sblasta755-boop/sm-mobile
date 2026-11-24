@@ -14,7 +14,8 @@ export type HomeTileKey =
   | "noticeboard"
   | "maintenance"
   | "verification"
-  | "progress";
+  | "progress"
+  | "tournaments";
 
 export type HomeTileAction = { kind: "route"; path: string };
 
@@ -54,6 +55,8 @@ export interface HomeTileInput {
   verification?: boolean;
   /** Gamification is on for this person. */
   progress: boolean;
+  /** The Tournaments module is on: see tournaments and the leaderboard, run them where allowed. */
+  tournaments?: boolean;
 }
 
 /** The tiles for the bottom of a staff home screen, in the order they are drawn. */
@@ -165,6 +168,15 @@ export function homeTiles(input: HomeTileInput): HomeTile[] {
       label: "My progress",
       icon: "trophy-outline",
       action: { kind: "route", path: "/progress" },
+    });
+  }
+  if (input.tournaments) {
+    tiles.push({
+      key: "tournaments",
+      label: "Tournaments",
+      icon: "trophy-outline",
+      action: { kind: "route", path: "/tournaments" },
+      hint: "Pool tables",
     });
   }
   return tiles;

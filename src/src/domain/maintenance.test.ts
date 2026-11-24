@@ -40,7 +40,7 @@ describe("hasMaintenanceAccess", () => {
     expect(hasMaintenanceAccess(null)).toBe(false);
   });
   it("turns on with any one grant", () => {
-    for (const key of ["access", "handle", "approve", "pay"] as const) {
+    for (const key of ["access", "handle", "approve", "pay", "override"] as const) {
       expect(hasMaintenanceAccess({ role: "cleaner", maintenance: { [key]: true } })).toBe(true);
     }
   });

@@ -25,6 +25,7 @@ import { focusTasks } from "@/domain/todayFocus";
 import { homeTaskView } from "@/domain/homeTasks";
 import { homeTiles } from "@/domain/homeTiles";
 import { useLeaveOn } from "@/features/leave";
+import { useTournamentsOn } from "@/features/tournaments";
 import { useNoticeboardOn, useNoticesUnread } from "@/features/noticeboard";
 import {
   useMaintenanceOn,
@@ -84,6 +85,7 @@ export default function HomeScreen() {
   const hasIncidents = useHasModule("incidents");
   const scheduleOn = useScheduleOn();
   const leaveOn = useLeaveOn();
+  const tournamentsOn = useTournamentsOn();
   const noticeboardOn = useNoticeboardOn();
   const noticesUnread = useNoticesUnread(noticeboardOn);
   const maintenanceOn = useMaintenanceOn();
@@ -406,6 +408,7 @@ export default function HomeScreen() {
           verification: verificationOn,
           maintenancePayments,
           progress: !!progress,
+          tournaments: tournamentsOn,
         }).map((tile) => ({
           key: tile.key,
           label: tile.label,

@@ -100,12 +100,12 @@ export function AddMemberFlow({
 
   const roleItems: PickerItem[] = useMemo(() => {
     const field = (ctx.staffRoles.length ? ctx.staffRoles : [{ key: "cleaner", label: "Cleaner", template: "standard" } as StaffRole])
-      .filter((r) => r.template !== "table_service" || ctx.tableServiceEnabled)
+      .filter((r) => !r.features?.tables || ctx.tableServiceEnabled)
       .map((r) => ({
         key: r.key,
         label: r.label,
-        sub: r.template === "table_service" ? "Field staff · table service" : "Field staff",
-        icon: (r.template === "table_service" ? "restaurant-outline" : "person-outline") as PickerItem["icon"],
+        sub: r.features?.tables ? "Field staff · table service" : "Field staff",
+        icon: (r.features?.tables ? "restaurant-outline" : "person-outline") as PickerItem["icon"],
         group: "Field staff",
       }));
     const supervising = [{ ...SUPERVISOR, sub: "Supervises a site", icon: ROLE_ICON.supervisor, group: "Supervising" }];

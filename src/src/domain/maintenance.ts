@@ -103,6 +103,7 @@ export function hasMaintenanceAccess(
           handle?: boolean;
           approve?: boolean;
           pay?: boolean;
+          override?: boolean;
         };
       }
     | null
@@ -117,7 +118,8 @@ export function hasMaintenanceAccess(
     (grants.access === true ||
       grants.handle === true ||
       grants.approve === true ||
-      grants.pay === true)
+      grants.pay === true ||
+      grants.override === true)
   );
 }
 

@@ -3265,6 +3265,8 @@ export type MaintenanceCapabilities = {
   handle: boolean;
   approve: boolean;
   pay: boolean;
+  /** May skip steps or close a job before it is finished, with a reason. */
+  override?: boolean;
 };
 export type MaintenanceFile = {
   filePath: string;
@@ -3313,6 +3315,8 @@ export type MaintenanceEvent = {
   createdAt: string;
 };
 export type MaintenanceJob = {
+  /** How skipping works for this organisation: next stage only, or any step. */
+  skipMode?: "next" | "choose";
   id: string;
   siteId: string;
   locationId: string | null;
@@ -3447,7 +3451,12 @@ export const moveMaintenanceJob = (
   token: string,
   id: string,
   to: MaintenanceState,
-  extra: { note?: string; finalCost?: number; visitAt?: string } = {},
+  extra: {
+    note?: string;
+    finalCost?: number;
+    visitAt?: string;
+    override?: boolean;
+  } = {},
 ) =>
   request<MaintenanceJob>(
     `/maintenance/jobs/${id}/transition`,
@@ -3902,4 +3911,139 @@ export const signOffWorkflowTask = (
     `/task-workflows/tasks/${encodeURIComponent(taskId)}/signoff`,
     { method: "POST", body: JSON.stringify(body) },
     accessToken,
+  );
+
+// ---- Tournaments (pool tables). Mirrors the web client's section of the same name. ----
+
+export type TournamentFormat = "single_elim" | "round_robin";
+export type TournamentStatus = "draft" | "registration" | "closed" | "running" | "completed" | "cancelled";
+
+export interface TournamentSummary {
+  id: string;
+  name: string;
+  format: TournamentFormat;
+  status: TournamentStatus;
+  siteId: string;
+  startsAt: string;
+  endsAt: string | null;
+  maxPlayers: number | null;
+  tableCount: number;
+  entrantCount: number;
+}
+
+export interface TournamentPlayer {
+  id: string;
+  name: string;
+  username: string;
+  seed?: number | null;
+}
+
+export interface TournamentMatch {
+  round: number;
+  position: number;
+  a: string | null;
+  b: string | null;
+  winner: string | null;
+  status: "pending" | "ready" | "done" | "bye";
+  tableId: string | null;
+}
+
+export interface TournamentStanding {
+  playerId: string;
+  placement: number;
+  played: number;
+  wins: number;
+  losses: number;
+  points: number;
+  champion: boolean;
+}
+
+export interface TournamentView {
+  id: string;
+  name: string;
+  format: TournamentFormat;
+  status: TournamentStatus;
+  siteId: string;
+  siteName: string;
+  maxPlayers: number | null;
+  startsAt: string;
+  endsAt: string | null;
+  tables: { id: string; name: string }[];
+  entrantCount: number;
+  players: Record<string, TournamentPlayer>;
+  entrants: TournamentPlayer[];
+  rounds: number;
+  matches: TournamentMatch[];
+  standings: TournamentStanding[];
+}
+
+export interface TournamentLeaderboardEntry {
+  rank: number;
+  playerId: string;
+  name: string;
+  username: string;
+  tournaments: number;
+  played: number;
+  wins: number;
+  points: number;
+  titles: number;
+  winRate: number;
+}
+
+export interface PoolTableChoice {
+  id: string;
+  name: string;
+  hasQr: boolean;
+  heldBy: { id: string; name: string; status: TournamentStatus } | null;
+}
+
+const tn = "/tournaments";
+const jsonBody = (method: string, body: unknown) => ({ method, body: JSON.stringify(body) });
+
+export const getTournamentRights = (t: string) =>
+  request<{ canRun: boolean; canManageAccess: boolean }>(`${tn}/me`, {}, t);
+export const listTournaments = (t: string) => request<TournamentSummary[]>(tn, {}, t);
+export const getTournament = (t: string, id: string) => request<TournamentView>(`${tn}/${id}`, {}, t);
+export const listPoolTables = (t: string, siteId: string) =>
+  request<PoolTableChoice[]>(`${tn}/pool-tables?siteId=${encodeURIComponent(siteId)}`, {}, t);
+export const createTournament = (
+  t: string,
+  input: {
+    name: string;
+    format: TournamentFormat;
+    siteId: string;
+    locationIds: string[];
+    startsAt: string;
+    endsAt?: string | null;
+    maxPlayers?: number | null;
+    openRegistration: boolean;
+    takeTables: boolean;
+  },
+) => request<TournamentView>(tn, jsonBody("POST", input), t);
+export const setTournamentRegistration = (t: string, id: string, open: boolean) =>
+  request<TournamentView>(`${tn}/${id}/registration/${open ? "open" : "close"}`, { method: "POST" }, t);
+export const startTournament = (t: string, id: string) =>
+  request<TournamentView>(`${tn}/${id}/start`, { method: "POST" }, t);
+export const cancelTournament = (t: string, id: string) =>
+  request<TournamentView>(`${tn}/${id}/cancel`, { method: "POST" }, t);
+export const removeTournamentEntrant = (t: string, id: string, playerId: string) =>
+  request<TournamentView>(`${tn}/${id}/entrants/${playerId}`, { method: "DELETE" }, t);
+export const setTournamentWinner = (
+  t: string,
+  id: string,
+  round: number,
+  position: number,
+  winnerId: string,
+  confirm = false,
+) =>
+  request<TournamentView>(
+    `${tn}/${id}/matches/winner`,
+    jsonBody("PUT", { round, position, winnerId, confirm }),
+    t,
+  );
+export const getTournamentLeaderboard = (t: string, period: string) =>
+  request<{ period: string; entries: TournamentLeaderboardEntry[] }>(
+    `${tn}/leaderboard?period=${period}`,
+    {},
+    t,
   );

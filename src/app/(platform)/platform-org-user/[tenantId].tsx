@@ -124,7 +124,7 @@ export default function PlatformOrganisationUser() {
       const tableService = !!bootstrap.tenants?.[0]?.tableServiceEnabled;
       const roles = [
         ...(bootstrap.staffRoles ?? [])
-          .filter((r) => r.template !== "table_service" || tableService)
+          .filter((r) => !r.features?.tables || tableService)
           .map((r) => ({ key: r.key, label: r.label })),
         ...MANAGEMENT_ROLES,
       ];

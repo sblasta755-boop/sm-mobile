@@ -251,6 +251,79 @@ export default function MaintenanceJobScreen() {
     }
   }
 
+  // For people given the right: jump ahead of the usual order, or close a job unfinished. A reason is always
+  // asked for and kept on the record; the server refuses anyone who has not been given the right.
+  if (
+    caps.override &&
+    !["completed", "no_action", "rejected", "cancelled"].includes(job.state)
+  ) {
+    // Skipping goes to the next stage only; the server refuses anything else.
+    const internal = job.path === "internal";
+    const next: Partial<Record<MaintenanceState, [MaintenanceState, string]>> = {
+      reported: ["investigating", "Being looked into"],
+      investigating: internal
+        ? ["in_progress", "Work in progress"]
+        : ["approved", "Approved, no quote needed"],
+      awaiting_quote: ["approved", "Approved, no quote needed"],
+      awaiting_approval: ["approved", "Approved, no quote needed"],
+      approved: ["scheduled", "Visit booked"],
+      scheduled: ["in_progress", "Work in progress"],
+      rework: ["in_progress", "Work in progress"],
+      in_progress: ["awaiting_verification", "Ready to check"],
+      awaiting_verification: ["completed", "Done"],
+    };
+    const overrideMove = (
+      to: MaintenanceState,
+      label: string,
+      title: string,
+    ) => ({
+      label,
+      onPress: () =>
+        setAsk({
+          title,
+          label: "Why? This is kept on the record.",
+          multiline: true,
+          then: (text) =>
+            act(
+              () =>
+                moveMaintenanceJob(token, job.id, to, {
+                  note: text,
+                  override: true,
+                }),
+              "Could not do that",
+            ),
+        }),
+    });
+    const step = next[job.state];
+    if (step && job.skipMode === "choose") {
+      // This organisation lets people pick the step: every later step, in order.
+      const later: [MaintenanceState, string][] = [
+        ["investigating", "Being looked into"],
+        ...(internal
+          ? []
+          : ([
+              ["awaiting_quote", "Getting a quote"],
+              ["awaiting_approval", "Waiting for approval"],
+              ["approved", "Approved"],
+            ] as [MaintenanceState, string][])),
+        ["scheduled", "Visit booked"],
+        ["in_progress", "Work in progress"],
+        ["awaiting_verification", "Ready to check"],
+      ];
+      const at = later.findIndex(([st]) => st === job.state);
+      for (const [to, name] of later.slice(at + 1))
+        moves.push(overrideMove(to, `Skip to: ${name}`, `Skip to: ${name}`));
+    } else if (step)
+      moves.push(
+        overrideMove(step[0], `Skip to: ${step[1]}`, `Skip to: ${step[1]}`),
+      );
+    moves.push(
+      overrideMove("completed", "Close early: as done", "Close as done"),
+      overrideMove("no_action", "Close early: no repair needed", "Close, no repair needed"),
+      overrideMove("cancelled", "Close early: cancelled", "Close as cancelled"),
+    );
+  }
+
   function bookVisit() {
     const when = parseLocalDateTime(visit);
     if (!when) {

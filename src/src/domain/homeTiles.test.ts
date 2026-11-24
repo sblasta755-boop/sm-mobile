@@ -105,3 +105,16 @@ describe("maintenance payments", () => {
     expect(tile?.hint).toBe("Report a fault");
   });
 });
+
+describe("tournaments tile", () => {
+  const base = {
+    hourlyCompliance: false, roundsToClaim: 0, correctiveActions: false, openCorrective: { count: 0 },
+    stock: false, incidents: false, hasQr: false, schedule: false, progress: false,
+  };
+  it("appears only when the module is on", () => {
+    expect(homeTiles({ ...base, tournaments: false }).some((t) => t.key === "tournaments")).toBe(false);
+    const tile = homeTiles({ ...base, tournaments: true }).find((t) => t.key === "tournaments");
+    expect(tile?.action).toEqual({ kind: "route", path: "/tournaments" });
+  });
+});
+
