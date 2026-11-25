@@ -66,10 +66,10 @@ export function actionFor(c: { toBook: number; toChange: number }, canChange: bo
 
 export function buttonLabel(action: BookAction): string {
   return action === "both"
-    ? "Book and update"
+    ? "Add bookings and updates"
     : action === "change"
-      ? "Update bookings"
-      : "Book and notify";
+      ? "Add the updates"
+      : "Add to schedule";
 }
 
 /** The one line under the list: how many of each, and what is missing for a change. */

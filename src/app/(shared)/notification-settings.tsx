@@ -14,6 +14,7 @@ type Row = { key: keyof NotificationPrefs; label: string; hint: string };
 
 const ROWS: Row[] = [
   { key: "taskAssignments", label: "Tasks", hint: "New tasks and changes to the ones you hold" },
+  { key: "rounds", label: "Hourly rounds", hint: "A round opening, closing soon, and clash warnings" },
   { key: "incidents", label: "Incidents", hint: "Incident reports at your sites" },
   { key: "correctiveActions", label: "Corrective actions", hint: "Follow-ups raised or rejected" },
   { key: "reports", label: "Reports", hint: "Scheduled reports" },

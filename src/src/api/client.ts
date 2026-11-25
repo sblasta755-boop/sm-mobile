@@ -1412,6 +1412,18 @@ export function updateFloorPlanImage(
   });
 }
 
+/** Emails a report (a PDF made on the phone) to up to five addresses. Managers and supervisors only. */
+export function emailReport(
+  accessToken: string,
+  payload: { recipients: string[]; reportName: string; siteName: string; note?: string; pdfBase64: string },
+) {
+  return request<{ sent: number }>(
+    "/reports/email",
+    { method: "POST", body: JSON.stringify(payload) },
+    accessToken,
+  );
+}
+
 export function updateLocationPosition(
   accessToken: string,
   locationId: string,
@@ -1613,6 +1625,206 @@ export function unregisterPushToken(accessToken: string, token: string) {
     accessToken,
   );
 }
+
+// ---- Platform: notification analytics ----
+export type NotificationInsight = {
+  id: string;
+  severity: "critical" | "warning" | "info";
+  title: string;
+  detail: string;
+  recommendation: string;
+};
+export type NotificationGuardSettings = {
+  enabled: boolean;
+  dedupeWindowMinutes: number;
+  pushPerRecipientPerHour: number;
+  bounds: { key: string; default: number; min: number; max: number; label: string }[];
+};
+export type NotificationOverview = {
+  days: number;
+  since: string;
+  bucket: "hour" | "day";
+  totals: {
+    total: number;
+    targeted: number;
+    broadcast: number;
+    recipients: number;
+    perHour: number;
+    readRate: number | null;
+    previous: number;
+    change: number | null;
+  };
+  series: { t: string; count: number }[];
+  byCategory: { category: string; count: number; share: number; readRate: number | null }[];
+  bySeverity: { severity: string; count: number }[];
+  byOrganisation: { tenantId: string; name: string; count: number; share: number }[];
+  bursts: { userId: string; name: string; role: string; hourStart: string; count: number }[];
+  burstThreshold: number;
+  fanOut: { category: string; notifications: number; events: number; avgRecipients: number }[];
+  repeats: { groups: number; notifications: number; categories: string[] };
+  channels: Record<
+    "push" | "web_push" | "email",
+    { sent: number; failed: number; suppressed: number }
+  >;
+  suppressed: { duplicate: number; burst: number };
+  deliveryLogSince: string | null;
+  insights: NotificationInsight[];
+  guard: NotificationGuardSettings;
+};
+export type NotificationPerson = {
+  userId: string;
+  name: string;
+  role: string;
+  organisation: string;
+  tenantId: string;
+  total: number;
+  perDay: number;
+  perActiveDay: number;
+  peakPerHour: number;
+  unreadRate: number;
+  topCategory: string | null;
+  pushOff: boolean;
+};
+export type NotificationRole = {
+  role: string;
+  people: number;
+  total: number;
+  share: number;
+  perPersonPerDay: number;
+  p95PerPerson: number;
+  maxPerPerson: number;
+  unreadRate: number;
+  peakPerHour: number;
+};
+export type NotificationTemplate = {
+  category: string;
+  title: string;
+  example: string;
+  message: string;
+  count: number;
+  recipients: number;
+  organisations: number;
+  share: number;
+  readRate: number | null;
+  previous: number;
+  change: number | null;
+};
+export type NotificationPersonDetail = {
+  userId: string;
+  name: string;
+  role: string;
+  organisation: string;
+  days: number;
+  total: number;
+  perDay: number;
+  byCategory: { category: string; count: number; readRate: number | null }[];
+  byHourOfDay: number[];
+  recent: {
+    id: string;
+    category: string;
+    severity: string;
+    title: string;
+    read: boolean;
+    createdAt: string;
+  }[];
+};
+export type NotificationStatsQuery = { days: number; tenantId?: string };
+const notificationQuery = (
+  q: NotificationStatsQuery,
+  extra: Record<string, string | number | undefined> = {},
+) => {
+  const params = new URLSearchParams({ days: String(q.days) });
+  if (q.tenantId) params.set("tenantId", q.tenantId);
+  for (const [key, value] of Object.entries(extra))
+    if (value !== undefined && value !== "") params.set(key, String(value));
+  return params.toString();
+};
+export const getPlatformNotificationOverview = (t: string, q: NotificationStatsQuery) =>
+  request<NotificationOverview>(`/platform/notifications/overview?${notificationQuery(q)}`, {}, t);
+export const listPlatformNotificationPeople = (
+  t: string,
+  q: NotificationStatsQuery & {
+    sort: "total" | "peak" | "unread" | "daily";
+    q?: string;
+    role?: string;
+    offset?: number;
+  },
+) =>
+  request<{ days: number; count: number; people: NotificationPerson[] }>(
+    `/platform/notifications/people?${notificationQuery(q, { sort: q.sort, q: q.q, role: q.role, offset: q.offset })}`,
+    {},
+    t,
+  );
+export const getPlatformNotificationPerson = (t: string, userId: string, days: number) =>
+  request<NotificationPersonDetail>(
+    `/platform/notifications/people/${encodeURIComponent(userId)}?days=${days}`,
+    {},
+    t,
+  );
+export const listPlatformNotificationRoles = (t: string, q: NotificationStatsQuery) =>
+  request<{ days: number; roles: NotificationRole[] }>(
+    `/platform/notifications/roles?${notificationQuery(q)}`,
+    {},
+    t,
+  );
+export const listPlatformNotificationTemplates = (t: string, q: NotificationStatsQuery) =>
+  request<{ days: number; templates: NotificationTemplate[] }>(
+    `/platform/notifications/templates?${notificationQuery(q)}`,
+    {},
+    t,
+  );
+export const getPlatformNotificationHeatmap = (t: string, q: NotificationStatsQuery) =>
+  request<{ days: number; grid: number[][] }>(
+    `/platform/notifications/heatmap?${notificationQuery(q)}`,
+    {},
+    t,
+  );
+export type NotificationLogItem = {
+  id: string;
+  kind: "notification" | "delivery";
+  createdAt: string;
+  tenantId: string | null;
+  organisation: string;
+  recipientId: string | null;
+  recipient: string;
+  role: string;
+  category: string;
+  severity: string;
+  title: string;
+  message: string;
+  channel: "in_app" | "push" | "web_push" | "email";
+  status: "sent" | "failed" | "suppressed";
+  reason: string | null;
+  read: boolean | null;
+};
+export const listPlatformNotificationLog = (
+  t: string,
+  q: NotificationStatsQuery & {
+    q?: string;
+    channel?: string;
+    status?: string;
+    category?: string;
+    offset?: number;
+  },
+) =>
+  request<{ days: number; total: number; items: NotificationLogItem[] }>(
+    `/platform/notifications/log?${notificationQuery(q, { q: q.q, channel: q.channel, status: q.status, category: q.category, offset: q.offset })}`,
+    {},
+    t,
+  );
+export const getPlatformNotificationGuard = (t: string) =>
+  request<NotificationGuardSettings>("/platform/notifications/guard", {}, t);
+export const savePlatformNotificationGuard = (
+  t: string,
+  values: Partial<
+    Pick<NotificationGuardSettings, "enabled" | "dedupeWindowMinutes" | "pushPerRecipientPerHour">
+  >,
+) =>
+  request<NotificationGuardSettings>(
+    "/platform/notifications/guard",
+    { method: "PUT", body: JSON.stringify(values) },
+    t,
+  );
 
 // ---- Platform console ----
 //
@@ -3000,6 +3212,25 @@ export const listBookablePeople = (t: string, siteId: string) =>
     {},
     t,
   );
+/** A whole roster week in one send: new bookings, changes and cancellations. Each person is told once, about
+ * only the days that changed for them. Whatever could not be applied comes back in `skipped`. */
+export type BookingBatchEntry = {
+  action: "add" | "update" | "cancel";
+  bookingId?: string;
+  userId: string;
+  date?: string;
+  shiftIds: string[];
+  startTime: string | null;
+  endTime: string | null;
+  instructions: string;
+};
+export const sendBookingBatch = (t: string, input: { siteId: string; entries: BookingBatchEntry[] }) =>
+  request<{
+    created: StaffBooking[];
+    updated: StaffBooking[];
+    cancelled: StaffBooking[];
+    skipped: { userId: string; userName: string; date: string; reason?: string }[];
+  }>("/schedule/bookings/batch", { method: "POST", body: JSON.stringify(input) }, t);
 export const bookStaff = (t: string, input: BookStaffInput) =>
   request<{
     created: StaffBooking[];
@@ -3307,12 +3538,61 @@ export type MaintenanceHold = {
   override: boolean;
   releasedAt: string | null;
 };
+export type ReminderPriority = "low" | "normal" | "high" | "urgent";
+export type ReminderStatus = "pending" | "acknowledged" | "ignored" | "resolved";
+export type MaintenanceReminder = {
+  id: string;
+  batchId: string;
+  jobId: string;
+  siteId: string;
+  senderId: string;
+  senderName: string;
+  recipientId: string;
+  recipientName: string;
+  direction: "to_payer" | "to_handler";
+  priority: ReminderPriority;
+  message: string;
+  stage: string;
+  status: ReminderStatus;
+  responseNote: string | null;
+  respondedAt: string | null;
+  createdAt: string;
+};
+export type PendingReminder = MaintenanceReminder & {
+  jobTitle: string;
+  siteName: string;
+  jobState: string;
+  /** Whether it must stop the person with a pop-up (priority at or above the site's setting). */
+  popup: boolean;
+};
+export type ReminderAvailability = { ok: boolean; at: string | null; reason: string };
+export type ReminderTarget = {
+  userId: string;
+  name: string;
+  role: string;
+  direction: "to_payer" | "to_handler";
+  why: string;
+  availability: Record<ReminderPriority, ReminderAvailability>;
+};
+/** Everything the Remind button needs, worked out by the server so no rule is repeated on the screen. */
+export type JobReminders = {
+  canSend: boolean;
+  blockedReason: string;
+  direction: "both" | "to_payers" | "to_handlers" | "off";
+  popupFrom: ReminderPriority;
+  dailyLeft: number;
+  priorities: { id: ReminderPriority; label: string; waitMinutes: number; minMessage: number }[];
+  targets: ReminderTarget[];
+  waitingOnYou: MaintenanceReminder[];
+  history: MaintenanceReminder[];
+};
 export type MaintenanceEvent = {
   id: string;
   kind: string;
   actorName: string | null;
   message: string;
   createdAt: string;
+  data?: Record<string, unknown>;
 };
 export type MaintenanceJob = {
   /** How skipping works for this organisation: next stage only, or any step. */
@@ -3353,6 +3633,7 @@ export type MaintenanceJob = {
   quotes?: MaintenanceQuote[];
   invoices?: MaintenanceInvoice[];
   capabilities?: MaintenanceCapabilities;
+  reminders?: JobReminders;
 };
 export type MaintenanceContractor = {
   id: string;
@@ -3640,9 +3921,56 @@ export type MaintenanceSummary = Record<
 export const getMaintenanceSummary = (token: string) =>
   request<MaintenanceSummary>("/maintenance/summary", {}, token);
 export const getMaintenanceMe = (token: string) =>
-  request<{ capabilities: MaintenanceCapabilities }>(
-    "/maintenance/me",
+  request<{
+    capabilities: MaintenanceCapabilities;
+    policy: Record<string, unknown>;
+  }>("/maintenance/me", {}, token);
+export const sendMaintenanceReminder = (
+  token: string,
+  jobId: string,
+  body: { priority: ReminderPriority; message: string; recipientIds: string[] },
+) =>
+  request<MaintenanceJob>(
+    `/maintenance/jobs/${jobId}/reminders`,
+    maintenanceBody("POST", body),
+    token,
+  );
+export const listPendingMaintenanceReminders = (token: string) =>
+  request<{ count: number; popupCount: number; items: PendingReminder[] }>(
+    "/maintenance/reminders/pending",
     {},
+    token,
+  );
+export const respondMaintenanceReminder = (
+  token: string,
+  id: string,
+  body: { action: "acknowledge" | "ignore"; reason?: string },
+) =>
+  request<{ id: string; status: ReminderStatus; jobId: string }>(
+    `/maintenance/reminders/${id}/respond`,
+    maintenanceBody("POST", body),
+    token,
+  );
+export type ReminderSettingsInput = {
+  direction?: "both" | "to_payers" | "to_handlers" | "off";
+  cooldownMinutes?: Record<ReminderPriority, number>;
+  popupFrom?: ReminderPriority;
+  maxPerJobPerDay?: number;
+  sites?: Record<
+    string,
+    { direction: "both" | "to_payers" | "to_handlers" | "off" } | null
+  >;
+};
+export const saveMaintenanceReminderSettings = (
+  token: string,
+  body: ReminderSettingsInput,
+) =>
+  request<{
+    reminders: Record<string, unknown>;
+    reminderSites: Record<string, { direction: string }>;
+  }>(
+    "/maintenance/reminder-settings",
+    maintenanceBody("PUT", body),
     token,
   );
 

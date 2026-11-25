@@ -12,8 +12,10 @@ import { CalendarFrame, CalendarLegend, DotStrip, MonthTiles, type DayTileData }
 import { heatColor, monthDays, monthTitle } from "@/domain/calendarGrid";
 import { appAlert } from "@/components/Dialog";
 import { NoticeChips } from "@/components/NoticeBits";
-import { cancelBooking, listMyBookings, listSiteBookings, type StaffBooking } from "@/api/client";
-import { addDays, bookingTime, isPastDay, mondayOf, dateKey, dayHeading, groupByDay, mapsUrl, parseDateKey } from "@/domain/schedule";
+import { listMyBookings, listSiteBookings, type StaffBooking } from "@/api/client";
+import { DraftBar } from "@/components/DraftBar";
+import { markDraft, useDrafts } from "@/features/rosterDraftStore";
+import { addDays, bookingShifts, bookingTime, isPastDay, mondayOf, dateKey, dayHeading, groupByDay, mapsUrl, parseDateKey } from "@/domain/schedule";
 import { useCanBook, useScheduleOn } from "@/features/schedule";
 import { useCanPostNotices, useNoticeCalendar, useNoticeboardOn } from "@/features/noticeboard";
 import { useHomePath } from "@/features/roles";
@@ -39,6 +41,7 @@ export default function ScheduleScreen() {
   const [pickedDay, setPickedDay] = useState(() => dateKey(new Date()));
   const [bookings, setBookings] = useState<StaffBooking[] | null>(null);
   const [mapDay, setMapDay] = useState<string | null>(null);
+  const drafts = useDrafts();
 
   const load = useCallback(async () => {
     if (!state.accessToken) return;
@@ -91,24 +94,25 @@ export default function ScheduleScreen() {
 
   if (!on) return <Redirect href={homePath as never} />;
 
-  const cancel = (b: StaffBooking) =>
-    appAlert("Cancel this booking?", `${b.userName} will be told that ${dayHeading(b.date).toLowerCase()} at ${b.site.name} is cancelled.`, [
-      { text: "Keep it", style: "cancel" },
-      {
-        text: "Cancel booking",
-        style: "destructive",
-        onPress: () =>
-          void cancelBooking(state.accessToken as string, b.id)
-            .then(load)
-            .catch((e) => appAlert("Could not cancel", e instanceof Error ? e.message : "Please try again.")),
-      },
-    ]);
+  // Removing a booking only marks it; the person is told when the schedules are sent.
+  const cancel = (b: StaffBooking) => {
+    markDraft(b.siteId, b.userId, b.date, {
+      kind: "cancel",
+      bookingId: b.id,
+      userId: b.userId,
+      userName: b.userName,
+      date: b.date,
+      label: b.shiftNames.length > 0 ? bookingShifts(b) : bookingTime(b),
+    });
+    appAlert("Marked to remove", `${b.userName} on ${dayHeading(b.date).toLowerCase()} is marked to be removed. Press Send schedules at the top to tell them.`);
+  };
 
   const renderCard = (b: StaffBooking) => (
     <BookingCard
       key={b.id}
       booking={b}
       showPerson={scope === "all"}
+      pending={drafts[b.siteId]?.[`${b.userId}|${b.date}`]?.kind === "cancel" ? "removed" : drafts[b.siteId]?.[`${b.userId}|${b.date}`]?.kind === "update" ? "changed" : null}
       onCancel={canBook && scope === "all" && !isPastDay(b.date) ? () => cancel(b) : undefined}
     />
   );
@@ -140,6 +144,7 @@ export default function ScheduleScreen() {
           </Pressable>
         ))}
       </View>
+      {canBook && <DraftBar siteName={(id) => state.sites.find((x) => x.id === id)?.name ?? "this site"} onSent={() => void load()} />}
       {canBook && <Button onPress={() => router.push("/schedule-book" as never)}>Book staff</Button>}
       {canBook && (
         <Button variant="outline" onPress={() => router.push("/schedule-report" as never)}>

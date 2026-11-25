@@ -120,6 +120,15 @@ export default function MaintenanceListScreen() {
             Contractors
           </Button>
         ) : null}
+        {currentUser && ["org_admin", "operations_manager"].includes(currentUser.role) ? (
+          <Button
+            variant="outline"
+            icon={<Ionicons name="notifications-outline" size={18} color={colors.foreground} />}
+            onPress={() => router.push("/maintenance/reminder-settings" as never)}
+          >
+            Reminder settings
+          </Button>
+        ) : null}
         {currentUser && ["org_admin", "operations_manager", "site_manager", "supervisor"].includes(currentUser.role) ? (
           <Button
             variant="outline"

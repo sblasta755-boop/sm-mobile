@@ -11,7 +11,7 @@ import { Button } from "@/components/Button";
 import { useSmartClean } from "@/features/store";
 import { useHomePath } from "@/features/roles";
 import { useReportAccessState } from "@/features/reportAccess";
-import { thumbUrl } from "@/api/client";
+import { emailReport, thumbUrl } from "@/api/client";
 import { useTenantBranding } from "@/services/branding";
 import {
   buildManagementReport,
@@ -58,6 +58,10 @@ export default function ManagementReportScreen() {
   const [busy, setBusy] = useState(false);
   // What the button says while a report is being made.
   const [stage, setStage] = useState("");
+  // Emailing the report: who to, and an optional note.
+  const [emailOpen, setEmailOpen] = useState(false);
+  const [recipients, setRecipients] = useState("");
+  const [note, setNote] = useState("");
 
   const site = sites.find((s) => s.id === siteId) ?? sites[0];
   const options = useMemo(
@@ -94,10 +98,10 @@ export default function ManagementReportScreen() {
   const toggle = (list: string[], set: (next: string[]) => void, value: string) =>
     set(list.includes(value) ? list.filter((v) => v !== value) : [...list, value]);
 
-  async function generate() {
-    if (!report || report.sections.length === 0) return;
-    setBusy(true);
-    try {
+  /** Builds the report PDF (page numbers stamped on) and returns it as base64. */
+  async function buildPdf(): Promise<string> {
+    if (!report) throw new Error("Nothing to report");
+    {
       const now = new Date();
       // Fetch small copies of the photos first and embed them in the report, so
       // the PDF step has nothing left to download and we can show real progress.
@@ -128,7 +132,16 @@ export default function ManagementReportScreen() {
       const printed = await Print.printToFileAsync({ html, base64: true, width: 595, height: 842 });
       // The print engine cannot number pages, so the footer is stamped on after.
       setStage("Adding page numbers...");
-      const stamped = await stampReportFooter(printed.base64 ?? "", report.siteName, name.trim() || "Daily Service");
+      return await stampReportFooter(printed.base64 ?? "", report.siteName, name.trim() || "Daily Service");
+    }
+  }
+
+  async function generate() {
+    if (!report || report.sections.length === 0) return;
+    setBusy(true);
+    try {
+      const now = new Date();
+      const stamped = await buildPdf();
       const uri = `${FileSystem.cacheDirectory}${(name.trim() || "Daily Service").replace(/[^\w-]+/g, "_")}_${dayKey(now)}.pdf`;
       await FileSystem.writeAsStringAsync(uri, stamped, { encoding: FileSystem.EncodingType.Base64 });
       if (await Sharing.isAvailableAsync()) {
@@ -149,6 +162,37 @@ export default function ManagementReportScreen() {
   }
 
   const empty = !report || report.sections.length === 0;
+  // Sending a report out of the organisation is for managers and supervisors (the server enforces it too).
+  const canEmail = ["org_admin", "operations_manager", "site_manager", "supervisor"].includes(currentUser.role);
+  const addresses = recipients.split(/[\s,;]+/).filter(Boolean);
+  const badAddress = addresses.find((a) => !/^[^@\s,;]+@[^@\s,;]+\.[^@\s,;]+$/.test(a));
+  const addressProblem =
+    addresses.length > 5 ? "At most 5 addresses at a time." : badAddress ? `"${badAddress}" is not a valid email address.` : "";
+
+  async function sendByEmail() {
+    if (!report || !site || !state.accessToken || addresses.length === 0 || addressProblem) return;
+    setBusy(true);
+    try {
+      const pdfBase64 = await buildPdf();
+      setStage("Sending...");
+      const result = await emailReport(state.accessToken, {
+        recipients: addresses,
+        reportName: `${name.trim() || "Daily Service"} Report`,
+        siteName: site.name,
+        note: note.trim() || undefined,
+        pdfBase64,
+      });
+      appAlert("Report sent", `Emailed to ${result.sent} ${result.sent === 1 ? "person" : "people"}.`);
+      setRecipients("");
+      setNote("");
+      setEmailOpen(false);
+    } catch (error) {
+      appAlert("Could not send the report", error instanceof Error ? error.message : "Please try again.");
+    } finally {
+      setBusy(false);
+      setStage("");
+    }
+  }
 
   return (
     <Screen title="Management report">
@@ -253,8 +297,60 @@ export default function ManagementReportScreen() {
         loading={busy}
         onPress={() => void generate()}
       >
-        {busy && stage ? stage : "Generate PDF"}
+        {busy && stage && !emailOpen ? stage : "Generate PDF"}
       </Button>
+
+      {canEmail && !emailOpen && (
+        <Button
+          variant="outline"
+          icon={<Ionicons name="mail-outline" size={18} color={colors.primary} />}
+          disabled={empty || busy}
+          onPress={() => setEmailOpen(true)}
+        >
+          Email report
+        </Button>
+      )}
+
+      {canEmail && emailOpen && (
+        <Card style={styles.card}>
+          <Text style={styles.label}>Email this report as a PDF</Text>
+          <TextInput
+            value={recipients}
+            onChangeText={setRecipients}
+            placeholder="name@company.com, other@company.com"
+            placeholderTextColor={colors.mutedForeground}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoCorrect={false}
+            accessibilityLabel="Email addresses"
+            style={styles.input}
+          />
+          <Text style={addressProblem ? styles.warn : styles.muted}>
+            {addressProblem || "Separate addresses with a comma or space. Up to 5."}
+          </Text>
+          <TextInput
+            value={note}
+            onChangeText={setNote}
+            placeholder="Message (optional)"
+            placeholderTextColor={colors.mutedForeground}
+            multiline
+            maxLength={1000}
+            accessibilityLabel="Message"
+            style={[styles.input, { minHeight: 72, textAlignVertical: "top" }]}
+          />
+          <Button
+            icon={<Ionicons name="send" size={16} color={colors.primaryForeground} />}
+            disabled={busy || addresses.length === 0 || !!addressProblem}
+            loading={busy}
+            onPress={() => void sendByEmail()}
+          >
+            {busy && stage ? stage : "Send report"}
+          </Button>
+          <Button variant="ghost" disabled={busy} onPress={() => setEmailOpen(false)}>
+            Cancel
+          </Button>
+        </Card>
+      )}
     </Screen>
   );
 }
@@ -303,6 +399,7 @@ const styles = themedStyles(() => StyleSheet.create({
   label: { fontSize: typography.small, fontWeight: "700", color: colors.foreground },
   gap: { marginTop: spacing.sm },
   muted: { fontSize: typography.small, color: colors.mutedForeground },
+  warn: { fontSize: typography.small, color: colors.destructive },
   link: { fontSize: typography.small, color: colors.primary },
   dateRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   dateText: { fontSize: typography.body, fontWeight: "700", color: colors.foreground },

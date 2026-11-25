@@ -257,6 +257,8 @@ export default function TimesheetReportScreen() {
             <Stepper label="From" value={start} onChange={setStart} />
             <Stepper label="To" value={end} onChange={setEnd} />
           </>
+        ) : kind === "daily" ? (
+          <Stepper label="Day" value={date} onChange={setDate} step={1} />
         ) : kind === "weekly" ? (
           <Stepper label="Week containing" value={date} onChange={setDate} step={7} />
         ) : (

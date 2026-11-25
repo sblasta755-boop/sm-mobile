@@ -9,6 +9,7 @@ import {
   View,
 } from "react-native";
 import { useFocusEffect, useLocalSearchParams } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { Screen } from "@/components/Screen";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
@@ -16,6 +17,9 @@ import { SelectField } from "@/components/SelectField";
 import { PhotoCapture } from "@/components/PhotoCapture";
 import { MaintenancePill } from "@/components/MaintenancePill";
 import { TextPrompt } from "@/components/TextPrompt";
+import { ReminderSheet } from "@/components/ReminderSheet";
+import { PRIORITY_LABEL, remindState, statusText } from "@/domain/maintenanceReminders";
+import { priorityColor, statusColor } from "@/domain/reminderColors";
 import { appAlert } from "@/components/Dialog";
 import { formatMoney } from "@/domain/payroll";
 import { useSmartClean } from "@/features/store";
@@ -37,6 +41,8 @@ import {
   listMaintenanceContractors,
   moveMaintenanceJob,
   recordMaintenancePop,
+  respondMaintenanceReminder,
+  sendMaintenanceReminder,
   verifyMaintenancePayment,
   type MaintenanceJob,
   type MaintenanceState,
@@ -83,6 +89,7 @@ export default function MaintenanceJobScreen() {
   const [visit, setVisit] = useState("");
   const [quoting, setQuoting] = useState(false);
   const [popFor, setPopFor] = useState<string | null>(null);
+  const [reminding, setReminding] = useState(false);
 
   const load = useCallback(async () => {
     if (!token || !jobId) return;
@@ -341,6 +348,23 @@ export default function MaintenanceJobScreen() {
 
   return (
     <Screen title="Maintenance job">
+      {reminding && job.reminders ? (
+        <ReminderSheet
+          reminders={job.reminders}
+          jobTitle={job.title}
+          onClose={() => setReminding(false)}
+          onSubmit={async (input) => {
+            try {
+              setJob(await sendMaintenanceReminder(token, job.id, input));
+              appAlert("Reminder sent", "They have been told, and it is in the job's history.", undefined, "success");
+              return true;
+            } catch (error) {
+              appAlert("Could not send the reminder", error instanceof Error ? error.message : "Try again in a moment.");
+              return false;
+            }
+          }}
+        />
+      ) : null}
       <View style={styles.body}>
         <Card style={styles.gap}>
           <Text style={styles.title}>{job.title}</Text>
@@ -411,6 +435,64 @@ export default function MaintenanceJobScreen() {
             </View>
           )}
         </Card>
+
+        {/* A reminder waiting on this person (the ones that do not stop them with a pop-up show here). */}
+        {(job.reminders?.waitingOnYou ?? []).map((r) => (
+          <Card key={r.id} style={[styles.gap, { borderColor: priorityColor(r.priority), borderWidth: 2 }]}>
+            <Text style={styles.heading}>
+              {`${r.senderName.split(" ")[0]} sent a ${PRIORITY_LABEL[r.priority].toLowerCase()} reminder`}
+            </Text>
+            {r.message ? <Text style={styles.text}>{r.message}</Text> : null}
+            <Button
+              disabled={busy}
+              onPress={() =>
+                void act(
+                  () => respondMaintenanceReminder(token, r.id, { action: "acknowledge" }),
+                  "Could not answer the reminder",
+                )
+              }
+            >
+              I have seen it
+            </Button>
+            <Button
+              variant="outline"
+              disabled={busy}
+              onPress={() =>
+                setAsk({
+                  title: "Ignore this reminder",
+                  label: "Why are you ignoring it? They will see your reason in the job's history.",
+                  multiline: true,
+                  required: true,
+                  confirmLabel: "Ignore it",
+                  then: (text) =>
+                    act(
+                      () => respondMaintenanceReminder(token, r.id, { action: "ignore", reason: text }),
+                      "Could not answer the reminder",
+                    ),
+                })
+              }
+            >
+              Ignore
+            </Button>
+          </Card>
+        ))}
+
+        {/* Always here, so people know it exists; off with the reason or a countdown when it cannot be used. */}
+        {job.reminders ? (
+          <View style={styles.gap}>
+            <Button
+              variant="outline"
+              disabled={busy || !remindState(job.reminders).enabled}
+              icon={<Ionicons name="notifications-outline" size={18} color={colors.foreground} />}
+              onPress={() => setReminding(true)}
+            >
+              Remind
+            </Button>
+            {remindState(job.reminders).caption ? (
+              <Text style={[styles.muted, { textAlign: "center" }]}>{remindState(job.reminders).caption}</Text>
+            ) : null}
+          </View>
+        ) : null}
 
         {caps.handle && job.state === "approved" && (
           <Card style={styles.gap}>
@@ -773,14 +855,28 @@ export default function MaintenanceJobScreen() {
 
         <Card style={styles.gap}>
           <Text style={styles.heading}>History</Text>
-          {(job.events ?? []).map((event) => (
-            <Text key={event.id} style={styles.text}>
-              <Text style={styles.muted}>{fmt(event.createdAt)} </Text>
-              <Text style={styles.bold}>{event.actorName ?? "System"} </Text>
-              {event.kind.replace(/_/g, " ")}
-              {event.message ? ` - ${event.message}` : ""}
-            </Text>
-          ))}
+          {(job.events ?? []).map((event) => {
+            const batch = (event.data as { batchId?: string } | undefined)?.batchId;
+            const sent = event.kind === "reminder_sent" ? (job.reminders?.history ?? []).filter((r) => r.batchId === batch) : [];
+            return (
+              <View key={event.id} style={styles.event}>
+                <Text style={styles.text}>
+                  <Text style={styles.muted}>{fmt(event.createdAt)} </Text>
+                  <Text style={styles.bold}>{event.actorName ?? "System"} </Text>
+                  {event.kind.replace(/_/g, " ")}
+                  {event.message ? ` - ${event.message}` : ""}
+                </Text>
+                {sent.map((r) => (
+                  <View key={r.id} style={styles.chipRow}>
+                    <View style={[styles.dot, { backgroundColor: priorityColor(r.priority) }]} />
+                    <Text style={[styles.chipText, { color: statusColor(r.status) }]}>
+                      {`${r.recipientName.split(" ")[0]} (${PRIORITY_LABEL[r.priority].toLowerCase()}): ${statusText(r.status, r.responseNote)}`}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            );
+          })}
           <TextInput
             value={note}
             onChangeText={setNote}
@@ -1084,6 +1180,10 @@ const styles = themedStyles(() =>
   StyleSheet.create({
     body: { gap: spacing.md },
     gap: { gap: spacing.sm },
+    event: { gap: 2 },
+    chipRow: { flexDirection: "row", alignItems: "center", gap: spacing.xs, marginLeft: spacing.md },
+    chipText: { fontSize: typography.small, fontWeight: "600", flexShrink: 1 },
+    dot: { width: 8, height: 8, borderRadius: 4 },
     sub: { gap: spacing.xs, paddingBottom: spacing.sm },
     costRow: {
       flexDirection: "row",

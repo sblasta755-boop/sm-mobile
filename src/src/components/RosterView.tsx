@@ -4,15 +4,14 @@ import { Ionicons } from "@expo/vector-icons";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { appAlert } from "@/components/Dialog";
+import { listBookablePeople, listSiteBookings, listSiteShifts, type StaffBooking } from "@/api/client";
+import { markDraft, useDrafts } from "@/features/rosterDraftStore";
 import {
-  bookStaff,
-  cancelBooking,
-  changeBooking,
-  listBookablePeople,
-  listSiteBookings,
-  listSiteShifts,
-  type StaffBooking,
-} from "@/api/client";
+  draftKey,
+  hoursLabel,
+  sameAsBooking,
+  type DraftEntry,
+} from "@/domain/rosterDraft";
 import type { StockShift } from "@/types/smartclean";
 import { fuzzyFilter } from "@/domain/fuzzySearch";
 import { addDays, bookingShifts, bookingTime, dateKey, dayHeading, isPastDay, mondayOf, parseDateKey } from "@/domain/schedule";
@@ -20,7 +19,7 @@ import { useSmartClean } from "@/features/store";
 import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 
 type Person = { id: string; name: string; role: string };
-type Cell = { person: Person; day: string; booking: StaffBooking | null };
+type Cell = { person: Person; day: string; booking: StaffBooking | null; marked: DraftEntry | null };
 
 const WEEKDAY = (iso: string) => parseDateKey(iso).toLocaleDateString("en-ZA", { weekday: "narrow" });
 
@@ -29,8 +28,11 @@ const short = (b: StaffBooking) => (b.shiftNames.length > 0 ? bookingShifts(b) :
 
 /**
  * The roster: the people at a site, each with the days of the week beside them. Tapping a day opens that
- * person's details for it (shift or hours, instructions) to book, change or cancel there and then. The same
- * bookings as the list and calendar, laid out the other way round.
+ * person's details for it (shift or hours, instructions). Those taps only mark the day: nothing is saved or sent
+ * until "Send schedules", and then each person gets one notification and one email covering their whole week.
+ * The same bookings as the list and calendar, laid out the other way round.
+ *
+ * The "Send schedules" bar sits at the top of the schedule screen, above every view.
  */
 export function RosterView() {
   useThemeVersion(); // re-render with the new colours when the theme changes
@@ -43,6 +45,11 @@ export function RosterView() {
   const [bookings, setBookings] = useState<StaffBooking[] | null>(null);
   const [query, setQuery] = useState("");
   const [cell, setCell] = useState<Cell | null>(null);
+  // Marked but unsent changes are held by one store shared with the other schedule screens, which also sends them.
+  const drafts = useDrafts();
+  const draft = drafts[siteId] ?? {};
+  const siteName = sites.find((s) => s.id === siteId)?.name ?? "";
+  const markCell = (userId: string, day: string, entry: DraftEntry | null) => markDraft(siteId, userId, day, entry);
 
   const days = useMemo(() => Array.from({ length: 7 }, (_, i) => dateKey(addDays(weekStart, i))), [weekStart]);
 
@@ -107,7 +114,7 @@ export function RosterView() {
         placeholderTextColor={colors.mutedForeground}
         accessibilityLabel="Find a person or role"
       />
-      <Text style={styles.muted}>Tap a day next to a person to set their shift and details there.</Text>
+      <Text style={styles.muted}>Mark the days for each person and set their shift and details, then press Send schedules at the top. Each person gets one message with their whole week.</Text>
 
       {(people === null || bookings === null) && <ActivityIndicator color={colors.primary} />}
       {people !== null && bookings !== null && shown.length === 0 && (
@@ -125,18 +132,33 @@ export function RosterView() {
               {days.map((day) => {
                 const b = bookingFor(person.id, day);
                 const past = isPastDay(day);
+                const marked = past ? null : (draft[draftKey(person.id, day)] ?? null);
                 return (
                   <Pressable
                     key={day}
                     disabled={past && !b}
-                    onPress={() => setCell({ person, day, booking: b })}
+                    onPress={() => setCell({ person, day, booking: b, marked })}
                     accessibilityRole="button"
-                    accessibilityLabel={`${person.name}, ${dayHeading(day)}: ${b ? short(b) : past ? "no booking" : "not booked. Book"}`}
-                    style={[styles.day, b && styles.dayBooked, !b && !past && styles.dayFree, day === today && styles.dayToday]}
+                    accessibilityLabel={`${person.name}, ${dayHeading(day)}: ${
+                      marked ? (marked.kind === "cancel" ? "marked to be removed" : `${marked.label}, not sent yet`) : b ? short(b) : past ? "no booking" : "not booked. Add"
+                    }`}
+                    style={[
+                      styles.day,
+                      b && styles.dayBooked,
+                      !b && !past && styles.dayFree,
+                      marked && styles.dayMarked,
+                      marked?.kind === "cancel" && styles.dayRemoved,
+                      day === today && styles.dayToday,
+                    ]}
                   >
                     <Text style={styles.dayLetter}>{WEEKDAY(day)}</Text>
                     <Text style={styles.dayNum}>{parseDateKey(day).getDate()}</Text>
-                    {b ? (
+                    {marked ? (
+                      <>
+                        <Text style={[styles.dayShift, marked.kind === "cancel" && styles.dayStruck]} numberOfLines={1}>{marked.label}</Text>
+                        <Text style={styles.dayTag}>{marked.kind === "add" ? "New" : marked.kind === "update" ? "Changed" : "Removed"}</Text>
+                      </>
+                    ) : b ? (
                       <Text style={styles.dayShift} numberOfLines={1}>{short(b)}</Text>
                     ) : past ? (
                       <Text style={styles.dayMuted}>-</Text>
@@ -150,13 +172,16 @@ export function RosterView() {
           </Card>
         ))}
 
-      <CellSheet cell={cell} siteId={siteId} siteName={sites.find((s) => s.id === siteId)?.name ?? ""} onClose={() => setCell(null)} onChanged={() => void load()} />
+      <CellSheet cell={cell} siteId={siteId} siteName={siteName} onClose={() => setCell(null)} onMark={markCell} />
     </View>
   );
 }
 
-/** One person on one day: shift or hours and instructions, then book, save or cancel. */
-function CellSheet({ cell, siteId, siteName, onClose, onChanged }: { cell: Cell | null; siteId: string; siteName: string; onClose: () => void; onChanged: () => void }) {
+/**
+ * One person on one day: shift or hours and instructions. Nothing is saved here; the choice is marked on the
+ * roster and goes out with the rest when the schedules are sent.
+ */
+function CellSheet({ cell, siteId, siteName, onClose, onMark }: { cell: Cell | null; siteId: string; siteName: string; onClose: () => void; onMark: (userId: string, day: string, entry: DraftEntry | null) => void }) {
   const { state } = useSmartClean();
   const token = state.accessToken;
   const [shifts, setShifts] = useState<StockShift[]>([]);
@@ -165,8 +190,8 @@ function CellSheet({ cell, siteId, siteName, onClose, onChanged }: { cell: Cell 
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
   const [instructions, setInstructions] = useState("");
-  const [busy, setBusy] = useState(false);
   const booking = cell?.booking ?? null;
+  const marked = cell?.marked ?? null;
   const past = cell ? isPastDay(cell.day) : false;
 
   useEffect(() => {
@@ -182,12 +207,14 @@ function CellSheet({ cell, siteId, siteName, onClose, onChanged }: { cell: Cell 
 
   useEffect(() => {
     if (!cell) return;
-    const b = cell.booking;
-    setShiftIds(b?.shiftIds ?? []);
-    setCustom(!!b && b.shiftIds.length === 0 && !!b.startTime);
-    setStartTime(b?.startTime ?? "");
-    setEndTime(b?.endTime ?? "");
-    setInstructions(b?.instructions ?? "");
+    // What was marked wins over what the booking has, so reopening a marked day shows the marked choice.
+    const m = cell.marked && cell.marked.kind !== "cancel" ? cell.marked : null;
+    const h = m ? m.hours : cell.booking ? { shiftIds: cell.booking.shiftIds, startTime: cell.booking.startTime, endTime: cell.booking.endTime } : null;
+    setShiftIds(h?.shiftIds ?? []);
+    setCustom(!!h && h.shiftIds.length === 0 && !!h.startTime);
+    setStartTime(h?.startTime ?? "");
+    setEndTime(h?.endTime ?? "");
+    setInstructions(m ? m.instructions : (cell.booking?.instructions ?? ""));
   }, [cell]);
 
   if (!cell) return null;
@@ -197,46 +224,27 @@ function CellSheet({ cell, siteId, siteName, onClose, onChanged }: { cell: Cell 
     startTime: useTimes ? startTime || null : null,
     endTime: useTimes ? endTime || null : null,
   };
+  const shiftNames = Object.fromEntries(shifts.map((x) => [x.id, x.name]));
+  const who = { userId: cell.person.id, userName: cell.person.name, date: cell.day };
 
-  async function run(job: () => Promise<string>) {
-    setBusy(true);
-    try {
-      const message = await job();
-      appAlert("Done", message);
-      onChanged();
-      onClose();
-    } catch (error) {
-      appAlert("Could not save", error instanceof Error ? error.message : "Please try again.");
-    } finally {
-      setBusy(false);
+  const mark = () => {
+    if (booking) {
+      // Putting back exactly what the booking has is the same as not touching it.
+      if (sameAsBooking(booking, hours, instructions)) onMark(who.userId, who.date, null);
+      else onMark(who.userId, who.date, { kind: "update", bookingId: booking.id, ...who, hours, instructions, label: hoursLabel(hours, shiftNames) });
+    } else {
+      onMark(who.userId, who.date, { kind: "add", ...who, hours, instructions, label: hoursLabel(hours, shiftNames) });
     }
-  }
-
-  const save = () =>
-    run(async () => {
-      if (!token || !cell) return "";
-      if (booking) {
-        await changeBooking(token, booking.id, { date: booking.date, ...hours, instructions });
-        return `${cell.person.name} has been told about the change.`;
-      }
-      const result = await bookStaff(token, { siteId, userIds: [cell.person.id], dates: [cell.day], ...hours, instructions });
-      if (result.created.length === 0) throw new Error(`${cell.person.name} could not be booked that day. They may be on approved leave.`);
-      return `${cell.person.name} is booked and has been told.`;
-    });
-
-  const cancel = () =>
-    appAlert("Cancel this booking?", `${cell.person.name} will be told that ${dayHeading(cell.day).toLowerCase()} at ${siteName} is cancelled.`, [
-      { text: "Keep it", style: "cancel" },
-      {
-        text: "Cancel booking",
-        style: "destructive",
-        onPress: () =>
-          void run(async () => {
-            await cancelBooking(token as string, (booking as StaffBooking).id);
-            return "Booking cancelled and the person told.";
-          }),
-      },
-    ]);
+    onClose();
+  };
+  const remove = () => {
+    onMark(who.userId, who.date, booking ? { kind: "cancel", bookingId: booking.id, ...who, label: short(booking) } : null);
+    onClose();
+  };
+  const undo = () => {
+    onMark(who.userId, who.date, null);
+    onClose();
+  };
 
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>
@@ -244,10 +252,10 @@ function CellSheet({ cell, siteId, siteName, onClose, onChanged }: { cell: Cell 
         <View style={styles.sheet}>
           <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.sheetBody}>
             <Text style={styles.sheetTitle}>
-              {past ? "Booking" : booking ? "Change booking" : "Book"} · {cell.person.name}
+              {past ? "Booking" : booking ? "Change booking" : "Add to schedule"} · {cell.person.name}
             </Text>
             <Text style={styles.muted}>
-              {dayHeading(cell.day)} at {siteName}. {past ? "This day has passed, so it is for viewing only." : "They are told when you save."}
+              {dayHeading(cell.day)} at {siteName}. {past ? "This day has passed, so it is for viewing only." : "This is only marked on the roster. They are told when you send the schedules."}
             </Text>
 
             {shifts.length > 0 && (
@@ -302,17 +310,18 @@ function CellSheet({ cell, siteId, siteName, onClose, onChanged }: { cell: Cell 
               placeholderTextColor={colors.mutedForeground}
               accessibilityLabel="Instructions"
             />
-            {!past && (
-              <Button loading={busy} onPress={() => void save()}>
-                {booking ? "Save and notify" : "Book and notify"}
+            {!past && <Button onPress={mark}>{booking ? "Update in schedule" : "Add to schedule"}</Button>}
+            {!past && marked && (
+              <Button variant="outline" onPress={undo}>
+                {booking ? "Undo my change" : "Clear this day"}
               </Button>
             )}
-            {booking && !past && (
-              <Button variant="outline" disabled={busy} onPress={cancel}>
-                Cancel booking
+            {!past && !marked && booking && (
+              <Button variant="outline" onPress={remove}>
+                Remove from schedule
               </Button>
             )}
-            <Button variant="ghost" disabled={busy} onPress={onClose}>
+            <Button variant="ghost" onPress={onClose}>
               Close
             </Button>
           </ScrollView>
@@ -346,6 +355,12 @@ const styles = themedStyles(() =>
     dayBooked: { backgroundColor: colors.muted },
     dayFree: { borderStyle: "dashed", borderColor: colors.border },
     dayToday: { borderColor: colors.primary },
+    dayMarked: { borderStyle: "dashed", borderWidth: 2, borderColor: colors.primary, backgroundColor: colors.muted },
+    dayRemoved: { borderColor: colors.destructive },
+    dayStruck: { textDecorationLine: "line-through", color: colors.destructive },
+    dayTag: { fontSize: 8, fontWeight: "700", color: colors.mutedForeground, textTransform: "uppercase" },
+    bar: { flex: 1, flexDirection: "row", alignItems: "center", gap: spacing.sm },
+    barTitle: { fontSize: typography.body, fontWeight: "800", color: colors.foreground },
     dayLetter: { fontSize: typography.tiny, color: colors.mutedForeground, fontWeight: "700" },
     dayNum: { fontSize: typography.body, fontWeight: "800", color: colors.foreground },
     dayShift: { fontSize: 9, fontWeight: "700", color: colors.primary, maxWidth: "100%" },

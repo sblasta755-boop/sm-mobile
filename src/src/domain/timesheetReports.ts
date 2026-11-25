@@ -20,9 +20,10 @@ import { flattenDoc, type ReportDoc, type ReportGroup } from "./reportDoc";
 import type { ChartSpec } from "./scheduleAnalysis";
 import { addDays, hoursBetween, weekStart, weekday, monthRange } from "./scheduleDates";
 
-export type TimesheetReportKind = "weekly" | "monthly" | "variance" | "audit";
+export type TimesheetReportKind = "daily" | "weekly" | "monthly" | "variance" | "audit";
 
 export const TIMESHEET_REPORTS: { kind: TimesheetReportKind; label: string; hint: string }[] = [
+  { kind: "daily", label: "Daily employee timesheet", hint: "Every employee's hours for one day." },
   { kind: "weekly", label: "Weekly employee timesheet", hint: "Every employee's hours for each day of a week." },
   { kind: "monthly", label: "Monthly employee timesheet", hint: "Day by day hours record, one section per employee." },
   { kind: "variance", label: "Scheduled vs actual hours", hint: "Booked hours against verified attendance." },
@@ -76,6 +77,7 @@ export interface TimesheetReportInput {
 }
 
 export function timesheetRange(kind: TimesheetReportKind, date: string, start: string, end: string) {
+  if (kind === "daily") return { start: date, end: date };
   if (kind === "weekly") {
     const s = weekStart(date);
     return { start: s, end: addDays(s, 6) };
@@ -128,7 +130,7 @@ export function buildTimesheetReport(input: TimesheetReportInput): TimesheetRepo
     kind,
     eyebrow: "TIMESHEET",
     title: def.label,
-    period: kind === "monthly" ? `${longDate(range.start).slice(3)}` : `${longDate(range.start)} - ${longDate(range.end)}`,
+    period: kind === "daily" ? longDate(range.start) : kind === "monthly" ? `${longDate(range.start).slice(3)}` : `${longDate(range.start)} - ${longDate(range.end)}`,
     start: range.start,
     end: range.end,
     filename: `${slug(def.label)}-${slug(siteName)}-${range.start}-to-${range.end}`,
@@ -138,7 +140,7 @@ export function buildTimesheetReport(input: TimesheetReportInput): TimesheetRepo
     ],
   };
   const ctx = { ...input, days, bookings, leave, range };
-  if (kind === "weekly") return weekly(base, ctx);
+  if (kind === "weekly" || kind === "daily") return weekly(base, ctx);
   if (kind === "monthly") return monthly(base, ctx);
   if (kind === "variance") return variance(base, ctx);
   return audit(base, ctx);
@@ -151,6 +153,8 @@ const onLeave = (c: Ctx, userId: string, day: string, status: string) =>
   c.leave.some((l) => l.userId === userId && l.status === status && l.startDate <= day && l.endDate >= day);
 
 function weekly(base: Base, c: Ctx): TimesheetReport {
+  const daily = base.kind === "daily";
+  const unit = daily ? "day" : "week";
   const dates = daysBetween(c.range.start, c.range.end);
   const people = new Map<string, string>();
   for (const d of c.days) people.set(d.userId, name(d));
@@ -194,23 +198,23 @@ function weekly(base: Base, c: Ctx): TimesheetReport {
   const grand = rows.reduce((n, r) => n + r.total, 0);
   const insights: string[] = [];
   if (rows.length > 0) {
-    insights.push(`${plural(rows.length, "employee")} logged ${txt(hrs(grand))} hours this week, an average of ${txt(hrs(grand / rows.length))} each.`);
+    insights.push(`${plural(rows.length, "employee")} logged ${txt(hrs(grand))} hours this ${unit}, an average of ${txt(hrs(grand / rows.length))} each.`);
     const sorted = [...rows].sort((a, z) => z.total - a.total);
     if (rows.length >= 3) insights.push(`Most hours: ${sorted[0].row[0]} (${sorted[0].row[sorted[0].row.length - 2]} h). Fewest: ${sorted[sorted.length - 1].row[0]} (${sorted[sorted.length - 1].row[sorted[sorted.length - 1].row.length - 2]} h).`);
     const over = rows.filter((r) => r.total / 60 > WEEKLY_LIMIT);
-    insights.push(over.length ? `${plural(over.length, "person", "people")} over ${WEEKLY_LIMIT} hours: ${over.map((r) => r.row[0]).slice(0, 5).join(", ")}.` : `No one is over ${WEEKLY_LIMIT} hours for the week.`);
+    if (!daily) insights.push(over.length ? `${plural(over.length, "person", "people")} over ${WEEKLY_LIMIT} hours: ${over.map((r) => r.row[0]).slice(0, 5).join(", ")}.` : `No one is over ${WEEKLY_LIMIT} hours for the week.`);
     if (absent.length) insights.push(`${plural(absent.length, "booked shift")} had no attendance: ${absent.slice(0, 5).join("; ")}${absent.length > 5 ? "; and more" : ""}.`);
     const al = rows.reduce((n, r) => n + r.row.filter((x) => x === "AL").length, 0);
     if (al) insights.push(`${plural(al, "day")} of approved leave and ${rows.reduce((n, r) => n + r.row.filter((x) => x === "PL").length, 0)} of leave still waiting.`);
     const waiting = c.days.filter((d) => d.approvalState === "pending");
-    insights.push(waiting.length ? `${plural(waiting.length, "day")} (${txt(hrs(waiting.reduce((n, d) => n + (d.workedMinutes ?? 0), 0)))} hours) still need approval.` : "Every day this week is approved.");
+    insights.push(waiting.length ? `${plural(waiting.length, "day")} (${txt(hrs(waiting.reduce((n, d) => n + (d.workedMinutes ?? 0), 0)))} hours) still need approval.` : daily ? "The day is approved." : "Every day this week is approved.");
   }
   const approvalCount = new Map<string, number>();
   for (const d of c.days) sum(approvalCount, APPROVAL[d.approvalState] ?? d.approvalState);
   const charts: ChartSpec[] = [
-    ...chart({ title: "Hours per day", caption: "Total hours worked by everyone on each day.", type: "columns", unit: "h", items: dates.map((d) => ({ label: SHORT[dow(d)][0] + SHORT[dow(d)].slice(1).toLowerCase(), value: r1(perDay.get(d) ?? 0) })) }),
-    ...chart({ title: "Hours per employee", caption: "Hours worked this week, highest first.", type: "bars", unit: "h", items: ranked(perPerson, 10) }),
-    ...(perRole.size > 1 ? chart({ title: "Hours by role", caption: "How the week's hours split between roles.", type: "bars", unit: "h", items: ranked(perRole, 8) }) : []),
+    ...(daily ? [] : chart({ title: "Hours per day", caption: "Total hours worked by everyone on each day.", type: "columns", unit: "h", items: dates.map((d) => ({ label: SHORT[dow(d)][0] + SHORT[dow(d)].slice(1).toLowerCase(), value: r1(perDay.get(d) ?? 0) })) })),
+    ...chart({ title: "Hours per employee", caption: `Hours worked this ${unit}, highest first.`, type: "bars", unit: "h", items: ranked(perPerson, 10) }),
+    ...(perRole.size > 1 ? chart({ title: "Hours by role", caption: `How the ${unit}'s hours split between roles.`, type: "bars", unit: "h", items: ranked(perRole, 8) }) : []),
     ...chart({ title: "Days by approval", caption: "Attendance days and where each stands.", type: "bars", unit: "", items: ranked(approvalCount, 4) }),
   ];
   const wk = isoWeek(c.range.start);
@@ -218,12 +222,12 @@ function weekly(base: Base, c: Ctx): TimesheetReport {
     ...base,
     kpis: [
       { label: "Staff in report", value: String(rows.length) },
-      { label: "Week", value: `${wk.week} / ${wk.year}` },
+      daily ? { label: "Date", value: dm(c.range.start) } : { label: "Week", value: `${wk.week} / ${wk.year}` },
       { label: "Total hours", value: txt(hrs(grand)) },
       { label: "Approval", value: rows.length === 0 ? "-" : c.days.length && c.days.every((d) => d.approvalState === "approved") ? "Approved" : c.days.some((d) => d.approvalState === "approved") ? "Mixed" : "Waiting" },
     ],
     header,
-    groups: rows.length ? [{ title: "Weekly totals", rows: rows.map((r) => r.row) }] : [],
+    groups: rows.length ? [{ title: daily ? "Daily totals" : "Weekly totals", rows: rows.map((r) => r.row) }] : [],
     hiddenColumns: [dates.length + 3],
     note: "Hours are worked time from attendance, with time away from site excluded. AL = approved leave, PL = leave waiting, ABS = booked but did not attend, OFF = not booked, In = still clocked in.",
     insights,

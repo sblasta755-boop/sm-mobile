@@ -13,10 +13,13 @@ export function BookingCard({
   booking: b,
   showPerson = false,
   onCancel,
+  pending = null,
 }: {
   booking: StaffBooking;
   showPerson?: boolean;
   onCancel?: () => void;
+  /** A change marked for this booking and not sent yet. */
+  pending?: "changed" | "removed" | null;
 }) {
   useThemeVersion();
   const [all, setAll] = useState(false);
@@ -37,7 +40,12 @@ export function BookingCard({
           </View>
           <View style={styles.headText}>
             <Text style={styles.site} numberOfLines={2}>{b.site.name}</Text>
-            {showPerson && <Text style={styles.person}>{b.userName}</Text>}
+            {showPerson && <Text style={[styles.person, pending === "removed" && { textDecorationLine: "line-through" }]}>{b.userName}</Text>}
+            {!!pending && (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>{pending === "removed" ? "Marked to remove" : "Change marked"}</Text>
+              </View>
+            )}
             {!!shifts && (
               <View style={styles.badge}>
                 <Text style={styles.badgeText}>{shifts}</Text>

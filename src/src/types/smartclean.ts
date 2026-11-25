@@ -123,6 +123,8 @@ export interface NotificationPrefs {
   push: boolean;
   incidents: boolean;
   taskAssignments: boolean;
+  /** Hourly round alerts and their clash warnings; a missing key means "on". */
+  rounds?: boolean;
   correctiveActions: boolean;
   tableService: boolean;
   leave: boolean;

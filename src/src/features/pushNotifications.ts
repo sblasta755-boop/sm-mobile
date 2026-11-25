@@ -4,7 +4,7 @@ import * as Device from "expo-device";
 import * as Notifications from "expo-notifications";
 import Constants from "expo-constants";
 import { router } from "expo-router";
-import { registerPushToken, unregisterPushToken } from "@/api/client";
+import { markNotificationRead, registerPushToken, unregisterPushToken } from "@/api/client";
 import { useSmartClean } from "@/features/store";
 import { isFieldRole } from "@/features/roles";
 
@@ -176,6 +176,8 @@ export function usePushRegistration() {
   // keeps the listener pointing at the latest refresh function.
   const roleRef = useRef(currentUser?.role);
   roleRef.current = currentUser?.role;
+  const tokenRef = useRef(state.accessToken);
+  tokenRef.current = state.accessToken;
   const refreshRef = useRef(refreshBackendData);
   refreshRef.current = refreshBackendData;
   const lastRefreshAt = useRef(0);
@@ -201,8 +203,12 @@ export function usePushRegistration() {
   useEffect(() => {
     const sub = Notifications.addNotificationResponseReceivedListener((response) => {
       const data = response.notification.request.content.data as
-        | { category?: string; relatedId?: string }
+        | { category?: string; relatedId?: string; notificationId?: string }
         | undefined;
+      // Tapping the alert counts as reading it. Best-effort: the next refresh reconciles it.
+      if (data?.notificationId && tokenRef.current) {
+        markNotificationRead(tokenRef.current, data.notificationId).catch(() => {});
+      }
       refreshSoon();
       navigateForNotificationData(data, roleRef.current);
     });
@@ -246,6 +252,7 @@ export function routeForNotification(
   switch (category) {
     case "tasks":
     case "task":
+    case "rounds":
       return id ? `/tasks/${id}` : "/my-tasks";
     case "correctiveaction":
     case "correctiveactions":
@@ -265,7 +272,8 @@ export function routeForNotification(
     case "overtime":
       return "/overtime";
     case "maintenance":
-      return id && manager ? `/maintenance/${id}` : "/maintenance";
+      // The job a reminder or update is about, for anyone with maintenance access (the screen checks it).
+      return id ? `/maintenance/${id}` : "/maintenance";
     case "schedule":
     case "scheduling":
       return "/schedule";

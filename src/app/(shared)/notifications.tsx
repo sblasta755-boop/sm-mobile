@@ -61,6 +61,7 @@ export default function NotificationsScreen() {
 
   // Opening a card reads it; where it leads is the Open button inside it.
   const openScreen = (n: Notification) => {
+    markRead(n); // going to what it is about counts as reading it
     const target = routeForNotification({ category: n.kind, relatedId: n.relatedId }, currentUser?.role);
     if (target !== "/notifications") router.push(target as never);
   };

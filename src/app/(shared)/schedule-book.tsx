@@ -8,8 +8,6 @@ import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { appAlert } from "@/components/Dialog";
 import {
-  bookStaff,
-  changeBookings,
   listBookablePeople,
   listSiteBookings,
   listSiteShifts,
@@ -18,7 +16,9 @@ import {
 import { ShiftSetup } from "@/components/ShiftSetup";
 import { MonthTiles, monthTitle } from "@/components/MonthCalendar";
 import type { StockShift } from "@/types/smartclean";
-import { addDays, dateKey, daysBetween, isPastDay } from "@/domain/schedule";
+import { addDays, bookingTime, dateKey, daysBetween, isPastDay } from "@/domain/schedule";
+import { hoursLabel, updateEntry } from "@/domain/rosterDraft";
+import { markDraft } from "@/features/rosterDraftStore";
 import {
   actionFor,
   buttonLabel,
@@ -56,7 +56,7 @@ function shiftSpan(
   return { start: first.startTime, end: last.endTime };
 }
 
-/** Book people onto a site for one or more days, with instructions. They are told straight away. */
+/** Book people onto a site for one or more days, with instructions. Nothing is sent until you press Send schedules. */
 export default function ScheduleBookScreen() {
   useThemeVersion(); // re-render with the new colours when the theme changes
   const { state } = useSmartClean();
@@ -92,7 +92,7 @@ export default function ScheduleBookScreen() {
   const [shifts, setShifts] = useState<StockShift[]>([]);
   const [shiftsVersion, setShiftsVersion] = useState(0);
   const [instructions, setInstructions] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [busy] = useState(false);
   // Three steps: who, when, then the shift and details with a recap.
   const [step, setStep] = useState<1 | 2 | 3>(1);
 
@@ -216,89 +216,55 @@ export default function ScheduleBookScreen() {
     setTo(dateKey(addDays(new Date(), which === "week" ? 6 : first)));
   };
 
-  const submit = async () => {
-    if (!state.accessToken) return;
-    setBusy(true);
-    try {
-      let made = 0;
-      let changed = 0;
-      if (split.toBook > 0) {
-        const result = await bookStaff(state.accessToken, {
-          siteId,
-          userIds: split.newPeople,
-          dates,
-          ...hoursBody,
-          instructions,
-        });
-        made = result.created.length;
+  const shiftNames = Object.fromEntries(shifts.map((x) => [x.id, x.name]));
+  const nameOf = (id: string) => people.find((p) => p.id === id)?.name ?? "";
+  const labelOf = (b: StaffBooking) => (b.shiftNames.length > 0 ? b.shiftNames.join(" + ") : bookingTime(b));
+
+  // Adds, changes and removals are only marked; they go out, one message per person, from the bar on the schedule.
+  const submit = () => {
+    const hoursNow = { shiftIds: hoursBody.shiftIds ?? [], startTime: hoursBody.startTime ?? null, endTime: hoursBody.endTime ?? null };
+    let adds = 0;
+    let changes = 0;
+    if (split.toBook > 0) {
+      for (const userId of split.newPeople) {
+        for (const date of dates) {
+          if (existing.some((b) => b.userId === userId && b.date === date)) continue;
+          markDraft(siteId, userId, date, {
+            kind: "add", userId, userName: nameOf(userId), date, hours: hoursNow, instructions, label: hoursLabel(hoursNow, shiftNames),
+          });
+          adds += 1;
+        }
       }
-      if (split.toChange > 0 && canChange) {
-        const result = await changeBookings(state.accessToken, {
-          siteId,
-          userIds: split.bookedPeople,
-          dates,
-          action: "update",
-          ...patch,
-        });
-        changed = result.changed.length;
-      }
-      const bits = [
-        made ? `${made} booking${made === 1 ? "" : "s"} made` : null,
-        changed
-          ? `${changed} booking${changed === 1 ? "" : "s"} updated`
-          : null,
-      ].filter(Boolean);
-      appAlert(
-        "Done",
-        `${bits.join(" and ") || "Nothing to do"}, and everyone told.`,
-        [{ text: "OK", onPress: () => router.back() }],
-      );
-    } catch (error) {
-      appAlert(
-        "Could not save",
-        error instanceof Error ? error.message : "Please try again.",
-      );
-    } finally {
-      setBusy(false);
     }
+    if (split.toChange > 0 && canChange) {
+      const patched = patch.shiftIds !== undefined ? { shiftIds: patch.shiftIds, startTime: patch.startTime ?? null, endTime: patch.endTime ?? null } : undefined;
+      for (const b of existing) {
+        if (!picked.includes(b.userId) || !dates.includes(b.date)) continue;
+        const entry = updateEntry(
+          b,
+          { ...(patched ? { hours: patched } : {}), ...(patch.instructions !== undefined ? { instructions: patch.instructions } : {}) },
+          patched ? hoursLabel(patched, shiftNames) : labelOf(b),
+        );
+        if (entry) {
+          markDraft(siteId, b.userId, b.date, entry);
+          changes += 1;
+        }
+      }
+    }
+    const bits = [adds ? `${adds} to book` : null, changes ? `${changes} to update` : null].filter(Boolean);
+    appAlert("Added to the schedule", `${bits.join(" and ") || "Nothing new to mark"}. Press Send schedules on the schedule screen when you are sure.`, [
+      { text: "OK", onPress: () => router.back() },
+    ]);
   };
 
   const cancelChosen = () => {
-    if (!state.accessToken || split.bookedPeople.length === 0) return;
-    appAlert(
-      `Cancel ${split.toChange} booking${split.toChange === 1 ? "" : "s"}?`,
-      `${split.bookedPeople.length} ${split.bookedPeople.length === 1 ? "person is" : "people are"} told their booking is cancelled.`,
-      [
-        { text: "Keep them", style: "cancel" },
-        {
-          text: "Cancel the bookings",
-          style: "destructive",
-          onPress: async () => {
-            setBusy(true);
-            try {
-              const result = await changeBookings(state.accessToken as string, {
-                siteId,
-                userIds: split.bookedPeople,
-                dates,
-                action: "cancel",
-              });
-              appAlert(
-                "Cancelled",
-                `${result.changed.length} booking${result.changed.length === 1 ? "" : "s"} cancelled and everyone told.`,
-                [{ text: "OK", onPress: () => router.back() }],
-              );
-            } catch (error) {
-              appAlert(
-                "Could not cancel",
-                error instanceof Error ? error.message : "Please try again.",
-              );
-            } finally {
-              setBusy(false);
-            }
-          },
-        },
-      ],
-    );
+    const targets = existing.filter((b) => picked.includes(b.userId) && dates.includes(b.date));
+    for (const b of targets) {
+      markDraft(siteId, b.userId, b.date, { kind: "cancel", bookingId: b.id, userId: b.userId, userName: b.userName, date: b.date, label: labelOf(b) });
+    }
+    appAlert("Marked to remove", `${targets.length} ${targets.length === 1 ? "booking" : "bookings"} marked to be removed. Press Send schedules on the schedule screen to tell everyone.`, [
+      { text: "OK", onPress: () => router.back() },
+    ]);
   };
 
   return (
@@ -775,7 +741,7 @@ export default function ScheduleBookScreen() {
         <>
           <Button
             disabled={busy || !canContinue || action === "none" || !timesOk}
-            onPress={() => void submit()}
+            onPress={submit}
           >
             {buttonLabel(action)}
           </Button>

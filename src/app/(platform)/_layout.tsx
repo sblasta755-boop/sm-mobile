@@ -106,6 +106,7 @@ export default function PlatformTabsLayout() {
           its own tab, so each needs href: null - same mechanism the
           customer shell uses. */}
       <Tabs.Screen name="platform-feedback" options={{ href: null }} />
+      <Tabs.Screen name="platform-notifications" options={{ href: null }} />
       <Tabs.Screen name="platform-organisation/[tenantId]" options={{ href: null }} />
       <Tabs.Screen name="platform-org-users/[tenantId]" options={{ href: null }} />
       <Tabs.Screen name="platform-org-user/[tenantId]" options={{ href: null }} />

@@ -126,6 +126,19 @@ export default function PlatformDashboard() {
         ) : null}
         <Ionicons name="chevron-forward" size={18} color={colors.mutedForeground} />
       </Pressable>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Notification analytics"
+        onPress={() => router.push("/platform-notifications" as never)}
+        style={[styles.card, { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginBottom: spacing.md }]}
+      >
+        <Ionicons name="notifications-outline" size={20} color={colors.primary} />
+        <View style={{ flex: 1 }}>
+          <Text style={styles.orgName}>Notifications</Text>
+          <Text style={styles.sub}>How much is sent, to whom, and how to cut the noise</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={18} color={colors.mutedForeground} />
+      </Pressable>
       {error ? (
         <View style={[styles.card, { borderColor: colors.destructive }]}>
           <Text style={{ color: colors.destructive }}>{error}</Text>

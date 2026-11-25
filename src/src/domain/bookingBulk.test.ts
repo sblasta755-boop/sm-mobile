@@ -58,9 +58,9 @@ describe("the action and its words", () => {
     expect(actionFor({ toBook: 1, toChange: 1 }, false)).toBe("book");
     expect(actionFor({ toBook: 0, toChange: 2 }, false)).toBe("none");
     expect(actionFor({ toBook: 0, toChange: 0 }, true)).toBe("none");
-    expect(buttonLabel("both")).toBe("Book and update");
-    expect(buttonLabel("change")).toBe("Update bookings");
-    expect(buttonLabel("book")).toBe("Book and notify");
+    expect(buttonLabel("both")).toBe("Add bookings and updates");
+    expect(buttonLabel("change")).toBe("Add the updates");
+    expect(buttonLabel("book")).toBe("Add to schedule");
   });
   it("sums it up in a line", () => {
     expect(summaryLine(3, 2, { toBook: 4, toChange: 2 }, true)).toBe(

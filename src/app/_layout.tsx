@@ -16,6 +16,7 @@ import { useRememberLocation } from "@/features/lastLocation";
 import { useGeofenceClock } from "@/features/geofenceClock";
 import { usePresenceReporting } from "@/features/presence";
 import { OvertimePrompt } from "@/components/OvertimePrompt";
+import { MaintenanceReminderGate } from "@/components/MaintenanceReminderGate";
 import { TourOverlay } from "@/components/TourOverlay";
 
 // Keep the native splash image up until our animated in-app splash
@@ -40,6 +41,7 @@ export default function RootLayout() {
           <UpdateRequiredGate />
           <AccountBlockedGate />
           <OvertimePrompt />
+          <MaintenanceReminderGate />
           <TourOverlay />
           <DialogHost />
         </SmartCleanProvider>
