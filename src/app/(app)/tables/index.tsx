@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { router } from "expo-router";
-import { ActivityIndicator, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
+import { AccessibilityInfo, ActivityIndicator, Animated, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Screen } from "@/components/Screen";
 import { Card } from "@/components/Card";
@@ -10,7 +10,7 @@ import { attendTableSession, claimTableSession, getPendingTableOrders, listTable
 import { elapsedLabel, riskLabel, sortByRisk, startedLabel } from "@/features/tableRisk";
 import { Button } from "@/components/Button";
 import type { PendingTableOrder, TableSession } from "@/types/smartclean";
-import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
+import { colors, radius, shadows, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 
 // How often to re-fetch the table grid while this screen is open. Push
 // SHOULD tell the waiter about a new request the moment it lands
@@ -131,19 +131,7 @@ export default function TablesScreen() {
 
   return (
     <Screen title="My Tables">
-      {waitingOrders.length > 0 && (
-        <Card style={styles.ordersCard}>
-          <Text style={styles.ordersTitle}>
-            {waitingOrders.length} order{waitingOrders.length === 1 ? "" : "s"} waiting for you
-          </Text>
-          {waitingOrders.map((o) => (
-            <Pressable key={o.order.id} style={styles.ordersRow} onPress={() => router.push(`/tables/${o.sessionId}`)}>
-              <Text style={styles.ordersName}>{o.locationName}</Text>
-              <Text style={styles.ordersMeta}>Order {o.order.number}</Text>
-            </Pressable>
-          ))}
-        </Card>
-      )}
+      {waitingOrders.length > 0 && <WaitingOrders orders={waitingOrders} />}
       <Card style={styles.claimCard}>
         <View style={styles.claimTop}>
           <View style={styles.claimIcon}>
@@ -193,6 +181,92 @@ export default function TablesScreen() {
         </View>
       )}
     </Screen>
+  );
+}
+
+const ORDER_LATE_MINUTES = 5;
+
+/** The orders guests have sent that this waiter has yet to confirm. The oldest comes first; one that has waited
+ * more than a few minutes is marked as late, so the waiter knows where to go first. */
+function WaitingOrders({ orders }: { orders: PendingTableOrder[] }) {
+  const pulse = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    let loop: Animated.CompositeAnimation | null = null;
+    let cancelled = false;
+    AccessibilityInfo.isReduceMotionEnabled()
+      .then((reduce) => {
+        if (reduce || cancelled) return;
+        loop = Animated.loop(
+          Animated.timing(pulse, { toValue: 1, duration: 1400, useNativeDriver: true }),
+        );
+        loop.start();
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+      loop?.stop();
+    };
+  }, [pulse]);
+
+  const sorted = [...orders].sort((x, y) => x.order.placedAt.localeCompare(y.order.placedAt));
+  const ring = {
+    opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.5, 0] }),
+    transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 2] }) }],
+  };
+
+  return (
+    <View style={styles.ordersCard} accessibilityRole="summary">
+      <View style={styles.ordersHead}>
+        <View style={styles.ordersBell}>
+          <Animated.View style={[styles.ordersRing, ring]} />
+          <Ionicons name="notifications" size={20} color={colors.primaryForeground} />
+        </View>
+        <View style={styles.ordersHeadCopy}>
+          <Text style={styles.ordersTitle}>
+            {orders.length} new order{orders.length === 1 ? "" : "s"}
+          </Text>
+          <Text style={styles.ordersSub}>Tap one to confirm or decline it</Text>
+        </View>
+        <View style={styles.ordersCount}>
+          <Text style={styles.ordersCountText}>{orders.length}</Text>
+        </View>
+      </View>
+      {sorted.map((o, index) => {
+        const minutes = Math.max(0, Math.round((Date.now() - new Date(o.order.placedAt).getTime()) / 60000));
+        const late = minutes >= ORDER_LATE_MINUTES;
+        const items = o.order.lines.reduce((n, l) => n + l.qty, 0);
+        return (
+          <Pressable
+            key={o.order.id}
+            accessibilityRole="button"
+            accessibilityLabel={`${o.locationName}, order ${o.order.number}, ${items} items, waiting ${elapsedLabel(o.order.placedAt)}`}
+            style={({ pressed }) => [styles.ordersRow, index > 0 && styles.ordersRowDivider, pressed && styles.ordersRowPressed]}
+            onPress={() => router.push(`/tables/${o.sessionId}`)}
+          >
+            <View style={styles.ordersTable}>
+              <Text style={styles.ordersTableText} numberOfLines={1} adjustsFontSizeToFit>
+                {o.locationName}
+              </Text>
+            </View>
+            <View style={styles.ordersRowCopy}>
+              <Text style={styles.ordersName} numberOfLines={1}>
+                Order {o.order.number}
+              </Text>
+              <Text style={styles.ordersMeta}>
+                {items} item{items === 1 ? "" : "s"}
+              </Text>
+            </View>
+            <View style={[styles.ordersAge, late && styles.ordersAgeLate]}>
+              <Ionicons name="time-outline" size={12} color={late ? colors.warningForeground : colors.mutedForeground} />
+              <Text style={[styles.ordersAgeText, late && styles.ordersAgeTextLate]}>
+                {minutes < 1 ? "Just now" : elapsedLabel(o.order.placedAt)}
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.mutedForeground} />
+          </Pressable>
+        );
+      })}
+    </View>
   );
 }
 
@@ -282,11 +356,86 @@ function SessionRow({ session, onAttend }: { session: TableSession; onAttend?: (
 }
 
 const styles = themedStyles(() => StyleSheet.create({
-  ordersCard: { marginBottom: spacing.md, gap: spacing.xs, borderColor: colors.primary, backgroundColor: colors.accent },
-  ordersTitle: { fontSize: typography.h2, fontWeight: "700", color: colors.foreground },
-  ordersRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: spacing.xs },
-  ordersName: { fontSize: typography.body, fontWeight: "600", color: colors.foreground, textTransform: "capitalize" },
+  ordersCard: {
+    marginBottom: spacing.md,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    backgroundColor: colors.card,
+    overflow: "hidden",
+    ...shadows.card,
+  },
+  ordersHead: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    padding: spacing.md,
+    backgroundColor: colors.primary,
+  },
+  ordersBell: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.round,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.22)",
+  },
+  ordersRing: {
+    position: "absolute",
+    width: 40,
+    height: 40,
+    borderRadius: radius.round,
+    borderWidth: 2,
+    borderColor: colors.primaryForeground,
+  },
+  ordersHeadCopy: { flex: 1, gap: 2 },
+  ordersTitle: { fontSize: typography.h2, fontWeight: "800", color: colors.primaryForeground },
+  ordersSub: { fontSize: typography.small, color: colors.primaryForeground, opacity: 0.85 },
+  ordersCount: {
+    minWidth: 32,
+    height: 32,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.round,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.primaryForeground,
+  },
+  ordersCountText: { fontSize: typography.h2, fontWeight: "800", color: colors.primary },
+  ordersRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    minHeight: 60,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+  },
+  ordersRowDivider: { borderTopWidth: 1, borderTopColor: colors.border },
+  ordersRowPressed: { backgroundColor: colors.accent },
+  ordersTable: {
+    minWidth: 44,
+    height: 44,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.lg,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: `${colors.primary}1A`,
+  },
+  ordersTableText: { fontSize: typography.h1, fontWeight: "800", color: colors.primary, textTransform: "capitalize" },
+  ordersRowCopy: { flex: 1, gap: 2 },
+  ordersName: { fontSize: typography.body, fontWeight: "700", color: colors.foreground },
   ordersMeta: { fontSize: typography.small, color: colors.mutedForeground },
+  ordersAge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: radius.round,
+    backgroundColor: colors.muted,
+  },
+  ordersAgeLate: { backgroundColor: colors.warningSoft },
+  ordersAgeText: { fontSize: typography.small, fontWeight: "600", color: colors.mutedForeground },
+  ordersAgeTextLate: { color: colors.warningForeground },
   claimCard: { marginBottom: spacing.md, gap: spacing.md },
   claimTop: { flexDirection: "row", alignItems: "center", gap: spacing.md },
   claimIcon: {

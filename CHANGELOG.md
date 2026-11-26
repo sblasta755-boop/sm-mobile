@@ -3,6 +3,10 @@
 Own versioning (not the store version in `app.json`): `MAJOR.MINOR.PATCH`. MAJOR = breaking change, MINOR = new feature, PATCH = fix or internal change.
 Newest first. One entry per piece of work.
 
+## 0.6.1 - 2026-11-26
+### Changed
+- My Tables, "orders waiting for you": redesigned. A header in the brand colour with a pulsing bell (still when reduced motion is on) and a count, then one tappable row per order showing the table, the order number, the item count and how long it has waited (amber after 5 minutes, oldest first). Replaces the flat box whose dark text was hard to read on a red brand colour.
+
 ## 0.6.0 - 2026-11-26
 ### Added
 - Notification settings: attendance (with its three kinds), schedule, and people and sites switches for the roles that receive them.
