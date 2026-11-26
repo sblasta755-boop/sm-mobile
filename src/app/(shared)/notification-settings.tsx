@@ -9,6 +9,9 @@ import { useLeaveOn } from "@/features/leave";
 import {
   PAUSE_CHOICES,
   QUIET_PRESETS,
+  SUMMARY_HOURS,
+  SUMMARY_ROLES,
+  summaryLabel,
   pauseActive,
   pauseEnd,
   visiblePrefRows,
@@ -39,6 +42,8 @@ export default function NotificationSettingsScreen() {
   const rows = visiblePrefRows(currentUser?.role, hidden);
   const quiet = prefs.quietHours ?? {};
   const paused = pauseActive(prefs.pausedUntil);
+  const hasSummary = SUMMARY_ROLES.includes(currentUser?.role ?? "");
+  const summaryHour = typeof prefs.summaryHour === "number" ? prefs.summaryHour : 18;
   const offline = state.connectivity === "offline";
 
   async function save(patch: Record<string, unknown>) {
@@ -86,6 +91,32 @@ export default function NotificationSettingsScreen() {
         </View>
       </Card>
 
+      <Text style={styles.section}>Where you get notifications</Text>
+      <Card style={styles.card}>
+        {[
+          {
+            key: "inApp",
+            label: "In the app",
+            hint: "The notifications bell. Off means new items are not kept there.",
+          },
+          { key: "email", label: "Email", hint: "Optional emails such as bookings, incidents and notices." },
+        ].map((channel, index) => (
+          <View key={channel.key} style={[styles.row, index > 0 && styles.divider]}>
+            <View style={styles.copy}>
+              <Text style={styles.label}>{channel.label}</Text>
+              <Text style={styles.hint}>{channel.hint}</Text>
+            </View>
+            <Switch
+              value={isOn(channel.key)}
+              disabled={saving}
+              onValueChange={(v) => void save({ [channel.key]: v })}
+              trackColor={{ true: colors.primary, false: colors.neutral }}
+              accessibilityLabel={channel.label}
+            />
+          </View>
+        ))}
+      </Card>
+
       <Text style={styles.section}>Alert me about</Text>
       <Card style={styles.card}>
         {rows.map((row, index) => (
@@ -112,6 +143,49 @@ export default function NotificationSettingsScreen() {
           </View>
         ))}
       </Card>
+
+      {hasSummary && (
+        <>
+          <Text style={styles.section}>Daily attendance summary</Text>
+          <Card style={styles.card}>
+            <View style={styles.row}>
+              <View style={styles.copy}>
+                <Text style={styles.label}>Arrives at</Text>
+                <Text style={styles.hint}>One note a day instead of one per person.</Text>
+              </View>
+            </View>
+            <View style={styles.chips}>
+              {SUMMARY_HOURS.map((hour) => (
+                <Pressable
+                  key={hour}
+                  disabled={saving}
+                  onPress={() => void save({ summaryHour: hour })}
+                  style={[styles.chip, summaryHour === hour && styles.chipActive]}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Summary at ${summaryLabel(hour)}`}
+                >
+                  <Text style={[styles.chipText, summaryHour === hour && styles.chipTextActive]}>
+                    {summaryLabel(hour)}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+            <View style={[styles.row, styles.divider]}>
+              <View style={styles.copy}>
+                <Text style={styles.label}>Only my sites</Text>
+                <Text style={styles.hint}>Leave out sites you are not assigned to.</Text>
+              </View>
+              <Switch
+                value={bag.onlyMySites === true}
+                disabled={saving}
+                onValueChange={(v) => void save({ onlyMySites: v })}
+                trackColor={{ true: colors.primary, false: colors.neutral }}
+                accessibilityLabel="Only my sites"
+              />
+            </View>
+          </Card>
+        </>
+      )}
 
       <Text style={styles.section}>Quiet hours</Text>
       <Card style={styles.card}>
@@ -207,7 +281,7 @@ export default function NotificationSettingsScreen() {
       </Card>
 
       <Text style={styles.footnote}>
-        Security and account notices always come through, and everything is kept in the notifications bell.
+        Security and account notices, password resets and invites always come through, whatever you choose here.
       </Text>
     </Screen>
   );

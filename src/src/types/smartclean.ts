@@ -141,6 +141,10 @@ export interface NotificationPrefs {
   quietHours?: { enabled?: boolean; from?: string; to?: string };
   /** No pushes before this ISO time. */
   pausedUntil?: string | null;
+  /** Only for the sites this person is assigned to (the daily summary). */
+  onlyMySites?: boolean;
+  /** Local hour the daily attendance summary arrives; 18 when missing. */
+  summaryHour?: number;
 }
 
 export interface DemoUser {

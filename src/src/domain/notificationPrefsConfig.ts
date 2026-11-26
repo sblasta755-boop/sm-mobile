@@ -32,47 +32,22 @@ export interface PrefRowSpec {
 const MANAGEMENT = ["org_admin", "operations_manager", "site_manager", "supervisor"];
 
 export const PREF_ROW_SPECS: PrefRowSpec[] = [
-  {
-    key: "taskAssignments",
-    label: "Tasks",
-    hint: "New tasks and changes to the ones you hold",
-  },
+  { key: "taskAssignments", label: "Tasks", hint: "New tasks and changes to the ones you hold" },
   {
     key: "rounds",
     label: "Hourly rounds",
     hint: "A round opening, closing soon, and clash warnings",
   },
-  {
-    key: "incidents",
-    label: "Incidents",
-    hint: "Incident reports at your sites",
-  },
-  {
-    key: "correctiveActions",
-    label: "Corrective actions",
-    hint: "Follow-ups raised or rejected",
-  },
-  {
-    key: "reports",
-    label: "Reports",
-    hint: "Scheduled reports",
-    roles: ["supervisor"],
-  },
-  {
-    key: "leave",
-    label: "Leave",
-    hint: "Requests waiting for you, and decisions on yours",
-  },
+  { key: "incidents", label: "Incidents", hint: "Incident reports at your sites" },
+  { key: "correctiveActions", label: "Corrective actions", hint: "Follow-ups raised or rejected" },
+  { key: "reports", label: "Reports", hint: "Scheduled reports", roles: ["supervisor"] },
+  { key: "leave", label: "Leave", hint: "Requests waiting for you, and decisions on yours" },
   {
     key: "tableService",
     label: "Table requests",
     hint: "Menu, bill, call waiter and other guest requests",
   },
-  {
-    key: "schedule",
-    label: "Schedule",
-    hint: "Shifts booked, changed or cancelled for you",
-  },
+  { key: "schedule", label: "Schedule", hint: "Shifts booked, changed or cancelled for you" },
   {
     key: "attendance",
     label: "Attendance",
@@ -124,6 +99,14 @@ export interface QuietHours {
   enabled?: boolean;
   from?: string;
   to?: string;
+}
+
+/** Local hours the daily attendance summary can be written; 18 is what a person gets until they choose. */
+export const SUMMARY_HOURS = [12, 16, 18, 20] as const;
+export const SUMMARY_ROLES = ["org_admin", "operations_manager"];
+
+export function summaryLabel(hour: number): string {
+  return `${String(hour).padStart(2, "0")}:00`;
 }
 
 export const PAUSE_CHOICES = [

@@ -7,6 +7,8 @@ Newest first. One entry per piece of work.
 ### Added
 - Notification settings: attendance (with its three kinds), schedule, and people and sites switches for the roles that receive them.
 - Quiet hours (three presets) and "Pause phone alerts" for 1 hour, 8 hours or until tomorrow, with "Resume now".
+- Daily attendance summary (organisation admins and operations managers): choose when it arrives (12:00, 16:00, 18:00 or 20:00) and limit it to your own sites.
+- "Where you get notifications": switch the notifications bell (in-app) and email on or off, next to push.
 
 ## 0.5.0 - 2026-11-25
 ### Added
