@@ -129,6 +129,18 @@ export interface NotificationPrefs {
   tableService: boolean;
   leave: boolean;
   reports: boolean;
+  /** Attendance alerts, and the three kinds apart; a missing key means "on". */
+  attendance?: boolean;
+  attendanceLate?: boolean;
+  attendanceNoClockOut?: boolean;
+  attendanceLocation?: boolean;
+  schedule?: boolean;
+  /** Staff and site changes. */
+  people?: boolean;
+  /** Pushes are held inside these hours (the inbox still gets them). */
+  quietHours?: { enabled?: boolean; from?: string; to?: string };
+  /** No pushes before this ISO time. */
+  pausedUntil?: string | null;
 }
 
 export interface DemoUser {

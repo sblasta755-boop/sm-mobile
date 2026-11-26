@@ -3,6 +3,11 @@
 Own versioning (not the store version in `app.json`): `MAJOR.MINOR.PATCH`. MAJOR = breaking change, MINOR = new feature, PATCH = fix or internal change.
 Newest first. One entry per piece of work.
 
+## 0.6.0 - 2026-11-26
+### Added
+- Notification settings: attendance (with its three kinds), schedule, and people and sites switches for the roles that receive them.
+- Quiet hours (three presets) and "Pause phone alerts" for 1 hour, 8 hours or until tomorrow, with "Resume now".
+
 ## 0.5.0 - 2026-11-25
 ### Added
 - "Hourly rounds" notification setting.
