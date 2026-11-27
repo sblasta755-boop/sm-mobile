@@ -16,6 +16,7 @@ import type { StockShift } from "@/types/smartclean";
 import { fuzzyFilter } from "@/domain/fuzzySearch";
 import { addDays, bookingShifts, bookingTime, dateKey, dayHeading, isPastDay, mondayOf, parseDateKey } from "@/domain/schedule";
 import { useSmartClean } from "@/features/store";
+import { useClosedDays } from "@/features/useClosedDays";
 import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 
 type Person = { id: string; name: string; role: string };
@@ -52,6 +53,8 @@ export function RosterView() {
   const markCell = (userId: string, day: string, entry: DraftEntry | null) => markDraft(siteId, userId, day, entry);
 
   const days = useMemo(() => Array.from({ length: 7 }, (_, i) => dateKey(addDays(weekStart, i))), [weekStart]);
+  // Days the site is shut (a closed weekday, a holiday, maintenance): nobody can be booked on them.
+  const shut = useClosedDays(days[0], days[6], siteId);
 
   useEffect(() => {
     if (!token || !siteId) return;
@@ -133,19 +136,21 @@ export function RosterView() {
                 const b = bookingFor(person.id, day);
                 const past = isPastDay(day);
                 const marked = past ? null : (draft[draftKey(person.id, day)] ?? null);
+                const closed = shut.forSite(siteId, day);
                 return (
                   <Pressable
                     key={day}
-                    disabled={past && !b}
+                    disabled={(past || !!closed) && !b}
                     onPress={() => setCell({ person, day, booking: b, marked })}
                     accessibilityRole="button"
                     accessibilityLabel={`${person.name}, ${dayHeading(day)}: ${
-                      marked ? (marked.kind === "cancel" ? "marked to be removed" : `${marked.label}, not sent yet`) : b ? short(b) : past ? "no booking" : "not booked. Add"
+                      marked ? (marked.kind === "cancel" ? "marked to be removed" : `${marked.label}, not sent yet`) : b ? short(b) : closed ? closed : past ? "no booking" : "not booked. Add"
                     }`}
                     style={[
                       styles.day,
                       b && styles.dayBooked,
-                      !b && !past && styles.dayFree,
+                      !b && !past && !closed && styles.dayFree,
+                      !b && !!closed && styles.dayClosed,
                       marked && styles.dayMarked,
                       marked?.kind === "cancel" && styles.dayRemoved,
                       day === today && styles.dayToday,
@@ -160,6 +165,8 @@ export function RosterView() {
                       </>
                     ) : b ? (
                       <Text style={styles.dayShift} numberOfLines={1}>{short(b)}</Text>
+                    ) : closed ? (
+                      <Text style={[styles.dayMuted, styles.dayClosedText]}>Closed</Text>
                     ) : past ? (
                       <Text style={styles.dayMuted}>-</Text>
                     ) : (
@@ -353,6 +360,8 @@ const styles = themedStyles(() =>
     days: { flexDirection: "row", gap: 4 },
     day: { flex: 1, minHeight: 64, alignItems: "center", justifyContent: "center", gap: 1, borderRadius: radius.md, borderWidth: 1, borderColor: "transparent", paddingVertical: spacing.xs },
     dayBooked: { backgroundColor: colors.muted },
+    dayClosed: { backgroundColor: colors.muted, borderStyle: "dashed", borderColor: colors.border, opacity: 0.7 },
+    dayClosedText: { fontSize: typography.tiny },
     dayFree: { borderStyle: "dashed", borderColor: colors.border },
     dayToday: { borderColor: colors.primary },
     dayMarked: { borderStyle: "dashed", borderWidth: 2, borderColor: colors.primary, backgroundColor: colors.muted },

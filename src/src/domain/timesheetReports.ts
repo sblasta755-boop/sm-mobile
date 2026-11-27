@@ -346,7 +346,7 @@ function variance(base: Base, c: Ctx): TimesheetReport {
     const d = s ? (s.dayId ? c.days.find((x) => x.id === s.dayId) : undefined) : c.days.find((x) => x.userId === b.userId && x.workDate === b.date);
     let review: string;
     if (d) review = d.approvalState === "approved" ? "Reviewed" : d.approvalState === "rejected" ? "Rejected" : "Unverified";
-    else if (s) review = s.status === "on_leave" ? "Approved leave" : s.status === "no_show" ? "No show" : "Upcoming";
+    else if (s) review = s.status === "on_leave" ? "Approved leave" : s.status === "site_closed" ? "Site closed" : s.status === "no_show" ? "No show" : "Upcoming";
     else if (onLeave(c, b.userId, b.date, "approved")) review = "Approved leave";
     else review = b.date < c.today ? "No show" : "Upcoming";
     return {

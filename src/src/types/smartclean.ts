@@ -410,6 +410,18 @@ export interface CorrectiveAction {
   timeline: { at: string; actor: string; text: string }[];
 }
 
+export type SiteClosureKind = "holiday" | "maintenance" | "renovation" | "other";
+
+export interface SiteClosure {
+  id?: string;
+  startDate: string;
+  endDate: string;
+  reason: string;
+  kind: SiteClosureKind;
+  /** "organisation" on a closure the site follows from the organisation (read only at the site). */
+  scope?: "organisation";
+}
+
 export interface Site {
   id: string;
   name: string;
@@ -434,6 +446,18 @@ export interface Site {
   // banner and the backend's late clock-in watchdog
   // (app/services/attendance_watchdog.py).
   workingHours?: { start: string; end: string };
+  /** Weekdays the site operates, 0 = Monday ... 6 = Sunday. All seven unless set. */
+  operatingDays?: number[];
+  /** Whether the organisation's public holidays are closed days for this site. */
+  closedOnPublicHolidays?: boolean;
+  /** Dated shutdowns (maintenance, a makeover, a holiday), both dates inclusive. */
+  closures?: SiteClosure[];
+  /** Single dates the site opens whatever the weekdays, holidays and closures say. */
+  openDates?: string[];
+  /** The site's own closures only; `closures` also holds the organisation's. */
+  ownClosures?: SiteClosure[];
+  /** Which calendar fields are the site's own (true) rather than followed from the organisation. */
+  calendarOverride?: { workingHours: boolean; operatingDays: boolean; closedOnPublicHolidays: boolean };
   /** The view the schedule opens on for this site, set by management on the web app. */
   scheduleView?: "list" | "calendar" | "map" | "roster" | null;
   /** workingHours with the shifts that run on from them counted (Day into Night ends when Night does). */

@@ -15,8 +15,10 @@ import { useSmartClean } from "@/features/store";
 import {
   fetchStaffOnboardingQrSvg,
   getStaffOnboardingStatus,
+  deleteUser,
   reopenStaffOnboardingCode,
   revealStaffOnboardingCode,
+  updateSite,
   updateUser,
   type StaffGrant,
 } from "@/api/client";
@@ -24,6 +26,9 @@ import { colors, radius, spacing, typography, themedStyles, useThemeVersion } fr
 import type { StatusTone } from "@/theme";
 import type { DemoUser } from "@/types/smartclean";
 import { appAlert } from "@/components/Dialog";
+import { TeamMemberEditor } from "@/components/TeamMemberEditor";
+import { canManageRole } from "@/domain/managerRanks";
+import { siteOwnerIds } from "@/domain/teamGroups";
 
 /**
  * The manager's team roster, and where an unfinished onboarding is
@@ -59,6 +64,7 @@ export default function ManageTeam() {
   const [qrSvg, setQrSvg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [loadingGrant, setLoadingGrant] = useState(false);
+  const [editing, setEditing] = useState(false);
 
   const [view, setView] = useState<"site" | "role">("site");
   const [openKeys, setOpenKeys] = useState<ReadonlySet<string>>(new Set());
@@ -177,7 +183,84 @@ export default function ManageTeam() {
     }
   }
 
+  // Suspend stops them signing in without removing anything; Reactivate undoes it. Same record-replacing PUT as above.
+  async function setAccountStatus(status: "Suspended" | "Active") {
+    if (!selected || !state.accessToken) return;
+    setBusy(true);
+    try {
+      const raw = selected as DemoUser & { username?: string };
+      await updateUser(state.accessToken, selected.id, {
+        ...raw,
+        displayName: raw.name,
+        username: raw.username ?? raw.email ?? raw.id,
+        email: raw.email ?? `${raw.id}@smartclean.local`,
+        status,
+      });
+      dispatch({ type: "UPDATE_USER", userId: selected.id, patch: { status } as Partial<DemoUser> });
+      setSelected({ ...selected, status } as DemoUser);
+    } catch (err) {
+      appAlert("Could not change the status", err instanceof Error ? err.message : "Try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function confirmSuspend() {
+    if (!selected) return;
+    appAlert(
+      `Suspend ${selected.name}?`,
+      "They will not be able to sign in until you reactivate them. Nothing is removed.",
+      [
+        { text: "Suspend", onPress: () => void setAccountStatus("Suspended") },
+        { text: "Cancel", style: "cancel" },
+      ],
+      "warning",
+    );
+  }
+
+  // Delete asks first; archiving (status Inactive) is the reversible alternative. The server limits this to the
+  // person's own level and below, and a site manager to their own sites.
+  function confirmDelete() {
+    if (!selected || !state.accessToken) return;
+    const target = selected;
+    const token = state.accessToken;
+    appAlert(
+      `Delete ${target.name}?`,
+      "This permanently removes their account and signs them out of every device. To keep the record, archive them instead.",
+      [
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            setBusy(true);
+            void (async () => {
+              try {
+                // Release any site they own first, so none is left pointing at someone who no longer exists.
+                for (const site of state.sites) {
+                  const owners = siteOwnerIds(site as unknown as { ownerId?: string | null; ownerIds?: string[] });
+                  if (owners.includes(target.id)) {
+                    await updateSite(token, site.id, { geofence: { ownerIds: owners.filter((id) => id !== target.id) } });
+                  }
+                }
+                await deleteUser(token, target.id);
+                dispatch({ type: "DELETE_USER", userId: target.id });
+                setSelected(null);
+              } catch (err) {
+                appAlert("Could not delete", err instanceof Error ? err.message : "Try again.");
+              } finally {
+                setBusy(false);
+              }
+            })();
+          },
+        },
+        { text: "Cancel", style: "cancel" },
+      ],
+      "danger",
+    );
+  }
+
   if (selected) {
+    const canManageSelected = canManageRole(currentUser?.role, selected.role);
     const canGrantOnboarding =
       (currentUser?.role === "org_admin" || currentUser?.role === "operations_manager") &&
       selected.role !== "org_admin" &&
@@ -195,6 +278,47 @@ export default function ManageTeam() {
           </View>
           {selected.email && <Text style={styles.muted}>{selected.email}</Text>}
         </Card>
+
+        {canManageSelected && (
+          <View style={styles.actions}>
+            <Button
+              variant="outline"
+              disabled={busy}
+              onPress={() => setEditing(true)}
+              icon={<Ionicons name="create-outline" size={18} color={colors.foreground} />}
+            >
+              Edit
+            </Button>
+            {statusOf(selected) === "Active" && (
+              <Button
+                variant="outline"
+                disabled={busy}
+                onPress={confirmSuspend}
+                icon={<Ionicons name="pause-circle-outline" size={18} color={colors.foreground} />}
+              >
+                Suspend
+              </Button>
+            )}
+            {statusOf(selected) === "Suspended" && (
+              <Button
+                variant="outline"
+                disabled={busy}
+                onPress={() => void setAccountStatus("Active")}
+                icon={<Ionicons name="play-circle-outline" size={18} color={colors.foreground} />}
+              >
+                Reactivate
+              </Button>
+            )}
+            <Button
+              variant="destructive"
+              loading={busy}
+              onPress={confirmDelete}
+              icon={<Ionicons name="trash-outline" size={18} color="#fff" />}
+            >
+              Delete
+            </Button>
+          </View>
+        )}
 
         {canGrantOnboarding && (
           <Card style={styles.detailCard}>
@@ -277,6 +401,22 @@ export default function ManageTeam() {
         <Button variant="ghost" onPress={() => setSelected(null)}>
           Back to team
         </Button>
+
+        {editing && (
+          <TeamMemberEditor
+            user={selected}
+            actorRole={currentUser?.role}
+            accessToken={state.accessToken}
+            staffRoles={state.staffRoles}
+            tableServiceEnabled={!!state.tenant?.tableServiceEnabled}
+            sites={state.sites}
+            onClose={() => setEditing(false)}
+            onSaved={(patch) => {
+              dispatch({ type: "UPDATE_USER", userId: selected.id, patch });
+              setSelected({ ...selected, ...patch });
+            }}
+          />
+        )}
       </Screen>
     );
   }
@@ -451,6 +591,7 @@ function statusOf(user: DemoUser): string {
 }
 
 const styles = themedStyles(() => StyleSheet.create({
+  actions: { gap: spacing.sm, marginBottom: spacing.md },
   switchRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   searchRow: {
     flexDirection: "row",

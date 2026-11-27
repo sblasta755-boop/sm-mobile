@@ -52,6 +52,7 @@ export default function SuperviseProfile() {
       <SettingsSection title="Settings">
         <SettingsRow icon="person-outline" title="Edit profile" onPress={() => router.push("/profile-edit")} />
         <SettingsRow icon="notifications-outline" title="Notifications" onPress={() => router.push("/notification-settings" as never)} />
+        <SettingsRow icon="calendar-outline" title="Organisation and site settings" sub="Operating days, working hours, holidays" onPress={() => router.push("/operations-settings" as never)} />
         <BiometricLockRow />
         <AppearanceRow />
         <SyncRow />

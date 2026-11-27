@@ -20,6 +20,7 @@ import { useCanBook, useScheduleOn } from "@/features/schedule";
 import { useCanPostNotices, useNoticeCalendar, useNoticeboardOn } from "@/features/noticeboard";
 import { useHomePath } from "@/features/roles";
 import { useSmartClean } from "@/features/store";
+import { useClosedDays } from "@/features/useClosedDays";
 import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
 
 const AHEAD_DAYS = 30;
@@ -92,6 +93,11 @@ export default function ScheduleScreen() {
   }, [groups, activeDay, scope]);
   const plotted = pins.filter((p) => p.site.latitude != null && p.site.longitude != null);
 
+  // Days every site in view is shut: nothing can be booked on them.
+  const gridFirst = dateKey(mondayOf(monthStart));
+  const shut = useClosedDays(view === "calendar" ? gridFirst : undefined, view === "calendar" ? dateKey(addDays(mondayOf(monthStart), 41)) : undefined);
+  const viewSiteIds = (scope === "all" && canBook ? state.sites.filter((s) => s.active) : state.sites.filter((s) => s.active && (currentUser?.siteIds ?? []).includes(s.id))).map((s) => s.id);
+  const closedOn = (day: string) => shut.allShut(viewSiteIds.length ? viewSiteIds : state.sites.filter((s) => s.active).map((s) => s.id), day);
   if (!on) return <Redirect href={homePath as never} />;
 
   // Removing a booking only marks it; the person is told when the schedules are sent.
@@ -121,7 +127,9 @@ export default function ScheduleScreen() {
   const busiest = Math.max(1, ...monthDays(monthStart, 1).map(bookedOn));
   const bookingTile = (day: string): DayTileData => {
     const count = bookedOn(day);
-    const label = `${dayHeading(day)}, ${count === 0 ? "no bookings" : `${count} booked`}`;
+    const closed = closedOn(day);
+    const label = `${dayHeading(day)}, ${closed ? `${closed}, ` : ""}${count === 0 ? "no bookings" : `${count} booked`}`;
+    if (count === 0 && closed) return { tone: "muted", disabled: true, label };
     return count === 0 ? { label } : { intensity: count / busiest, badge: count, label };
   };
 
@@ -211,12 +219,14 @@ export default function ScheduleScreen() {
                 { label: "Booked", color: heatColor(colors.card, colors.primary, 0.6) },
                 { label: "Today", ring: true },
                 { label: "Free" },
+                { label: "Closed", color: colors.muted },
               ]}
             />
           </CalendarFrame>
           <Text style={styles.dayHeading}>{dayHeading(pickedDay)}</Text>
           <NoticeChips entries={notices.get(pickedDay)} onOpen={openNotice} />
-          {canBook && !isPastDay(pickedDay) && <Button onPress={() => router.push(`/schedule-book?date=${pickedDay}` as never)}>Book staff on this day</Button>}
+          {closedOn(pickedDay) && <Text style={styles.muted}>{closedOn(pickedDay)}. Nothing can be booked on this day.</Text>}
+          {canBook && !isPastDay(pickedDay) && !closedOn(pickedDay) && <Button onPress={() => router.push(`/schedule-book?date=${pickedDay}` as never)}>Book staff on this day</Button>}
           {noticeboardOn && canPostNotice && !isPastDay(pickedDay) && (
             <Button
               variant="outline"

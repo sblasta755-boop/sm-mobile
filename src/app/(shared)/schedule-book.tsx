@@ -29,6 +29,7 @@ import {
 import { useCanBook, useScheduleOn } from "@/features/schedule";
 import { useHomePath } from "@/features/roles";
 import { useSmartClean } from "@/features/store";
+import { useClosedDays } from "@/features/useClosedDays";
 import {
   colors,
   radius,
@@ -121,12 +122,28 @@ export default function ScheduleBookScreen() {
   const chosenShifts = shifts.filter((s) => shiftIds.includes(s.id));
   const span = shiftSpan(chosenShifts);
 
-  const dates = useMemo(
+  // Days the site is shut are never booked: the calendar greys them and they are left out here too.
+  const spanFirst = pattern === "dates" ? ([...pickedDays].sort()[0] ?? from) : from;
+  const spanLast = pattern === "dates" ? ([...pickedDays].sort().pop() ?? to) : to;
+  const validSpan = !!siteId && /^\d{4}-\d{2}-\d{2}$/.test(spanFirst) && /^\d{4}-\d{2}-\d{2}$/.test(spanLast);
+  const shutLimit = validSpan ? dateKey(addDays(new Date(`${spanFirst}T00:00:00`), 120)) : "";
+  const shutDays = useClosedDays(
+    validSpan ? spanFirst : undefined,
+    validSpan ? (spanLast < shutLimit ? spanLast : shutLimit) : undefined,
+    siteId,
+  );
+  const closedOn = (day: string) => shutDays.forSite(siteId, day);
+  const wanted = useMemo(
     () =>
       pattern === "dates"
-        ? [...pickedDays].sort().slice(0, 31)
+        ? [...pickedDays].sort()
         : daysBetween(from, to, pattern === "weekdays"),
     [from, to, pattern, pickedDays],
+  );
+  const leftOut = wanted.filter((d) => shutDays.forSite(siteId, d));
+  const dates = useMemo(
+    () => wanted.filter((d) => !shutDays.forSite(siteId, d)).slice(0, 31),
+    [wanted, shutDays, siteId],
   );
   // Who is already booked at this site on the chosen days, so the list can say so.
   const [existing, setExisting] = useState<StaffBooking[]>([]);
@@ -508,7 +525,9 @@ export default function ScheduleBookScreen() {
                 <MonthTiles
                   month={calMonth}
                   tile={(day) =>
-                    isPastDay(day) ? { tone: "muted", disabled: true } : {}
+                    isPastDay(day) || closedOn(day)
+                      ? { tone: "muted", disabled: true, label: closedOn(day) ?? undefined }
+                      : {}
                   }
                   selected={pickedDays}
                   onSelect={(day) =>
@@ -519,6 +538,9 @@ export default function ScheduleBookScreen() {
                     )
                   }
                 />
+                {pickedDays.some((d) => closedOn(d)) && (
+                  <Text style={styles.muted}>Closed days are left out.</Text>
+                )}
                 <Text style={styles.muted}>
                   {pickedDays.length === 0
                     ? "Tap the days to book."
@@ -568,6 +590,12 @@ export default function ScheduleBookScreen() {
                   />
                 </View>
               </>
+            )}
+            {pattern !== "dates" && leftOut.length > 0 && (
+              <Text style={styles.muted}>
+                {leftOut.length} closed {leftOut.length === 1 ? "day is" : "days are"} left out
+                {leftOut.length <= 3 ? `: ${leftOut.map((d) => `${d} (${closedOn(d)})`).join(", ")}` : ""}.
+              </Text>
             )}
             {inPast && (
               <Text style={styles.error}>
@@ -755,6 +783,11 @@ export default function ScheduleBookScreen() {
           siteId={siteId}
           onSaved={() => setShiftsVersion((v) => v + 1)}
         />
+      </View>
+      <View style={styles.setup}>
+        <Pressable accessibilityRole="button" onPress={() => router.push("/operations-settings" as never)}>
+          <Text style={styles.link}>Operating days, closures and working hours are in Organisation and site settings</Text>
+        </Pressable>
       </View>
     </Screen>
   );

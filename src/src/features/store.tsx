@@ -158,6 +158,7 @@ type Action =
   | { type: "APPEND_CA_TIMELINE"; id: string; entry: { at: string; actor: string; text: string } }
   | { type: "CREATE_INCIDENT"; incident: Incident }
   | { type: "UPDATE_USER"; userId: string; patch: Partial<DemoUser> }
+  | { type: "DELETE_USER"; userId: string }
   | { type: "MARK_NOTIFICATION_READ"; id: string; all?: boolean }
   | { type: "SIGN_OUT" }
   | { type: "ACCOUNT_BLOCKED"; status: string; billingEmail: string | null };
@@ -349,6 +350,8 @@ function reducer(state: State, action: Action): State {
         ...state,
         users: state.users.map((user) => (user.id === action.userId ? { ...user, ...action.patch } : user)),
       };
+    case "DELETE_USER":
+      return { ...state, users: state.users.filter((user) => user.id !== action.userId) };
     case "MARK_NOTIFICATION_READ":
       return {
         ...state,

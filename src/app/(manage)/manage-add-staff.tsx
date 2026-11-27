@@ -3,6 +3,7 @@ import { router } from "expo-router";
 import { Screen } from "@/components/Screen";
 import { AddMemberFlow, type AddMemberContext } from "@/components/AddMemberFlow";
 import { useSmartClean } from "@/features/store";
+import { assignableManagementRoles } from "@/domain/managerRanks";
 
 /**
  * A manager adds someone to their own organisation and shows them a QR code to scan. The flow itself
@@ -15,6 +16,8 @@ export default function ManageAddStaff() {
 
   const ctx: AddMemberContext = useMemo(() => {
     const ownSites = currentUser?.siteIds ?? [];
+    // Their own level and below: a site manager can add site managers, not operations managers or administrators.
+    const managementRoles = assignableManagementRoles(currentUser?.role).map((r) => r.key);
     return {
       getToken: async () => {
         if (!state.accessToken) throw new Error("You are signed out. Sign in again.");
@@ -22,7 +25,8 @@ export default function ManageAddStaff() {
       },
       staffRoles: state.staffRoles,
       tableServiceEnabled: !!state.tenant?.tableServiceEnabled,
-      canAssignManagement: currentUser?.role === "org_admin",
+      canAssignManagement: managementRoles.some((key) => ["site_manager", "operations_manager", "org_admin"].includes(key)),
+      managementRoles,
       sites: ownSites.length > 0 ? state.sites.filter((s) => ownSites.includes(s.id)) : state.sites,
       recentScope: currentUser?.id ?? "anon",
     };

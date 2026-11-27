@@ -38,8 +38,8 @@ import { colors, spacing, themedStyles, typography, useThemeVersion } from "@/th
  * organisation (platform-onboard), so everything organisation-specific comes in as props: the token to act with, its
  * roles and sites, and whether the actor may hand out the management roles.
  *
- * The roles offered mirror _require_can_assign_role on the backend: only an org_admin may create the management roles,
- * and system_admin is never assignable. Showing a role the server would refuse turns a clear rule into a confusing
+ * The roles offered mirror _require_can_assign_role on the backend: a manager may create management roles at their own
+ * level and below, and system_admin is never assignable. Showing a role the server would refuse turns a clear rule into a confusing
  * error, so the list is filtered rather than the failure explained afterwards.
  */
 
@@ -63,8 +63,10 @@ export type AddMemberContext = {
   getToken: () => Promise<string>;
   staffRoles: StaffRole[];
   tableServiceEnabled: boolean;
-  /** The actor is an org_admin (or acts as one), so the management roles are offered. */
+  /** The actor may hand out management roles, so the Management group is offered. */
   canAssignManagement: boolean;
+  /** Which management roles they may hand out (their own level and below). Everything when left out (a platform operator). */
+  managementRoles?: string[];
   sites: Site[];
   /** Keys the recent roles and sites (person + organisation). */
   recentScope: string;
@@ -110,10 +112,10 @@ export function AddMemberFlow({
       }));
     const supervising = [{ ...SUPERVISOR, sub: "Supervises a site", icon: ROLE_ICON.supervisor, group: "Supervising" }];
     const management = ctx.canAssignManagement
-      ? MANAGEMENT.map((m) => ({ ...m, sub: "Management", icon: ROLE_ICON[m.key], group: "Management" }))
+      ? MANAGEMENT.filter((m) => !ctx.managementRoles || ctx.managementRoles.includes(m.key)).map((m) => ({ ...m, sub: "Management", icon: ROLE_ICON[m.key], group: "Management" }))
       : [];
     return [...field, ...supervising, ...management];
-  }, [ctx.staffRoles, ctx.tableServiceEnabled, ctx.canAssignManagement]);
+  }, [ctx.staffRoles, ctx.tableServiceEnabled, ctx.canAssignManagement, ctx.managementRoles]);
 
   const siteItems: PickerItem[] = useMemo(
     () =>

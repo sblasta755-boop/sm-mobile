@@ -45,6 +45,7 @@ import type {
   WaiterSessionEndReason,
   WorkflowCandidates,
   WorkflowSignPayload,
+  SiteClosure,
 } from "@/types/smartclean";
 import { formatTime } from "@/services/formatDateTime";
 
@@ -808,7 +809,7 @@ export function getAttendanceTimesheet(accessToken: string, start: string, end: 
 }
 
 /** One booking beside what happened, from GET /attendance/vs-schedule. */
-export type ScheduleStatus = "on_time" | "late" | "early_leave" | "in_progress" | "on_leave" | "no_show" | "upcoming";
+export type ScheduleStatus = "on_time" | "late" | "early_leave" | "in_progress" | "on_leave" | "site_closed" | "no_show" | "upcoming";
 
 export interface ScheduleComparison {
   bookingId: string;
@@ -3252,6 +3253,81 @@ export const saveSiteShifts = (
   request<StockShift[]>(
     `/schedule/sites/${encodeURIComponent(siteId)}/shifts`,
     { method: "PUT", body: JSON.stringify({ shifts }) },
+    t,
+  );
+/** The weekdays a site operates and the dates it is shut. Attendance alerts, bookings, recurring tasks and
+ * hourly rounds follow it. */
+export type Holiday = { id: string; date: string; name: string };
+/** The organisation's public holiday calendar. It belongs to no module, so it is always reachable. */
+export const listHolidays = (t: string, year: number) =>
+  request<Holiday[]>(`/org-settings/holidays?year=${year}`, {}, t);
+export const addHoliday = (t: string, date: string, name: string) =>
+  request<Holiday>("/org-settings/holidays", { method: "POST", body: JSON.stringify({ date, name }) }, t);
+export const removeHoliday = (t: string, id: string) =>
+  request<{ ok: boolean }>(`/org-settings/holidays/${id}`, { method: "DELETE" }, t);
+export const seedHolidays = (t: string, year: number) =>
+  request<Holiday[]>(`/org-settings/holidays/seed-za?year=${year}`, { method: "POST" }, t);
+
+export type OrgOperations = {
+  workingHours: { start: string; end: string } | null;
+  operatingDays: number[];
+  closedOnPublicHolidays: boolean;
+  closures: SiteClosure[];
+};
+/** The organisation's default working hours, operating days and company-wide closures. */
+export const getOrgOperations = (t: string) => request<OrgOperations>("/org-settings/operations", {}, t);
+export const saveOrgOperations = (t: string, body: OrgOperations & { cancelConflictingBookings?: boolean }) =>
+  request<OrgOperations>("/org-settings/operations", { method: "PUT", body: JSON.stringify(body) }, t);
+export const getOrgOperationsConflicts = (t: string, body: OrgOperations) =>
+  request<{ total: number; days: { date: string; count: number }[] }>(
+    "/org-settings/operations/conflicts",
+    { method: "POST", body: JSON.stringify(body) },
+    t,
+  );
+/** A site's own calendar. A null workingHours, operatingDays or closedOnPublicHolidays follows the organisation. */
+export type SiteOperationsPayload = {
+  workingHours: { start: string; end: string } | null;
+  operatingDays: number[] | null;
+  closedOnPublicHolidays: boolean | null;
+  closures: SiteClosure[];
+  openDates: string[];
+  cancelConflictingBookings?: boolean;
+};
+export const saveSiteOperations = (t: string, siteId: string, body: SiteOperationsPayload) =>
+  request<Site>(`/sites/${encodeURIComponent(siteId)}/operations`, { method: "PUT", body: JSON.stringify(body) }, t);
+export const getSiteOperationsConflicts = (t: string, siteId: string, body: SiteOperationsPayload) =>
+  request<{ total: number; days: { date: string; count: number }[] }>(
+    `/sites/${encodeURIComponent(siteId)}/operations/conflicts`,
+    { method: "POST", body: JSON.stringify(body) },
+    t,
+  );
+export type ClosedDays = Record<string, Record<string, { kind: string; reason: string }>>;
+/** The days each visible site is shut in a range (at most about three months), with the reason, public holidays included. */
+export const getClosedDays = (t: string, start: string, end: string, siteId?: string) =>
+  request<{ days: ClosedDays }>(
+    `/sites/closed-days?start=${start}&end=${end}${siteId ? `&siteId=${encodeURIComponent(siteId)}` : ""}`,
+    {},
+    t,
+  );
+/** Upcoming bookings that would land on a closed day if this calendar were saved. Changes nothing. */
+export const getOperatingCalendarConflicts = (
+  t: string,
+  siteId: string,
+  body: { operatingDays: number[]; closedOnPublicHolidays: boolean; closures: SiteClosure[]; openDates: string[] },
+) =>
+  request<{ total: number; days: { date: string; count: number }[] }>(
+    `/sites/${encodeURIComponent(siteId)}/operating-calendar/conflicts`,
+    { method: "POST", body: JSON.stringify(body) },
+    t,
+  );
+export const saveSiteOperatingCalendar = (
+  t: string,
+  siteId: string,
+  body: { operatingDays: number[]; closedOnPublicHolidays: boolean; closures: SiteClosure[]; openDates: string[]; cancelConflictingBookings?: boolean },
+) =>
+  request<Site>(
+    `/sites/${encodeURIComponent(siteId)}/operating-calendar`,
+    { method: "PUT", body: JSON.stringify(body) },
     t,
   );
 /** Change or cancel several people's bookings on several days in one go. Send only what to change. */
