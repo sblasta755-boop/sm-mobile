@@ -163,6 +163,8 @@ export interface DemoUser {
   maintenance?: { access?: boolean; handle?: boolean; approve?: boolean; pay?: boolean };
   /** May onboard new staff (add a person, approve their scan). Set by an admin; the server enforces it. */
   canOnboardStaff?: boolean;
+  /** Per site, which staff roles a site manager or supervisor books; no entry means every role. */
+  roleScopes?: Record<string, { mode: "all" | "roles"; roles: string[]; extraRoles: string[] }>;
   profilePhotoDataUrl?: string;
   notificationPrefs?: Partial<NotificationPrefs> & Record<string, unknown>;
   // ISO timestamp of account creation - always sent by the backend

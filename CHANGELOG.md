@@ -3,6 +3,32 @@
 Own versioning (not the store version in `app.json`): `MAJOR.MINOR.PATCH`. MAJOR = breaking change, MINOR = new feature, PATCH = fix or internal change.
 Newest first. One entry per piece of work.
 
+## 0.14.0 - 2026-11-27
+### Changed
+- The Maintenance job screen now matches the PWA's job panel: the job name with its site, place and when it was reported; a "what is needed next" card with a progress bar, what is stopping it, one main button, Remind and More actions; then folding sections for What is wrong (with a photo grid you can open full size), Quotes, What it cost, Payments and Activity (shown in words, newest first, with a note box). Folded or open is remembered on the phone.
+- The step sheets are the PWA's too: Add a quote, Review the quote, Book the contractor, Close the job, Record the payment, the reason sheets, Skip, Close early and Send a reminder. They slide up with the main button on top and Cancel under it.
+- Actions follow the same rules as the PWA (one main action, the rest under More, skip and close-early for people given the right).
+### Notes
+- A quotation or proof of payment is added by photographing it; choosing a PDF is not on the phone.
+- The day and time for a contractor visit are typed or picked from the quick choices.
+
+## 0.13.0 - 2026-11-27
+### Added
+- Maintenance Access tab (administrators and operations managers): who can access, handle, approve, pay and skip or close early, a switch per person with search, how skipping works, and the reminder settings. Same as the PWA.
+### Changed
+- The Maintenance list now matches the PWA: Jobs / Contractors switch, "N open jobs" line, attention tiles (Critical, To pay, To approve, On hold, To check, Need a quote), round queue chips with counts, a search box once there are more than five jobs, job cards with a severity bar, time since update, site/place/equipment line, next step, round pills, photo count and chevron, and a floating "Report fault" button. Empty and loading states match too.
+- Job state names and queue names use the same words as the PWA ("Being looked into", "Ready to check", "To approve").
+- Contractors and the new Access tab now open inside the Maintenance screen, as on the PWA. Contractors moved from its own screen into the tab.
+- Reminder settings now sit inside the Access tab (as on the PWA) instead of a separate screen and a button on the list. Maintenance reports are no longer on this screen; they are in Reports, as on the PWA.
+
+## 0.12.0 - 2026-11-27
+### Changed
+- Public holidays at a site: follow the organisation, close, or stay open on public holidays; open a single holiday for that site; add holidays only that site keeps.
+- Public holidays at a site now has a "Manage holidays for the organisation" button that switches to the organisation view, where they are edited.
+### Added
+- A site manager or supervisor can be limited to certain staff roles at their site (for example only cleaners), with optional extra roles they may also book. Set by an administrator or operations manager in Organisation and site settings > Staff roles: pick a site, then Edit a person. The organisation view lists who is limited across all sites.
+- Booking staff lists only the roles you look after; if you have extra roles, "Include other roles you can book" widens the list.
+
 ## 0.11.1 - 2026-11-27
 ### Changed
 - Suspending someone from the Team tab asks first.

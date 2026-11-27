@@ -14,7 +14,6 @@ import { useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as Contacts from "expo-contacts";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Screen } from "@/components/Screen";
 import { Button } from "@/components/Button";
 import { appAlert } from "@/components/Dialog";
 import { PickerSheet, type PickerItem } from "@/components/PickerSheet";
@@ -50,7 +49,7 @@ import {
 } from "@/theme";
 
 /** The contractors maintenance calls on: its own list, with one-tap call and WhatsApp, and add, edit and remove. */
-export default function ContractorsScreen() {
+export function ContractorsView() {
   useThemeVersion();
   const { state } = useSmartClean();
   const token = state.accessToken;
@@ -99,7 +98,7 @@ export default function ContractorsScreen() {
   const kinds = useMemo(() => categoriesInUse(active), [active]);
 
   return (
-    <Screen title="Contractors">
+    <>
       <View style={styles.body}>
         <Button
           icon={
@@ -268,7 +267,7 @@ export default function ContractorsScreen() {
           void load();
         }}
       />
-    </Screen>
+    </>
   );
 }
 

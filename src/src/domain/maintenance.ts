@@ -2,29 +2,29 @@ import type { MaintenanceSeverity, MaintenanceState } from "../api/client";
 
 export const MAINTENANCE_STATE_LABEL: Record<MaintenanceState, string> = {
   reported: "Reported",
-  investigating: "Investigating",
-  awaiting_quote: "Awaiting quote",
-  awaiting_approval: "Awaiting approval",
+  investigating: "Being looked into",
+  awaiting_quote: "Waiting for a quote",
+  awaiting_approval: "Waiting for approval",
   approved: "Approved",
-  scheduled: "Scheduled",
-  in_progress: "In progress",
-  awaiting_verification: "To verify",
-  completed: "Completed",
-  no_action: "No action needed",
+  scheduled: "Contractor booked",
+  in_progress: "Repair under way",
+  awaiting_verification: "Ready to check",
+  completed: "Closed",
+  no_action: "No repair needed",
   rejected: "Rejected",
   cancelled: "Cancelled",
-  rework: "Rework",
+  rework: "Needs redoing",
 };
 
 export const MAINTENANCE_QUEUES = [
-  { value: "open", label: "Open" },
+  { value: "open", label: "All open" },
   { value: "mine", label: "Mine" },
+  { value: "payments", label: "To pay" },
+  { value: "awaiting_approval", label: "To approve" },
   { value: "need_quote", label: "Need a quote" },
-  { value: "awaiting_approval", label: "Approval" },
   { value: "on_hold", label: "On hold" },
   { value: "scheduled", label: "Scheduled" },
-  { value: "verify", label: "To verify" },
-  { value: "payments", label: "To pay" },
+  { value: "verify", label: "To check" },
   { value: "closed", label: "Closed" },
 ] as const;
 
@@ -55,7 +55,9 @@ export function maintenanceSeverityTone(
     ? "danger"
     : severity === "high"
       ? "warning"
-      : "muted";
+      : severity === "medium"
+        ? "info"
+        : "muted";
 }
 
 export function formatRand(value: number | null | undefined): string {
@@ -221,4 +223,79 @@ export function sortJobs<T extends JobLike>(jobs: T[], caps: Caps): T[] {
   return [...jobs].sort(
     (a, b) => rank(a) - rank(b) || b.updatedAt.localeCompare(a.updatedAt),
   );
+}
+
+// ---- The list screen: queue chips, attention tiles, empty messages (same rules as the PWA) ----
+
+type QueueKey = (typeof MAINTENANCE_QUEUES)[number]["value"];
+type Counts = Partial<Record<QueueKey | "critical", number>> | null;
+
+/** The queue chips worth showing: the always-useful ones, plus any with something in them, plus the one open now. */
+export function visibleQueues(counts: Counts, current: QueueKey) {
+  const always: QueueKey[] = ["open", "mine", "closed"];
+  return MAINTENANCE_QUEUES.filter((q) =>
+    // "To pay" is money: never shown before the counts arrive, and only when something is waiting.
+    q.value === "payments"
+      ? q.value === current || (!!counts && (counts.payments ?? 0) > 0)
+      : always.includes(q.value) ||
+        q.value === current ||
+        !counts ||
+        (counts[q.value] ?? 0) > 0,
+  ).map((q) => ({
+    value: q.value,
+    label: q.label,
+    count: counts ? (counts[q.value] ?? 0) : null,
+  }));
+}
+
+export type AttentionTile = {
+  queue: QueueKey;
+  label: string;
+  count: number;
+  tone: "bad" | "warn" | "info";
+};
+
+export function attentionTiles(
+  counts: (Counts & { payments_overdue?: number }) | null,
+  caps: { handle: boolean; approve: boolean; pay: boolean } | undefined,
+): AttentionTile[] {
+  if (!counts || !caps) return [];
+  const n = (k: QueueKey | "critical") => counts[k] ?? 0;
+  const tiles: AttentionTile[] = [];
+  if (n("critical") > 0)
+    tiles.push({ queue: "open", label: "Critical", count: n("critical"), tone: "bad" });
+  if (caps.pay && n("payments") > 0)
+    tiles.push({
+      queue: "payments",
+      label: "To pay",
+      count: n("payments"),
+      tone: (counts.payments_overdue ?? 0) > 0 ? "bad" : "warn",
+    });
+  if (caps.approve && n("awaiting_approval") > 0)
+    tiles.push({ queue: "awaiting_approval", label: "To approve", count: n("awaiting_approval"), tone: "warn" });
+  if (n("on_hold") > 0)
+    tiles.push({ queue: "on_hold", label: "On hold", count: n("on_hold"), tone: "bad" });
+  if (caps.handle && n("verify") > 0)
+    tiles.push({ queue: "verify", label: "To check", count: n("verify"), tone: "info" });
+  if (caps.handle && n("need_quote") > 0)
+    tiles.push({ queue: "need_quote", label: "Need a quote", count: n("need_quote"), tone: "info" });
+  return tiles;
+}
+
+/** What an empty queue says, so it never looks broken. */
+export function emptyMessage(queue: QueueKey): { title: string; hint: string } {
+  switch (queue) {
+    case "closed":
+      return { title: "Nothing closed yet", hint: "Finished jobs end up here." };
+    case "mine":
+      return { title: "Nothing of yours", hint: "Jobs you report or handle show up here." };
+    case "awaiting_approval":
+      return { title: "Nothing to approve", hint: "Quotes waiting for a decision appear here." };
+    case "payments":
+      return { title: "Nothing to pay", hint: "Deposits and invoices waiting for payment appear here." };
+    case "on_hold":
+      return { title: "Nothing on hold", hint: "Jobs stopped by an unpaid deposit or invoice appear here." };
+    default:
+      return { title: "All clear", hint: "No faults waiting. Report one if you spot something." };
+  }
 }

@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from "react-native";
 import type { MaintenanceTone } from "@/domain/maintenance";
-import { colors, radius, spacing, typography, themedStyles, useThemeVersion } from "@/theme";
+import { colors, radius, typography, themedStyles, useThemeVersion } from "@/theme";
 
 /** A small coloured label for a job's state, urgency or hold. */
 export function MaintenancePill({ label, tone }: { label: string; tone: MaintenanceTone }) {
@@ -14,14 +14,14 @@ export function MaintenancePill({ label, tone }: { label: string; tone: Maintena
   }[tone];
   return (
     <View style={[styles.pill, { backgroundColor: palette.bg }]}>
-      <Text style={[styles.text, { color: palette.fg }]}>{label}</Text>
+      <Text style={[styles.text, { color: palette.fg }]}>{label.charAt(0).toUpperCase() + label.slice(1)}</Text>
     </View>
   );
 }
 
 const styles = themedStyles(() =>
   StyleSheet.create({
-    pill: { borderRadius: radius.md, paddingHorizontal: spacing.sm, paddingVertical: 2 },
-    text: { fontSize: typography.tiny, fontWeight: "700", textTransform: "capitalize" },
+    pill: { borderRadius: radius.round, paddingHorizontal: 10, paddingVertical: 2 },
+    text: { fontSize: typography.small, fontWeight: "600" },
   }),
 );

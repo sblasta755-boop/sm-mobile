@@ -28,6 +28,7 @@ import {
 } from "@/domain/bookingBulk";
 import { useCanBook, useScheduleOn } from "@/features/schedule";
 import { useHomePath } from "@/features/roles";
+import { hasExtraRoles } from "@/domain/roleScope";
 import { useSmartClean } from "@/features/store";
 import { useClosedDays } from "@/features/useClosedDays";
 import {
@@ -60,7 +61,7 @@ function shiftSpan(
 /** Book people onto a site for one or more days, with instructions. Nothing is sent until you press Send schedules. */
 export default function ScheduleBookScreen() {
   useThemeVersion(); // re-render with the new colours when the theme changes
-  const { state } = useSmartClean();
+  const { state, currentUser } = useSmartClean();
   const on = useScheduleOn();
   const canBook = useCanBook();
   const homePath = useHomePath();
@@ -72,8 +73,11 @@ export default function ScheduleBookScreen() {
   const sites = state.sites.filter((s) => s.active);
   const [siteId, setSiteId] = useState(sites[0]?.id ?? "");
   const [people, setPeople] = useState<
-    { id: string; name: string; role: string }[]
+    { id: string; name: string; role: string; inPrimary?: boolean }[]
   >([]);
+  // A manager limited to certain roles sees those by default; with extra roles they can widen the list.
+  const extraRoles = hasExtraRoles(currentUser?.roleScopes, siteId);
+  const [includeOthers, setIncludeOthers] = useState(false);
   const [chosen, setChosen] = useState<string[]>([]);
   const [from, setFrom] = useState(startDay);
   const [to, setTo] = useState(startDay);
@@ -99,11 +103,15 @@ export default function ScheduleBookScreen() {
 
   useEffect(() => {
     if (!state.accessToken || !siteId) return;
-    setChosen([]);
-    listBookablePeople(state.accessToken, siteId)
-      .then(setPeople)
+    listBookablePeople(state.accessToken, siteId, includeOthers && extraRoles ? "all" : "mine")
+      .then((rows) => {
+        setPeople(rows);
+        // Keep ticks that are still listed; drop the rest.
+        setChosen((ids) => ids.filter((id) => rows.some((p) => p.id === id)));
+      })
       .catch(() => setPeople([]));
-  }, [state.accessToken, siteId]);
+  }, [state.accessToken, siteId, includeOthers, extraRoles]);
+  useEffect(() => setIncludeOthers(false), [siteId]);
 
   useEffect(() => {
     if (!state.accessToken || !siteId) return;
@@ -332,6 +340,19 @@ export default function ScheduleBookScreen() {
             )}
 
             <Text style={styles.heading}>Who? ({picked.length} chosen)</Text>
+            {extraRoles && (
+              <Pressable
+                style={styles.person}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: includeOthers }}
+                onPress={() => setIncludeOthers((v) => !v)}
+              >
+                <View style={[styles.box, includeOthers && styles.boxOn]}>
+                  {includeOthers && <Ionicons name="checkmark" size={14} color={colors.white} />}
+                </View>
+                <Text style={styles.personName}>Include other roles you can book</Text>
+              </Pressable>
+            )}
             {people.length > 6 && (
               <View style={styles.search}>
                 <Ionicons

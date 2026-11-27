@@ -3,6 +3,7 @@ import { Redirect } from "expo-router";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Screen } from "@/components/Screen";
 import { OperatingDaysSetup } from "@/components/OperatingDaysSetup";
+import { RoleScopeSetup } from "@/components/RoleScopeSetup";
 import { PublicHolidaysSetup } from "@/components/PublicHolidaysSetup";
 import { WorkingHoursSetup } from "@/components/WorkingHoursSetup";
 import { getOrgOperations, type OrgOperations } from "@/api/client";
@@ -17,6 +18,7 @@ const SECTIONS = [
   ["days", "Operating days"],
   ["hours", "Working hours"],
   ["holidays", "Public holidays"],
+  ["roles", "Staff roles"],
 ] as const;
 type Section = (typeof SECTIONS)[number][0];
 const MANAGERS = ["org_admin", "operations_manager", "site_manager", "supervisor"];
@@ -94,7 +96,8 @@ export default function OperationsSettingsScreen() {
       <Text style={styles.scopeName}>{site ? site.name : "Organisation default"}</Text>
       {section === "days" && <OperatingDaysSetup key={`days-${scope}`} site={site} org={org} canEditOrg={canEditOrg} onOrgSaved={setOrg} />}
       {section === "hours" && <WorkingHoursSetup key={`hours-${scope}`} site={site} org={org} canEditOrg={canEditOrg} onOrgSaved={setOrg} />}
-      {section === "holidays" && <PublicHolidaysSetup readOnly={!canEditOrg || !!site} />}
+      {section === "roles" && <RoleScopeSetup key={`roles-${scope}`} site={site} canEdit={canEditOrg} onOpenSite={setScope} />}
+      {section === "holidays" && <PublicHolidaysSetup key={`holidays-${scope}`} site={site} org={org} readOnly={!canEditOrg} onManage={canEditOrg && site ? () => setScope(ORG) : undefined} />}
     </Screen>
   );
 }

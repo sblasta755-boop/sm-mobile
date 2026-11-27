@@ -80,6 +80,7 @@ export function Screen({
   backTo,
   /** Pinned under the content, above the tab bar: a screen's own actions (for example Save). */
   footer,
+  overlay,
 }: {
   children: ReactNode;
   title?: string;
@@ -87,6 +88,8 @@ export function Screen({
   scroll?: boolean;
   backTo?: string;
   footer?: ReactNode;
+  /** Floats over the content, bottom right (a floating action button). Clears the system bar when there is no tab bar. */
+  overlay?: ReactNode;
 }) {
   useThemeVersion();
   const { state, currentUser } = useSmartClean();
@@ -217,6 +220,18 @@ export function Screen({
       </Content>
 
       {footer ? <View style={styles.footer}>{footer}</View> : null}
+
+      {overlay ? (
+        <View
+          pointerEvents="box-none"
+          style={[
+            styles.overlay,
+            { bottom: spacing.lg + (footer || !showBack ? 0 : insets.bottom) },
+          ]}
+        >
+          {overlay}
+        </View>
+      ) : null}
 
       <ProfileMenuSheet visible={menuOpen} onClose={() => setMenuOpen(false)} />
     </View>
@@ -402,6 +417,7 @@ const styles = themedStyles(() => StyleSheet.create({
   content: {
     flex: 1,
   },
+  overlay: { position: "absolute", right: spacing.lg },
   contentContainer: {
     padding: spacing.lg,
     paddingBottom: spacing.xxl,

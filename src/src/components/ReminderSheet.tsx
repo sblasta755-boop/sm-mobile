@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Button } from "@/components/Button";
+import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import type { JobReminders, ReminderPriority } from "@/api/client";
+import { Field, FieldLabel, Hint, Panel, PillButton, tint } from "@/components/maintenance/JobKit";
 import { fuzzyFilter } from "@/domain/fuzzySearch";
 import {
   PRIORITY_HINT,
@@ -19,6 +19,7 @@ const roleText = (role: string) => role.replace(/_/g, " ");
 /**
  * Remind the people this job is waiting on: choose who (everyone by default), how urgent, and say why. A priority that
  * cannot be sent yet says when it can. The server checks every rule again; this only shows what it worked out.
+ * Same as the PWA's reminder sheet.
  */
 export function ReminderSheet({
   reminders,
@@ -32,7 +33,6 @@ export function ReminderSheet({
   onClose: () => void;
 }) {
   useThemeVersion();
-  const insets = useSafeAreaInsets();
   const { targets } = reminders;
   const [chosen, setChosen] = useState<string[]>(targets.map((t) => t.userId));
   const [priority, setPriority] = useState<ReminderPriority>("normal");
@@ -54,117 +54,134 @@ export function ReminderSheet({
   };
 
   return (
-    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
-      <View style={styles.backdrop}>
-        <View style={[styles.sheet, { paddingBottom: insets.bottom + spacing.lg }]}>
-          <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.body}>
-            <Text style={styles.title}>Send a reminder</Text>
-            <Text style={styles.muted}>{`About "${jobTitle}". They get a notification, and it is kept in the job's history.`}</Text>
-
-            <Text style={styles.heading}>Who to remind</Text>
-            {targets.length > 1 && (
-              <Pressable onPress={() => setChosen(allOn ? [] : targets.map((t) => t.userId))} accessibilityRole="button">
-                <Text style={styles.link}>{allOn ? "Everyone chosen. Clear" : `${chosen.length} of ${targets.length}. Choose everyone`}</Text>
-              </Pressable>
-            )}
-            {targets.length > 6 && (
-              <TextInput
-                style={styles.input}
-                value={query}
-                onChangeText={setQuery}
-                placeholder="Find a person"
-                placeholderTextColor={colors.mutedForeground}
-                accessibilityLabel="Find a person"
-              />
-            )}
-            {shown.map((t) => {
-              const on = chosen.includes(t.userId);
-              return (
-                <Pressable
-                  key={t.userId}
-                  onPress={() => toggle(t.userId)}
-                  accessibilityRole="checkbox"
-                  accessibilityState={{ checked: on }}
-                  style={[styles.person, on && styles.personOn]}
-                >
+    <Panel
+      title="Send a reminder"
+      description={`About "${jobTitle}". They get a notification, and it is kept in the job's activity.`}
+      onClose={onClose}
+      footer={
+        <>
+          <PillButton label={busy ? "Sending…" : "Send reminder"} disabled={!canSend || busy} onPress={() => void send()} />
+          <PillButton label="Cancel" variant="outline" disabled={busy} onPress={onClose} />
+        </>
+      }
+    >
+      <View style={styles.group}>
+        <Text style={styles.legend}>Who to remind</Text>
+        {targets.length > 1 ? (
+          <View style={styles.between}>
+            <Text style={styles.small}>{allOn ? "Everyone" : `${chosen.length} of ${targets.length}`}</Text>
+            <Pressable accessibilityRole="button" onPress={() => setChosen(allOn ? [] : targets.map((t) => t.userId))}>
+              <Text style={styles.link}>{allOn ? "Clear" : "Choose everyone"}</Text>
+            </Pressable>
+          </View>
+        ) : null}
+        {targets.length > 6 ? (
+          <Field placeholder="Find a person" accessibilityLabel="Find a person" value={query} onChangeText={setQuery} />
+        ) : null}
+        <View style={styles.people}>
+          {shown.map((t) => {
+            const on = chosen.includes(t.userId);
+            return (
+              <Pressable
+                key={t.userId}
+                onPress={() => toggle(t.userId)}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: on }}
+                style={[styles.person, on && styles.personOn]}
+              >
+                <View style={[styles.box, on && styles.boxOn]}>
+                  {on ? <Ionicons name="checkmark" size={12} color={colors.primaryForeground} /> : null}
+                </View>
+                <View style={styles.flex}>
                   <Text style={styles.personName}>{t.name}</Text>
-                  <Text style={styles.muted}>{`${roleText(t.role)} · ${t.why}`}</Text>
-                </Pressable>
-              );
-            })}
-
-            <Text style={styles.heading}>How urgent</Text>
-            <View style={styles.grid}>
-              {PRIORITY_ORDER.map((p) => {
-                const choice = choices[p];
-                const on = priority === p;
-                return (
-                  <Pressable
-                    key={p}
-                    disabled={!choice.ok}
-                    onPress={() => setPriority(p)}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: on, disabled: !choice.ok }}
-                    style={[styles.pri, on && { borderColor: priorityColor(p), borderWidth: 2 }, !choice.ok && { opacity: 0.5 }]}
-                  >
-                    <View style={styles.priTop}>
-                      <View style={[styles.dot, { backgroundColor: priorityColor(p) }]} />
-                      <Text style={styles.personName}>{PRIORITY_LABEL[p]}</Text>
-                    </View>
-                    <Text style={styles.muted}>{choice.ok ? PRIORITY_HINT[p] : choice.note || "Not available yet"}</Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-            <Text style={styles.muted}>
-              {`After a ${PRIORITY_LABEL[priority].toLowerCase()} reminder, the same person can be reminded again at that level after ${waitText(reminders.priorities.find((p) => p.id === priority)?.waitMinutes ?? 0)}.`}
-              {reminders.dailyLeft <= 3 ? ` You have ${reminders.dailyLeft} left today on this job.` : ""}
-            </Text>
-
-            <Text style={styles.heading}>{need > 0 ? "Message" : "Message (optional)"}</Text>
-            <TextInput
-              style={[styles.input, styles.multiline]}
-              value={message}
-              onChangeText={setMessage}
-              multiline
-              placeholder={need > 0 ? "Say why it matters" : "Anything they should know"}
-              placeholderTextColor={colors.mutedForeground}
-              accessibilityLabel="Message"
-            />
-            {need > 0 && message.trim().length < need ? (
-              <Text style={styles.muted}>{`A ${PRIORITY_LABEL[priority].toLowerCase()} reminder needs a reason of at least ${need} characters.`}</Text>
-            ) : null}
-
-            <Button loading={busy} disabled={!canSend} onPress={() => void send()}>
-              Send reminder
-            </Button>
-            <Button variant="ghost" disabled={busy} onPress={onClose}>
-              Cancel
-            </Button>
-          </ScrollView>
+                  <Text style={styles.personSub}>{`${roleText(t.role)} · ${t.why}`}</Text>
+                </View>
+              </Pressable>
+            );
+          })}
         </View>
       </View>
-    </Modal>
+
+      <View style={styles.group}>
+        <Text style={styles.legend}>How urgent</Text>
+        <View style={styles.grid}>
+          {PRIORITY_ORDER.map((p) => {
+            const choice = choices[p];
+            const on = priority === p;
+            const c = priorityColor(p);
+            return (
+              <Pressable
+                key={p}
+                disabled={!choice.ok}
+                onPress={() => setPriority(p)}
+                accessibilityRole="button"
+                accessibilityState={{ selected: on, disabled: !choice.ok }}
+                style={[
+                  styles.pri,
+                  on && { borderColor: c, backgroundColor: tint(c, 0.1), borderWidth: 2 },
+                  !choice.ok && { opacity: 0.5 },
+                ]}
+              >
+                <View style={styles.priTop}>
+                  <View style={[styles.dot, { backgroundColor: c }]} />
+                  <Text style={[styles.priName, on && { color: c }]}>{PRIORITY_LABEL[p]}</Text>
+                </View>
+                <Text style={styles.small}>{choice.ok ? PRIORITY_HINT[p] : choice.note || "Not available yet"}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+        <Hint>
+          {`After a ${PRIORITY_LABEL[priority].toLowerCase()} reminder, the same person can be reminded again at that level after ${waitText(reminders.priorities.find((p) => p.id === priority)?.waitMinutes ?? 0)}.`}
+          {reminders.dailyLeft <= 3 ? ` You have ${reminders.dailyLeft} left today on this job.` : ""}
+        </Hint>
+      </View>
+
+      <View style={styles.field}>
+        <FieldLabel>{need > 0 ? "Message" : "Message (optional)"}</FieldLabel>
+        <Field
+          multiline
+          value={message}
+          onChangeText={setMessage}
+          placeholder={need > 0 ? "Say why it matters" : "Anything they should know"}
+          accessibilityLabel="Message"
+        />
+        {need > 0 && message.trim().length < need ? (
+          <Hint>{`A ${PRIORITY_LABEL[priority].toLowerCase()} reminder needs a reason of at least ${need} characters.`}</Hint>
+        ) : null}
+      </View>
+    </Panel>
   );
 }
 
 const styles = themedStyles(() =>
   StyleSheet.create({
-    backdrop: { flex: 1, justifyContent: "flex-end", backgroundColor: colors.overlay },
-    sheet: { maxHeight: "92%", backgroundColor: colors.background, borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg },
-    body: { padding: spacing.lg, gap: spacing.sm },
-    title: { fontSize: typography.h2, fontWeight: "800", color: colors.foreground },
-    heading: { fontSize: typography.body, fontWeight: "700", color: colors.foreground, marginTop: spacing.sm },
-    muted: { fontSize: typography.small, color: colors.mutedForeground },
-    link: { fontSize: typography.small, fontWeight: "700", color: colors.primary },
-    input: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, fontSize: typography.body, color: colors.foreground, backgroundColor: colors.card },
-    multiline: { minHeight: 80, textAlignVertical: "top" },
-    person: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: spacing.md, backgroundColor: colors.card, gap: 2 },
-    personOn: { borderColor: colors.primary, borderWidth: 2 },
-    personName: { fontSize: typography.body, fontWeight: "700", color: colors.foreground },
+    flex: { flex: 1, minWidth: 0 },
+    group: { gap: spacing.sm },
+    field: { gap: 6 },
+    legend: { fontSize: typography.body, fontWeight: "600", color: colors.foreground },
+    small: { fontSize: typography.small, color: colors.mutedForeground },
+    between: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.sm },
+    link: { fontSize: typography.small, fontWeight: "600", color: colors.primary },
+    people: { gap: 4 },
+    person: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: spacing.md,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: spacing.md,
+    },
+    personOn: { borderColor: colors.primary, backgroundColor: tint(colors.primary, 0.05) },
+    box: { width: 18, height: 18, marginTop: 2, alignItems: "center", justifyContent: "center", borderRadius: 4, borderWidth: 1, borderColor: colors.border },
+    boxOn: { borderColor: colors.primary, backgroundColor: colors.primary },
+    personName: { fontSize: typography.body, fontWeight: "500", color: colors.foreground },
+    personSub: { fontSize: typography.small, color: colors.mutedForeground, textTransform: "capitalize" },
     grid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
-    pri: { flexBasis: "47%", flexGrow: 1, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: spacing.md, backgroundColor: colors.card, gap: 2 },
-    priTop: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
-    dot: { width: 10, height: 10, borderRadius: 5 },
+    pri: { flexBasis: "47%", flexGrow: 1, gap: 4, borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, padding: spacing.md },
+    priTop: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+    priName: { fontSize: typography.body, fontWeight: "600", color: colors.foreground },
+    dot: { width: 10, height: 10, borderRadius: radius.round },
   }),
 );

@@ -1,7 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
-import { Redirect } from "expo-router";
-import { Screen } from "@/components/Screen";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { appAlert } from "@/components/Dialog";
@@ -26,7 +24,7 @@ type Form = Record<ReminderPriority, string> & { maxPerJobPerDay: string };
  * at each priority, which priority stops people with a pop-up, and a daily limit. A site can have its own direction.
  * Administrators and operations managers only, like the web Access tab.
  */
-export default function ReminderSettingsScreen() {
+export function ReminderSettingsPanel() {
   useThemeVersion();
   const { state, currentUser } = useSmartClean();
   const token = state.accessToken;
@@ -66,7 +64,6 @@ export default function ReminderSettingsScreen() {
 
   const errors = settingsErrors(form);
   const shownSites = useMemo(() => fuzzyFilter(sites, query, (s) => [s.name]), [sites, query]);
-  if (!owner) return <Redirect href={"/maintenance" as never} />;
 
   const cycle = (id: string) => {
     const order = [INHERIT, ...DIRECTIONS];
@@ -96,7 +93,7 @@ export default function ReminderSettingsScreen() {
   };
 
   return (
-    <Screen title="Reminder settings">
+    <>
       <View style={styles.stack}>
         <Text style={styles.muted}>
           Lets the person handling a job chase the people who approve or pay, and the other way round, without being able to spam them.
@@ -160,7 +157,7 @@ export default function ReminderSettingsScreen() {
           Save reminder settings
         </Button>
       </View>
-    </Screen>
+    </>
   );
 }
 

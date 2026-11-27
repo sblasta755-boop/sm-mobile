@@ -3207,10 +3207,23 @@ export const listSiteBookings = (t: string, start: string, end: string, siteId?:
     {},
     t,
   );
-export const listBookablePeople = (t: string, siteId: string) =>
-  request<{ id: string; name: string; role: string }[]>(
-    `/schedule/people?siteId=${encodeURIComponent(siteId)}`,
+/** "mine" lists only the roles the signed-in manager looks after; "all" adds their extra roles. */
+export const listBookablePeople = (t: string, siteId: string, scope: "mine" | "all" = "mine") =>
+  request<{ id: string; name: string; role: string; inPrimary?: boolean }[]>(
+    `/schedule/people?siteId=${encodeURIComponent(siteId)}&scope=${scope}`,
     {},
+    t,
+  );
+/** Which staff roles a site manager or supervisor books at one site. mode "all" clears the limit. */
+export const setRoleScope = (
+  t: string,
+  userId: string,
+  siteId: string,
+  scope: { mode: "all" | "roles"; roles: string[]; extraRoles: string[] },
+) =>
+  request<Record<string, unknown>>(
+    `/users/${encodeURIComponent(userId)}/role-scope/${encodeURIComponent(siteId)}`,
+    { method: "PUT", body: JSON.stringify(scope) },
     t,
   );
 /** A whole roster week in one send: new bookings, changes and cancellations. Each person is told once, about
@@ -3592,6 +3605,7 @@ export type MaintenanceQuote = {
   files: { filePath: string; fileName: string }[];
   decisionComment: string | null;
   selfApproved: boolean;
+  reference?: string | null;
 };
 export type MaintenanceInvoice = {
   id: string;
@@ -4047,6 +4061,44 @@ export const saveMaintenanceReminderSettings = (
   }>(
     "/maintenance/reminder-settings",
     maintenanceBody("PUT", body),
+    token,
+  );
+
+export type MaintenanceGrants = {
+  access: boolean;
+  handle: boolean;
+  approve: boolean;
+  pay: boolean;
+  override: boolean;
+};
+export type MaintenancePerson = {
+  id: string;
+  name: string;
+  role: string;
+  rank: number;
+  siteIds: string[];
+  /** Administrators and operations managers have everything by role. */
+  byRole: boolean;
+  grants: MaintenanceGrants;
+  effective: MaintenanceGrants;
+  canBeGivenApprovalAndPay: boolean;
+};
+export const listMaintenancePeople = (token: string) =>
+  request<MaintenancePerson[]>("/maintenance/people", {}, token);
+export const setMaintenanceAccess = (
+  token: string,
+  userId: string,
+  grants: Partial<Record<"access" | "handle" | "approve" | "pay" | "override", boolean>>,
+) =>
+  request<{ userId: string; maintenance: Record<string, boolean> }>(
+    `/maintenance/grants/${userId}`,
+    { method: "PUT", body: JSON.stringify(grants) },
+    token,
+  );
+export const setMaintenanceSkipMode = (token: string, skipMode: "next" | "choose") =>
+  request<{ skipMode: "next" | "choose" }>(
+    "/maintenance/skip-mode",
+    { method: "PUT", body: JSON.stringify({ skipMode }) },
     token,
   );
 
